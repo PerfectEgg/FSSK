@@ -33,6 +33,10 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField] private OmokStoneLauncher blackLauncher = new();
     [SerializeField] private OmokStoneLauncher whiteLauncher = new();
 
+    [Header("Manual Input")]
+    [SerializeField] private bool allowBlackManualPlacement = true;
+    [SerializeField] private bool allowWhiteManualPlacement = true;
+
     [Header("Drag")]
     [SerializeField, Min(0f)] private float dragHoverHeight = 1.25f;
 
@@ -171,6 +175,63 @@ public class OmokStoneDropper : MonoBehaviour
     internal void ReleaseReservation(Vector2Int coordinate)
     {
         reservedCoordinates.Remove(coordinate);
+    }
+
+    public void SetManualPlacementState(bool allowBlack, bool allowWhite)
+    {
+        allowBlackManualPlacement = allowBlack;
+        allowWhiteManualPlacement = allowWhite;
+    }
+
+    public bool TryPlaceStone(OmokStoneColor stoneColor, Vector2Int targetCoordinate)
+    {
+        if (stoneColor == OmokStoneColor.None || grid == null || !grid.IsReady || !IsInsideBoard(targetCoordinate))
+        {
+            return false;
+        }
+
+        if (IsCoordinateBlocked(targetCoordinate) || !TryGetLauncherForColor(stoneColor, out OmokStoneLauncher launcher))
+        {
+            return false;
+        }
+
+        Vector3 targetWorldPosition = grid.GetWorldPosition(targetCoordinate);
+        Vector3 spawnPosition = targetWorldPosition + (grid.transform.up * dragHoverHeight);
+        GameObject stoneObject = Instantiate(launcher.stonePrefab, spawnPosition, launcher.stonePrefab.transform.rotation, stoneRoot);
+
+        ActivateStoneColliders(stoneObject);
+
+        Rigidbody rigidbody = stoneObject.GetComponent<Rigidbody>();
+        if (rigidbody == null)
+        {
+            rigidbody = stoneObject.AddComponent<Rigidbody>();
+        }
+
+        ConfigureRigidbody(rigidbody);
+        ApplyReleaseMotion(stoneObject.transform, rigidbody);
+
+        OmokFallingStone fallingStone = stoneObject.GetComponent<OmokFallingStone>();
+        if (fallingStone == null)
+        {
+            fallingStone = stoneObject.AddComponent<OmokFallingStone>();
+        }
+
+        reservedCoordinates.Add(targetCoordinate);
+
+        Vector3 snappedPosition = targetWorldPosition +
+                                  (grid.transform.up * (fallingStone.GetSnapOffsetAlongNormal(grid.transform.up) + settleOffset));
+
+        fallingStone.Initialize(this,
+                                grid,
+                                rigidbody,
+                                stoneColor,
+                                OmokStoneSnapTiming.OnPlacement,
+                                true,
+                                targetCoordinate,
+                                snappedPosition,
+                                fallGravityScale);
+
+        return true;
     }
 
     private void TryBeginDrag()
@@ -368,13 +429,13 @@ public class OmokStoneDropper : MonoBehaviour
     {
         launcher = null;
 
-        if (IsLauncherHit(collider, blackLauncher))
+        if (allowBlackManualPlacement && IsLauncherHit(collider, blackLauncher))
         {
             launcher = blackLauncher;
             return true;
         }
 
-        if (IsLauncherHit(collider, whiteLauncher))
+        if (allowWhiteManualPlacement && IsLauncherHit(collider, whiteLauncher))
         {
             launcher = whiteLauncher;
             return true;
@@ -412,6 +473,18 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         return OmokStoneColor.None;
+    }
+
+    private bool TryGetLauncherForColor(OmokStoneColor stoneColor, out OmokStoneLauncher launcher)
+    {
+        launcher = stoneColor switch
+        {
+            OmokStoneColor.Black => blackLauncher,
+            OmokStoneColor.White => whiteLauncher,
+            _ => null
+        };
+
+        return IsLauncherConfigured(launcher);
     }
 
     private bool TryGetBoardHit(out RaycastHit boardHit)
@@ -471,6 +544,15 @@ public class OmokStoneDropper : MonoBehaviour
     private bool IsCoordinateBlocked(Vector2Int coordinate)
     {
         return occupiedCoordinates.Contains(coordinate) || reservedCoordinates.Contains(coordinate);
+    }
+
+    private bool IsInsideBoard(Vector2Int coordinate)
+    {
+        return grid != null &&
+               coordinate.x >= 0 &&
+               coordinate.x < grid.BoardSize &&
+               coordinate.y >= 0 &&
+               coordinate.y < grid.BoardSize;
     }
 
     private void DrawPreview(Vector2Int coordinate, bool isBlocked)

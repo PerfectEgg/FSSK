@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -26,10 +27,16 @@ public class OmokMatchManager : MonoBehaviour
     private bool isMatchEnded;
     private OmokStoneColor winner = OmokStoneColor.None;
     private int placedStoneCount;
+    private OmokStoneColor currentTurn = OmokStoneColor.Black;
 
     public bool IsMatchEnded => isMatchEnded;
     public OmokStoneColor Winner => winner;
     public IReadOnlyList<Vector2Int> WinningCoordinates => winningCoordinates;
+    public OmokStoneColor CurrentTurn => currentTurn;
+    public int BoardSize => grid != null ? grid.BoardSize : boardState != null ? boardState.GetLength(0) : 0;
+
+    public event Action<OmokStoneColor> TurnChanged;
+    public event Action<OmokStoneColor> MatchEnded;
 
     private void Reset()
     {
@@ -83,6 +90,7 @@ public class OmokMatchManager : MonoBehaviour
         isMatchEnded = false;
         winner = OmokStoneColor.None;
         placedStoneCount = 0;
+        currentTurn = OmokStoneColor.Black;
 
         if (resultOverlayRoot != null)
         {
@@ -93,6 +101,20 @@ public class OmokMatchManager : MonoBehaviour
         {
             stoneDropper.enabled = true;
         }
+
+        TurnChanged?.Invoke(currentTurn);
+    }
+
+    public OmokStoneColor[,] GetBoardSnapshot()
+    {
+        if (boardState == null)
+        {
+            return null;
+        }
+
+        OmokStoneColor[,] snapshot = new OmokStoneColor[boardState.GetLength(0), boardState.GetLength(1)];
+        Array.Copy(boardState, snapshot, boardState.Length);
+        return snapshot;
     }
 
     private void HandleStonePlaced(Vector2Int coordinate, OmokStoneColor stoneColor)
@@ -122,7 +144,11 @@ public class OmokMatchManager : MonoBehaviour
         {
             winningCoordinates.Clear();
             EndMatch(OmokStoneColor.None);
+            return;
         }
+
+        currentTurn = GetOppositeColor(stoneColor);
+        TurnChanged?.Invoke(currentTurn);
     }
 
     private void EndMatch(OmokStoneColor resultWinner)
@@ -140,6 +166,7 @@ public class OmokMatchManager : MonoBehaviour
             resultOverlayRoot.SetActive(true);
         }
 
+        MatchEnded?.Invoke(resultWinner);
         onMatchEnded?.Invoke();
     }
 
@@ -198,5 +225,15 @@ public class OmokMatchManager : MonoBehaviour
                coordinate.x < grid.BoardSize &&
                coordinate.y >= 0 &&
                coordinate.y < grid.BoardSize;
+    }
+
+    private static OmokStoneColor GetOppositeColor(OmokStoneColor stoneColor)
+    {
+        return stoneColor switch
+        {
+            OmokStoneColor.Black => OmokStoneColor.White,
+            OmokStoneColor.White => OmokStoneColor.Black,
+            _ => OmokStoneColor.None
+        };
     }
 }
