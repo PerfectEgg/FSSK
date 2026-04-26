@@ -124,10 +124,8 @@ public class OmokAiController : MonoBehaviour
             return;
         }
 
-        bool allowPlayerMove = !matchManager.IsMatchEnded && matchManager.CurrentTurn == playerStoneColor;
-        stoneDropper.SetManualPlacementState(
-            allowPlayerMove && playerStoneColor == OmokStoneColor.Black,
-            allowPlayerMove && playerStoneColor == OmokStoneColor.White);
+        OmokManualPlacementState placementState = matchManager.GetManualPlacementState(playerStoneColor);
+        stoneDropper.SetManualPlacementState(placementState.AllowBlack, placementState.AllowWhite);
     }
 
     private void TryQueueAiTurn()
@@ -162,7 +160,10 @@ public class OmokAiController : MonoBehaviour
             yield break;
         }
 
-        stoneDropper.TryPlaceStone(GetAiStoneColor(), move);
+        if (!stoneDropper.TryRequestPlacement(GetAiStoneColor(), move))
+        {
+            TryQueueAiTurn();
+        }
     }
 
     private bool CanAiMove()
@@ -171,8 +172,7 @@ public class OmokAiController : MonoBehaviour
                selectedAi != null &&
                matchManager != null &&
                stoneDropper != null &&
-               !matchManager.IsMatchEnded &&
-               matchManager.CurrentTurn == GetAiStoneColor();
+               matchManager.CanTakeTurn(GetAiStoneColor());
     }
 
     private void CancelPendingAiTurn()

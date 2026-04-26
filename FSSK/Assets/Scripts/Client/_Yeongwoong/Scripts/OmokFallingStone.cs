@@ -12,6 +12,8 @@ public class OmokFallingStone : MonoBehaviour
     private Collider cachedCollider;
     private bool isInitialized;
     private bool isSnapped;
+    private bool isBlockedByBlocker;
+    private bool isFailed;
     private float spawnTime;
     private OmokStoneSnapTiming snapTiming;
     private bool hasReservedTarget;
@@ -21,6 +23,8 @@ public class OmokFallingStone : MonoBehaviour
 
     public Vector2Int Coordinate { get; private set; }
     public bool IsSnapped => isSnapped;
+    public bool IsBlockedByBlocker => isBlockedByBlocker;
+    public Transform BlockerTarget { get; private set; }
     public OmokStoneColor StoneColor { get; private set; }
     public OmokStoneSnapTiming SnapTiming => snapTiming;
     public Vector2Int TargetCoordinate => targetCoordinate;
@@ -49,6 +53,9 @@ public class OmokFallingStone : MonoBehaviour
         cachedCollider = GetComponent<Collider>();
         isInitialized = true;
         isSnapped = false;
+        isBlockedByBlocker = false;
+        isFailed = false;
+        BlockerTarget = null;
         spawnTime = Time.time;
         StoneColor = stoneColor;
         snapTiming = timing;
@@ -60,7 +67,7 @@ public class OmokFallingStone : MonoBehaviour
 
     private void Update()
     {
-        if (!isInitialized || isSnapped)
+        if (!isInitialized || isSnapped || isFailed || isBlockedByBlocker)
         {
             return;
         }
@@ -79,7 +86,7 @@ public class OmokFallingStone : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (!isInitialized || isSnapped || cachedRigidbody == null || cachedRigidbody.isKinematic)
+        if (!isInitialized || isSnapped || isFailed || isBlockedByBlocker || cachedRigidbody == null || cachedRigidbody.isKinematic)
         {
             return;
         }
@@ -94,12 +101,22 @@ public class OmokFallingStone : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        TryResolveLanding();
+        HandleContact(collision.collider);
     }
 
     private void OnCollisionStay(Collision collision)
     {
-        TryResolveLanding();
+        HandleContact(collision.collider);
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        HandleContact(other);
+    }
+
+    private void OnTriggerStay(Collider other)
+    {
+        HandleContact(other);
     }
 
     public float GetSnapOffsetAlongNormal(Vector3 normal)
@@ -133,9 +150,54 @@ public class OmokFallingStone : MonoBehaviour
         cachedRigidbody.isKinematic = true;
     }
 
+    public void StickToBlocker(Transform blockerTarget, int blockerLayer)
+    {
+        StickToBlocker(blockerTarget, blockerLayer, false, default);
+    }
+
+    public void StickToBlocker(Transform blockerTarget, int blockerLayer, Vector3 worldPosition)
+    {
+        StickToBlocker(blockerTarget, blockerLayer, true, worldPosition);
+    }
+
+    private void StickToBlocker(Transform blockerTarget, int blockerLayer, bool applyPosition, Vector3 worldPosition)
+    {
+        if (isBlockedByBlocker)
+        {
+            return;
+        }
+
+        isBlockedByBlocker = true;
+        hasReservedTarget = false;
+        BlockerTarget = blockerTarget;
+
+        if (cachedRigidbody != null)
+        {
+            cachedRigidbody.linearVelocity = Vector3.zero;
+            cachedRigidbody.angularVelocity = Vector3.zero;
+            cachedRigidbody.useGravity = false;
+            cachedRigidbody.isKinematic = true;
+        }
+
+        if (applyPosition)
+        {
+            transform.position = worldPosition;
+        }
+
+        if (blockerTarget != null)
+        {
+            transform.SetParent(blockerTarget, true);
+        }
+
+        if (blockerLayer >= 0)
+        {
+            SetLayerRecursively(transform, blockerLayer);
+        }
+    }
+
     private void TryResolveLanding()
     {
-        if (!isInitialized || isSnapped || owner == null || grid == null)
+        if (!isInitialized || isSnapped || isFailed || isBlockedByBlocker || owner == null || grid == null)
         {
             return;
         }
@@ -153,6 +215,47 @@ public class OmokFallingStone : MonoBehaviour
         if (!isSnapped && hasReservedTarget && owner != null)
         {
             owner.ReleaseReservation(targetCoordinate);
+        }
+    }
+
+    private void HandleContact(Collider collider)
+    {
+        if (!isInitialized || isSnapped || isFailed || isBlockedByBlocker)
+        {
+            return;
+        }
+
+        if (owner != null && owner.IsBlockerHit(collider))
+        {
+            owner.TryStickStoneToBlocker(this, collider);
+            return;
+        }
+
+        TryResolveLanding();
+    }
+
+    private void FailPlacement()
+    {
+        if (isFailed)
+        {
+            return;
+        }
+
+        isFailed = true;
+        Destroy(gameObject);
+    }
+
+    private static void SetLayerRecursively(Transform root, int layer)
+    {
+        if (root == null || layer < 0)
+        {
+            return;
+        }
+
+        root.gameObject.layer = layer;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            SetLayerRecursively(root.GetChild(i), layer);
         }
     }
 }

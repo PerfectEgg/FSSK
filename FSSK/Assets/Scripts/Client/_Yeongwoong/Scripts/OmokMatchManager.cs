@@ -3,7 +3,36 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-public class OmokMatchManager : MonoBehaviour
+[Serializable]
+public class OmokMatchRules
+{
+    [SerializeField] private OmokStoneColor openingTurn = OmokStoneColor.Black;
+    [SerializeField] private bool allowOverline = true;
+    [SerializeField] private bool blockedAttemptConsumesTurn = true;
+
+    public OmokStoneColor OpeningTurn => openingTurn == OmokStoneColor.None ? OmokStoneColor.Black : openingTurn;
+    public bool AllowOverline => allowOverline;
+    public bool BlockedAttemptConsumesTurn => blockedAttemptConsumesTurn;
+
+    public bool IsWinningLineLength(int lineLength)
+    {
+        return allowOverline ? lineLength >= 5 : lineLength == 5;
+    }
+}
+
+public readonly struct OmokManualPlacementState
+{
+    public OmokManualPlacementState(bool allowBlack, bool allowWhite)
+    {
+        AllowBlack = allowBlack;
+        AllowWhite = allowWhite;
+    }
+
+    public bool AllowBlack { get; }
+    public bool AllowWhite { get; }
+}
+
+public static class OmokMatchFlow
 {
     private static readonly Vector2Int[] WinDirections =
     {
@@ -13,9 +42,119 @@ public class OmokMatchManager : MonoBehaviour
         new(1, -1)
     };
 
+    public static bool CanAct(OmokStoneColor currentTurn, bool isMatchEnded, OmokStoneColor actorColor)
+    {
+        return !isMatchEnded &&
+               actorColor != OmokStoneColor.None &&
+               currentTurn == actorColor;
+    }
+
+    public static OmokManualPlacementState BuildManualPlacementState(
+        OmokStoneColor currentTurn,
+        bool isMatchEnded,
+        OmokStoneColor localPlayerColor,
+        bool allowManualInput)
+    {
+        if (!allowManualInput || localPlayerColor == OmokStoneColor.None)
+        {
+            return new OmokManualPlacementState(false, false);
+        }
+
+        bool canControlAssignedColor = CanAct(currentTurn, isMatchEnded, localPlayerColor);
+        return new OmokManualPlacementState(
+            canControlAssignedColor && localPlayerColor == OmokStoneColor.Black,
+            canControlAssignedColor && localPlayerColor == OmokStoneColor.White);
+    }
+
+    public static bool IsInsideBoard(int boardSize, Vector2Int coordinate)
+    {
+        return coordinate.x >= 0 &&
+               coordinate.x < boardSize &&
+               coordinate.y >= 0 &&
+               coordinate.y < boardSize;
+    }
+
+    public static OmokStoneColor GetOppositeColor(OmokStoneColor stoneColor)
+    {
+        return stoneColor switch
+        {
+            OmokStoneColor.Black => OmokStoneColor.White,
+            OmokStoneColor.White => OmokStoneColor.Black,
+            _ => OmokStoneColor.None
+        };
+    }
+
+    public static bool TryFindWinningLine(
+        OmokStoneColor[,] boardState,
+        Vector2Int coordinate,
+        OmokStoneColor stoneColor,
+        OmokMatchRules rules,
+        out List<Vector2Int> winningLine)
+    {
+        winningLine = null;
+
+        if (boardState == null || stoneColor == OmokStoneColor.None || rules == null)
+        {
+            return false;
+        }
+
+        int boardSize = boardState.GetLength(0);
+        foreach (Vector2Int direction in WinDirections)
+        {
+            List<Vector2Int> line = new();
+            CollectConnectedCoordinates(boardState, boardSize, coordinate, new Vector2Int(-direction.x, -direction.y), stoneColor, line, true);
+            line.Add(coordinate);
+            CollectConnectedCoordinates(boardState, boardSize, coordinate, direction, stoneColor, line, false);
+
+            if (rules.IsWinningLineLength(line.Count))
+            {
+                winningLine = line;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void CollectConnectedCoordinates(
+        OmokStoneColor[,] boardState,
+        int boardSize,
+        Vector2Int origin,
+        Vector2Int direction,
+        OmokStoneColor stoneColor,
+        List<Vector2Int> coordinates,
+        bool insertAtFront)
+    {
+        Vector2Int current = origin + direction;
+
+        while (IsInsideBoard(boardSize, current) && boardState[current.x, current.y] == stoneColor)
+        {
+            if (insertAtFront)
+            {
+                coordinates.Insert(0, current);
+            }
+            else
+            {
+                coordinates.Add(current);
+            }
+
+            current += direction;
+        }
+    }
+}
+
+public class OmokMatchManager : MonoBehaviour
+{
     [Header("References")]
     [SerializeField] private OmokGrid grid;
     [SerializeField] private OmokStoneDropper stoneDropper;
+
+    [Header("Authority")]
+    [SerializeField] private bool processPlacementRequestsLocally = true;
+    [SerializeField] private bool applyStoneResultsLocally = true;
+
+    [Header("Rules")]
+    [SerializeField] private OmokMatchRules rules = new();
 
     [Header("Result Overlay")]
     [SerializeField] private GameObject resultOverlayRoot;
@@ -34,6 +173,7 @@ public class OmokMatchManager : MonoBehaviour
     public IReadOnlyList<Vector2Int> WinningCoordinates => winningCoordinates;
     public OmokStoneColor CurrentTurn => currentTurn;
     public int BoardSize => grid != null ? grid.BoardSize : boardState != null ? boardState.GetLength(0) : 0;
+    public OmokMatchRules Rules => rules;
 
     public event Action<OmokStoneColor> TurnChanged;
     public event Action<OmokStoneColor> MatchEnded;
@@ -56,6 +196,7 @@ public class OmokMatchManager : MonoBehaviour
             stoneDropper = GetComponent<OmokStoneDropper>();
         }
 
+        rules ??= new OmokMatchRules();
         ResetMatch();
     }
 
@@ -63,7 +204,9 @@ public class OmokMatchManager : MonoBehaviour
     {
         if (stoneDropper != null)
         {
+            stoneDropper.PlacementRequested += HandlePlacementRequested;
             stoneDropper.StonePlaced += HandleStonePlaced;
+            stoneDropper.StoneBlocked += HandleStoneBlocked;
         }
     }
 
@@ -71,7 +214,9 @@ public class OmokMatchManager : MonoBehaviour
     {
         if (stoneDropper != null)
         {
+            stoneDropper.PlacementRequested -= HandlePlacementRequested;
             stoneDropper.StonePlaced -= HandleStonePlaced;
+            stoneDropper.StoneBlocked -= HandleStoneBlocked;
         }
     }
 
@@ -90,7 +235,7 @@ public class OmokMatchManager : MonoBehaviour
         isMatchEnded = false;
         winner = OmokStoneColor.None;
         placedStoneCount = 0;
-        currentTurn = OmokStoneColor.Black;
+        currentTurn = rules != null ? rules.OpeningTurn : OmokStoneColor.Black;
 
         if (resultOverlayRoot != null)
         {
@@ -117,38 +262,103 @@ public class OmokMatchManager : MonoBehaviour
         return snapshot;
     }
 
-    private void HandleStonePlaced(Vector2Int coordinate, OmokStoneColor stoneColor)
+    private void HandlePlacementRequested(OmokStonePlacementRequest request)
     {
-        if (isMatchEnded || stoneColor == OmokStoneColor.None || boardState == null)
+        if (!processPlacementRequestsLocally || stoneDropper == null)
         {
             return;
         }
 
-        if (!IsInsideBoard(coordinate) || boardState[coordinate.x, coordinate.y] != OmokStoneColor.None)
+        if (!CanAcceptPlacementRequest(request.TargetCoordinate, request.StoneColor))
         {
             return;
+        }
+
+        stoneDropper.TryExecutePlacement(request);
+    }
+
+    private void HandleStonePlaced(Vector2Int coordinate, OmokStoneColor stoneColor)
+    {
+        if (!applyStoneResultsLocally)
+        {
+            return;
+        }
+
+        TryRegisterPlacedStone(coordinate, stoneColor);
+    }
+
+    private void HandleStoneBlocked(OmokStoneColor stoneColor)
+    {
+        if (!applyStoneResultsLocally)
+        {
+            return;
+        }
+
+        TryRegisterBlockedAttempt(stoneColor);
+    }
+
+    public bool CanTakeTurn(OmokStoneColor stoneColor)
+    {
+        return OmokMatchFlow.CanAct(currentTurn, isMatchEnded, stoneColor);
+    }
+
+    public OmokManualPlacementState GetManualPlacementState(OmokStoneColor localPlayerColor, bool allowManualInput = true)
+    {
+        return OmokMatchFlow.BuildManualPlacementState(currentTurn, isMatchEnded, localPlayerColor, allowManualInput);
+    }
+
+    public bool CanAcceptPlacementRequest(Vector2Int coordinate, OmokStoneColor stoneColor)
+    {
+        return boardState != null &&
+               stoneColor != OmokStoneColor.None &&
+               CanTakeTurn(stoneColor) &&
+               OmokMatchFlow.IsInsideBoard(BoardSize, coordinate) &&
+               boardState[coordinate.x, coordinate.y] == OmokStoneColor.None;
+    }
+
+    public bool TryRegisterPlacedStone(Vector2Int coordinate, OmokStoneColor stoneColor)
+    {
+        if (!CanAcceptPlacementRequest(coordinate, stoneColor))
+        {
+            return false;
         }
 
         boardState[coordinate.x, coordinate.y] = stoneColor;
         placedStoneCount++;
 
-        if (TryFindWinningLine(coordinate, stoneColor, out List<Vector2Int> line))
+        if (OmokMatchFlow.TryFindWinningLine(boardState, coordinate, stoneColor, rules, out List<Vector2Int> line))
         {
             winningCoordinates.Clear();
             winningCoordinates.AddRange(line);
             EndMatch(stoneColor);
-            return;
+            return true;
         }
 
-        if (placedStoneCount >= grid.BoardSize * grid.BoardSize)
+        if (placedStoneCount >= BoardSize * BoardSize)
         {
             winningCoordinates.Clear();
             EndMatch(OmokStoneColor.None);
-            return;
+            return true;
         }
 
-        currentTurn = GetOppositeColor(stoneColor);
+        currentTurn = OmokMatchFlow.GetOppositeColor(stoneColor);
         TurnChanged?.Invoke(currentTurn);
+        return true;
+    }
+
+    public bool TryRegisterBlockedAttempt(OmokStoneColor stoneColor)
+    {
+        if (boardState == null ||
+            rules == null ||
+            !rules.BlockedAttemptConsumesTurn ||
+            !CanTakeTurn(stoneColor))
+        {
+            return false;
+        }
+
+        currentTurn = OmokMatchFlow.GetOppositeColor(stoneColor);
+        TurnChanged?.Invoke(currentTurn);
+        return true;
     }
 
     private void EndMatch(OmokStoneColor resultWinner)
@@ -168,72 +378,5 @@ public class OmokMatchManager : MonoBehaviour
 
         MatchEnded?.Invoke(resultWinner);
         onMatchEnded?.Invoke();
-    }
-
-    private bool TryFindWinningLine(Vector2Int coordinate, OmokStoneColor stoneColor, out List<Vector2Int> winningLine)
-    {
-        foreach (Vector2Int direction in WinDirections)
-        {
-            List<Vector2Int> line = new();
-            CollectConnectedCoordinates(coordinate, new Vector2Int(-direction.x, -direction.y), stoneColor, line, true);
-            line.Add(coordinate);
-            CollectConnectedCoordinates(coordinate, direction, stoneColor, line, false);
-
-            if (line.Count >= 5)
-            {
-                winningLine = line;
-                return true;
-            }
-        }
-
-        winningLine = null;
-        return false;
-    }
-
-    private void CollectConnectedCoordinates(
-        Vector2Int origin,
-        Vector2Int direction,
-        OmokStoneColor stoneColor,
-        List<Vector2Int> coordinates,
-        bool insertAtFront)
-    {
-        Vector2Int current = origin + direction;
-
-        while (IsInsideBoard(current) && boardState[current.x, current.y] == stoneColor)
-        {
-            if (insertAtFront)
-            {
-                coordinates.Insert(0, current);
-            }
-            else
-            {
-                coordinates.Add(current);
-            }
-
-            current += direction;
-        }
-    }
-
-    private bool IsInsideBoard(Vector2Int coordinate)
-    {
-        if (grid == null)
-        {
-            return false;
-        }
-
-        return coordinate.x >= 0 &&
-               coordinate.x < grid.BoardSize &&
-               coordinate.y >= 0 &&
-               coordinate.y < grid.BoardSize;
-    }
-
-    private static OmokStoneColor GetOppositeColor(OmokStoneColor stoneColor)
-    {
-        return stoneColor switch
-        {
-            OmokStoneColor.Black => OmokStoneColor.White,
-            OmokStoneColor.White => OmokStoneColor.Black,
-            _ => OmokStoneColor.None
-        };
     }
 }

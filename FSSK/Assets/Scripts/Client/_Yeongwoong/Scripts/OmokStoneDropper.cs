@@ -1,11 +1,18 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public enum OmokStoneSnapTiming
 {
     OnPlacement,
     OnLanding
+}
+
+public enum OmokBlockerAttachmentMode
+{
+    SurfaceContact,
+    ObjectCenterXZ
 }
 
 public enum OmokStoneColor
@@ -22,8 +29,32 @@ public class OmokStoneLauncher
     public GameObject stonePrefab;
 }
 
+public readonly struct OmokStonePlacementRequest
+{
+    public OmokStonePlacementRequest(OmokStoneColor stoneColor, Vector2Int targetCoordinate, Vector3 releasePosition)
+    {
+        StoneColor = stoneColor;
+        TargetCoordinate = targetCoordinate;
+        ReleasePosition = releasePosition;
+    }
+
+    public OmokStoneColor StoneColor { get; }
+    public Vector2Int TargetCoordinate { get; }
+    public Vector3 ReleasePosition { get; }
+}
+
 public class OmokStoneDropper : MonoBehaviour
 {
+    private const string BoardLayerName = "Board";
+    private const string BlockerLayerName = "Blocker";
+    private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+    private static readonly int SurfacePropertyId = Shader.PropertyToID("_Surface");
+    private static readonly int BlendPropertyId = Shader.PropertyToID("_Blend");
+    private static readonly int SrcBlendPropertyId = Shader.PropertyToID("_SrcBlend");
+    private static readonly int DstBlendPropertyId = Shader.PropertyToID("_DstBlend");
+    private static readonly int ZWritePropertyId = Shader.PropertyToID("_ZWrite");
+
     [Header("References")]
     [SerializeField] private OmokGrid grid;
     [SerializeField] private Camera targetCamera;
@@ -43,10 +74,13 @@ public class OmokStoneDropper : MonoBehaviour
     [Header("Spawn")]
     [SerializeField] private OmokStoneSnapTiming snapTiming = OmokStoneSnapTiming.OnPlacement;
     [SerializeField, Min(1f)] private float raycastDistance = 500f;
-    [SerializeField] private LayerMask raycastLayers = ~0;
 
     [Header("Landing")]
     [SerializeField, Min(0f)] private float settleOffset = 0.01f;
+
+    [Header("Blocker")]
+    [SerializeField] private OmokBlockerAttachmentMode blockerAttachmentMode = OmokBlockerAttachmentMode.SurfaceContact;
+    [SerializeField, Min(0f)] private float blockerCenterStackGap = 0.01f;
 
     [Header("Drop Feel")]
     [SerializeField, Min(0f)] private float initialFallSpeed = 2.5f;
@@ -58,9 +92,14 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField] private Color blockedPreviewColor = new(1f, 0.3f, 0.3f, 0.95f);
     [SerializeField, Min(0.005f)] private float previewLineWidth = 0.08f;
     [SerializeField, Min(0f)] private float previewTargetHeightOffset = 0.05f;
+    [SerializeField, Range(0.15f, 0.85f)] private float previewStoneAlpha = 0.45f;
+    [SerializeField, Range(0f, 1f)] private float blockedPreviewTintStrength = 0.65f;
+    [SerializeField, Range(0.85f, 1f)] private float previewStoneScaleMultiplier = 0.97f;
 
     private readonly HashSet<Vector2Int> occupiedCoordinates = new();
     private readonly HashSet<Vector2Int> reservedCoordinates = new();
+    private readonly Dictionary<Transform, float> blockerCenterStackTopY = new();
+    private readonly List<Material> draggedStonePreviewMaterials = new();
     private LineRenderer previewRenderer;
     private LineRenderer previewRayRenderer;
     private Material previewMaterial;
@@ -68,12 +107,17 @@ public class OmokStoneDropper : MonoBehaviour
     private OmokStoneLauncher activeLauncher;
     private bool isDraggingLauncher;
     private bool hasDragBoardTarget;
-    private RaycastHit currentDragBoardHit;
     private Vector2Int currentDragCoordinate;
     private GameObject draggedStoneObject;
+    private int boardLayer = -1;
+    private int blockerLayer = -1;
+    private int boardLayerMask;
+    private int launcherLayerMask;
 
     public OmokStoneSnapTiming SnapTiming => snapTiming;
+    public event Action<OmokStonePlacementRequest> PlacementRequested;
     public event Action<Vector2Int, OmokStoneColor> StonePlaced;
+    public event Action<OmokStoneColor> StoneBlocked;
 
     private void Reset()
     {
@@ -82,6 +126,8 @@ public class OmokStoneDropper : MonoBehaviour
 
     private void Awake()
     {
+        ResolveNamedLayers();
+
         if (grid == null)
         {
             grid = GetComponent<OmokGrid>();
@@ -93,6 +139,11 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         CacheExistingStoneCoordinates();
+    }
+
+    private void OnValidate()
+    {
+        ResolveNamedLayers();
     }
 
     private void Update()
@@ -183,55 +234,25 @@ public class OmokStoneDropper : MonoBehaviour
         allowWhiteManualPlacement = allowWhite;
     }
 
+    public bool TryRequestPlacement(OmokStoneColor stoneColor, Vector2Int targetCoordinate)
+    {
+        if (!TryBuildPlacementRequest(stoneColor, targetCoordinate, out OmokStonePlacementRequest request))
+        {
+            return false;
+        }
+
+        if (PlacementRequested == null)
+        {
+            return false;
+        }
+
+        PlacementRequested.Invoke(request);
+        return true;
+    }
+
     public bool TryPlaceStone(OmokStoneColor stoneColor, Vector2Int targetCoordinate)
     {
-        if (stoneColor == OmokStoneColor.None || grid == null || !grid.IsReady || !IsInsideBoard(targetCoordinate))
-        {
-            return false;
-        }
-
-        if (IsCoordinateBlocked(targetCoordinate) || !TryGetLauncherForColor(stoneColor, out OmokStoneLauncher launcher))
-        {
-            return false;
-        }
-
-        Vector3 targetWorldPosition = grid.GetWorldPosition(targetCoordinate);
-        Vector3 spawnPosition = targetWorldPosition + (grid.transform.up * dragHoverHeight);
-        GameObject stoneObject = Instantiate(launcher.stonePrefab, spawnPosition, launcher.stonePrefab.transform.rotation, stoneRoot);
-
-        ActivateStoneColliders(stoneObject);
-
-        Rigidbody rigidbody = stoneObject.GetComponent<Rigidbody>();
-        if (rigidbody == null)
-        {
-            rigidbody = stoneObject.AddComponent<Rigidbody>();
-        }
-
-        ConfigureRigidbody(rigidbody);
-        ApplyReleaseMotion(stoneObject.transform, rigidbody);
-
-        OmokFallingStone fallingStone = stoneObject.GetComponent<OmokFallingStone>();
-        if (fallingStone == null)
-        {
-            fallingStone = stoneObject.AddComponent<OmokFallingStone>();
-        }
-
-        reservedCoordinates.Add(targetCoordinate);
-
-        Vector3 snappedPosition = targetWorldPosition +
-                                  (grid.transform.up * (fallingStone.GetSnapOffsetAlongNormal(grid.transform.up) + settleOffset));
-
-        fallingStone.Initialize(this,
-                                grid,
-                                rigidbody,
-                                stoneColor,
-                                OmokStoneSnapTiming.OnPlacement,
-                                true,
-                                targetCoordinate,
-                                snappedPosition,
-                                fallGravityScale);
-
-        return true;
+        return TryRequestPlacement(stoneColor, targetCoordinate);
     }
 
     private void TryBeginDrag()
@@ -270,7 +291,6 @@ public class OmokStoneDropper : MonoBehaviour
             return;
         }
 
-        currentDragBoardHit = boardHit;
         currentDragCoordinate = previewCoordinate;
         hasDragBoardTarget = true;
 
@@ -283,30 +303,34 @@ public class OmokStoneDropper : MonoBehaviour
             UpdateDraggedStoneOnBoard(boardHit.point);
         }
 
-        DrawPreview(previewCoordinate, IsCoordinateBlocked(previewCoordinate));
+        bool isBlocked = IsCoordinateBlocked(previewCoordinate);
+        UpdateDraggedStonePreviewVisual(isBlocked);
+        DrawPreview(previewCoordinate, isBlocked);
     }
 
     private void TryReleaseDrag()
     {
         OmokStoneLauncher releasedLauncher = activeLauncher;
         bool canPlace = hasDragBoardTarget;
-        RaycastHit boardHit = currentDragBoardHit;
         Vector2Int targetCoordinate = currentDragCoordinate;
-        GameObject releasedStoneObject = draggedStoneObject;
+        GameObject releasedPreviewObject = draggedStoneObject;
+        Vector3 releasePosition = releasedPreviewObject != null ? releasedPreviewObject.transform.position : default;
+        bool isBlocked = canPlace && releasedPreviewObject != null && IsCoordinateBlocked(targetCoordinate);
 
         ClearDragState();
+        DestroyDraggedStonePreview(releasedPreviewObject);
 
-        if (!canPlace || releasedStoneObject == null)
+        if (!canPlace || releasedPreviewObject == null || isBlocked)
         {
-            if (releasedStoneObject != null)
-            {
-                Destroy(releasedStoneObject);
-            }
-
             return;
         }
 
-        TryReleaseStone(releasedLauncher, releasedStoneObject, boardHit, targetCoordinate);
+        if (!TryBuildPlacementRequest(releasedLauncher, releasePosition, targetCoordinate, out OmokStonePlacementRequest request))
+        {
+            return;
+        }
+
+        PlacementRequested?.Invoke(request);
     }
 
     private void ClearDragState()
@@ -318,29 +342,30 @@ public class OmokStoneDropper : MonoBehaviour
         HidePreview();
     }
 
-    private void TryReleaseStone(OmokStoneLauncher launcher, GameObject stoneObject, RaycastHit boardHit, Vector2Int targetCoordinate)
+    public bool TryExecutePlacement(OmokStonePlacementRequest request)
     {
-        if (!IsLauncherConfigured(launcher) || stoneObject == null || grid == null || !grid.IsReady)
+        if (!TryGetLauncherForColor(request.StoneColor, out OmokStoneLauncher launcher) ||
+            !IsLauncherConfigured(launcher) ||
+            grid == null ||
+            !grid.IsReady ||
+            !IsInsideBoard(request.TargetCoordinate))
         {
-            return;
+            return false;
         }
 
-        OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
-        if (stoneColor == OmokStoneColor.None)
+        if (IsCoordinateBlocked(request.TargetCoordinate))
         {
-            Destroy(stoneObject);
-            return;
+            return false;
         }
 
-        if (snapTiming == OmokStoneSnapTiming.OnPlacement && IsCoordinateBlocked(targetCoordinate))
-        {
-            Destroy(stoneObject);
-            return;
-        }
+        Vector3 spawnPosition = snapTiming == OmokStoneSnapTiming.OnPlacement
+            ? grid.GetWorldPosition(request.TargetCoordinate) + (grid.transform.up * dragHoverHeight)
+            : request.ReleasePosition;
+        GameObject stoneObject = Instantiate(launcher.stonePrefab, spawnPosition, launcher.stonePrefab.transform.rotation, stoneRoot);
 
         if (snapTiming == OmokStoneSnapTiming.OnPlacement)
         {
-            stoneObject.transform.position = grid.GetWorldPosition(targetCoordinate) + (grid.transform.up * dragHoverHeight);
+            stoneObject.transform.position = spawnPosition;
         }
 
         ActivateStoneColliders(stoneObject);
@@ -363,14 +388,23 @@ public class OmokStoneDropper : MonoBehaviour
         bool reserveTarget = snapTiming == OmokStoneSnapTiming.OnPlacement;
         if (reserveTarget)
         {
-            reservedCoordinates.Add(targetCoordinate);
+            reservedCoordinates.Add(request.TargetCoordinate);
         }
 
-        Vector3 targetWorldPosition = grid.GetWorldPosition(targetCoordinate);
+        Vector3 targetWorldPosition = grid.GetWorldPosition(request.TargetCoordinate);
         Vector3 snappedPosition = targetWorldPosition +
                                   (grid.transform.up * (fallingStone.GetSnapOffsetAlongNormal(grid.transform.up) + settleOffset));
 
-        fallingStone.Initialize(this, grid, rigidbody, stoneColor, snapTiming, reserveTarget, targetCoordinate, snappedPosition, fallGravityScale);
+        fallingStone.Initialize(this,
+                                grid,
+                                rigidbody,
+                                request.StoneColor,
+                                snapTiming,
+                                reserveTarget,
+                                request.TargetCoordinate,
+                                snappedPosition,
+                                fallGravityScale);
+        return true;
     }
 
     private void ConfigureRigidbody(Rigidbody rigidbody)
@@ -399,6 +433,15 @@ public class OmokStoneDropper : MonoBehaviour
     {
         launcher = null;
 
+        if (launcherLayerMask == 0)
+        {
+            launcherLayerMask = BuildLauncherLayerMask();
+            if (launcherLayerMask == 0)
+            {
+                return false;
+            }
+        }
+
         Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
         if (cameraToUse == null)
         {
@@ -406,7 +449,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         Ray ray = cameraToUse.ScreenPointToRay(Input.mousePosition);
-        RaycastHit[] hits = Physics.RaycastAll(ray, raycastDistance, raycastLayers, QueryTriggerInteraction.Ignore);
+        RaycastHit[] hits = Physics.RaycastAll(ray, raycastDistance, launcherLayerMask, QueryTriggerInteraction.Ignore);
         if (hits.Length == 0)
         {
             return false;
@@ -491,6 +534,11 @@ public class OmokStoneDropper : MonoBehaviour
     {
         boardHit = default;
 
+        if (boardLayerMask == 0)
+        {
+            return false;
+        }
+
         Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
         if (cameraToUse == null)
         {
@@ -498,24 +546,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         Ray ray = cameraToUse.ScreenPointToRay(Input.mousePosition);
-        RaycastHit[] hits = Physics.RaycastAll(ray, raycastDistance, raycastLayers, QueryTriggerInteraction.Ignore);
-        if (hits.Length == 0)
-        {
-            return false;
-        }
-
-        Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
-
-        foreach (RaycastHit hit in hits)
-        {
-            if (IsBoardHit(hit.collider))
-            {
-                boardHit = hit;
-                return true;
-            }
-        }
-
-        return false;
+        return Physics.Raycast(ray, out boardHit, raycastDistance, boardLayerMask, QueryTriggerInteraction.Ignore);
     }
 
     private bool IsBoardHit(Collider collider)
@@ -526,7 +557,54 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         Transform hitTransform = collider.transform;
-        return hitTransform == grid.transform || hitTransform.IsChildOf(grid.transform);
+        return IsLayerInHierarchy(hitTransform, boardLayer) ||
+               hitTransform == grid.transform ||
+               hitTransform.IsChildOf(grid.transform);
+    }
+
+    internal bool IsBlockerHit(Collider collider)
+    {
+        return collider != null && IsLayerInHierarchy(collider.transform, blockerLayer);
+    }
+
+    internal bool TryStickStoneToBlocker(OmokFallingStone stone, Collider blockerCollider)
+    {
+        if (stone == null || blockerCollider == null)
+        {
+            return false;
+        }
+
+        Transform blockerTarget = GetBlockerAttachmentTarget(blockerCollider);
+        ReleaseReservation(stone.TargetCoordinate);
+
+        if (blockerAttachmentMode == OmokBlockerAttachmentMode.ObjectCenterXZ)
+        {
+            Vector3 centerPosition = blockerTarget != null ? blockerTarget.position : blockerCollider.bounds.center;
+            Vector3 stickPosition = stone.transform.position;
+            stickPosition.x = centerPosition.x;
+            stickPosition.z = centerPosition.z;
+
+            Transform stackKey = blockerTarget != null ? blockerTarget : blockerCollider.transform;
+            float halfHeight = stone.GetSnapOffsetAlongNormal(Vector3.up);
+            if (stackKey != null && blockerCenterStackTopY.TryGetValue(stackKey, out float stackTopY))
+            {
+                stickPosition.y = Mathf.Max(stickPosition.y, stackTopY + halfHeight + blockerCenterStackGap);
+            }
+
+            if (stackKey != null)
+            {
+                blockerCenterStackTopY[stackKey] = stickPosition.y + halfHeight;
+            }
+
+            stone.StickToBlocker(blockerTarget, blockerLayer, stickPosition);
+        }
+        else
+        {
+            stone.StickToBlocker(blockerTarget, blockerLayer);
+        }
+
+        StoneBlocked?.Invoke(stone.StoneColor);
+        return true;
     }
 
     private bool TryGetCoordinate(Vector3 worldPosition, out Vector2Int coordinate)
@@ -544,6 +622,51 @@ public class OmokStoneDropper : MonoBehaviour
     private bool IsCoordinateBlocked(Vector2Int coordinate)
     {
         return occupiedCoordinates.Contains(coordinate) || reservedCoordinates.Contains(coordinate);
+    }
+
+    private bool TryBuildPlacementRequest(
+        OmokStoneLauncher launcher,
+        Vector3 releasePosition,
+        Vector2Int targetCoordinate,
+        out OmokStonePlacementRequest request)
+    {
+        request = default;
+
+        if (!IsLauncherConfigured(launcher) ||
+            grid == null ||
+            !grid.IsReady ||
+            !IsInsideBoard(targetCoordinate) ||
+            IsCoordinateBlocked(targetCoordinate))
+        {
+            return false;
+        }
+
+        OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
+        if (stoneColor == OmokStoneColor.None)
+        {
+            return false;
+        }
+
+        request = new OmokStonePlacementRequest(stoneColor, targetCoordinate, releasePosition);
+        return true;
+    }
+
+    private bool TryBuildPlacementRequest(OmokStoneColor stoneColor, Vector2Int targetCoordinate, out OmokStonePlacementRequest request)
+    {
+        request = default;
+
+        if (stoneColor == OmokStoneColor.None ||
+            grid == null ||
+            !grid.IsReady ||
+            !IsInsideBoard(targetCoordinate) ||
+            IsCoordinateBlocked(targetCoordinate))
+        {
+            return false;
+        }
+
+        Vector3 releasePosition = grid.GetWorldPosition(targetCoordinate) + (grid.transform.up * dragHoverHeight);
+        request = new OmokStonePlacementRequest(stoneColor, targetCoordinate, releasePosition);
+        return true;
     }
 
     private bool IsInsideBoard(Vector2Int coordinate)
@@ -628,6 +751,7 @@ public class OmokStoneDropper : MonoBehaviour
             Destroy(existingFallingStone);
         }
 
+        ApplyDraggedStonePreviewAppearance(launcher, draggedStoneObject);
         return true;
     }
 
@@ -838,7 +962,7 @@ public class OmokStoneDropper : MonoBehaviour
         Collider[] colliders = FindObjectsByType<Collider>(FindObjectsSortMode.None);
         foreach (Collider collider in colliders)
         {
-            if (collider == null || IsBoardHit(collider) || collider.isTrigger)
+            if (collider == null || IsBoardHit(collider) || IsBlockerHit(collider) || collider.isTrigger)
             {
                 continue;
             }
@@ -859,10 +983,7 @@ public class OmokStoneDropper : MonoBehaviour
 
     private void OnDisable()
     {
-        if (draggedStoneObject != null)
-        {
-            Destroy(draggedStoneObject);
-        }
+        DestroyDraggedStonePreview(draggedStoneObject);
 
         ClearDragState();
     }
@@ -883,5 +1004,226 @@ public class OmokStoneDropper : MonoBehaviour
         {
             Destroy(previewMaterial);
         }
+
+        DestroyDraggedStonePreview(draggedStoneObject);
     }
+
+    private void ResolveNamedLayers()
+    {
+        boardLayer = LayerMask.NameToLayer(BoardLayerName);
+        blockerLayer = LayerMask.NameToLayer(BlockerLayerName);
+        boardLayerMask = boardLayer >= 0 ? 1 << boardLayer : 0;
+        launcherLayerMask = BuildLauncherLayerMask();
+    }
+
+    private static bool IsLayerInHierarchy(Transform target, int layer)
+    {
+        if (target == null || layer < 0)
+        {
+            return false;
+        }
+
+        Transform current = target;
+        while (current != null)
+        {
+            if (current.gameObject.layer == layer)
+            {
+                return true;
+            }
+
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    private int BuildLauncherLayerMask()
+    {
+        int mask = 0;
+        AddLauncherLayers(blackLauncher, ref mask);
+        AddLauncherLayers(whiteLauncher, ref mask);
+        return mask;
+    }
+
+    private static void AddLauncherLayers(OmokStoneLauncher launcher, ref int mask)
+    {
+        if (launcher == null || launcher.source == null)
+        {
+            return;
+        }
+
+        Transform[] hierarchy = launcher.source.GetComponentsInChildren<Transform>(true);
+        foreach (Transform current in hierarchy)
+        {
+            mask |= 1 << current.gameObject.layer;
+        }
+    }
+
+    private void ApplyDraggedStonePreviewAppearance(OmokStoneLauncher launcher, GameObject previewObject)
+    {
+        if (previewObject == null)
+        {
+            return;
+        }
+
+        draggedStonePreviewMaterials.Clear();
+        previewObject.transform.localScale *= previewStoneScaleMultiplier;
+
+        Renderer[] renderers = previewObject.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            Material[] sharedMaterials = renderer.sharedMaterials;
+            Material[] previewMaterials = new Material[sharedMaterials.Length];
+
+            for (int i = 0; i < sharedMaterials.Length; i++)
+            {
+                Material sourceMaterial = sharedMaterials[i];
+                if (sourceMaterial == null)
+                {
+                    continue;
+                }
+
+                Material previewMaterialInstance = new Material(sourceMaterial);
+                ConfigurePreviewMaterial(previewMaterialInstance, GetDraggedStonePreviewColor(launcher, false));
+                previewMaterials[i] = previewMaterialInstance;
+                draggedStonePreviewMaterials.Add(previewMaterialInstance);
+            }
+
+            renderer.sharedMaterials = previewMaterials;
+        }
+    }
+
+    private void UpdateDraggedStonePreviewVisual(bool isBlocked)
+    {
+        if (draggedStoneObject == null || activeLauncher == null)
+        {
+            return;
+        }
+
+        Color previewColor = GetDraggedStonePreviewColor(activeLauncher, isBlocked);
+        foreach (Material material in draggedStonePreviewMaterials)
+        {
+            if (material == null)
+            {
+                continue;
+            }
+
+            ApplyPreviewMaterialColor(material, previewColor);
+        }
+    }
+
+    private Color GetDraggedStonePreviewColor(OmokStoneLauncher launcher, bool isBlocked)
+    {
+        OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
+        Color baseColor = stoneColor == OmokStoneColor.Black
+            ? new Color(0.18f, 0.18f, 0.18f, previewStoneAlpha)
+            : new Color(1f, 1f, 1f, previewStoneAlpha);
+
+        if (!isBlocked)
+        {
+            return baseColor;
+        }
+
+        Color tinted = Color.Lerp(baseColor, blockedPreviewColor, blockedPreviewTintStrength);
+        tinted.a = Mathf.Max(baseColor.a, previewStoneAlpha);
+        return tinted;
+    }
+
+    private void ConfigurePreviewMaterial(Material material, Color color)
+    {
+        if (material == null)
+        {
+            return;
+        }
+
+        if (material.HasProperty(SurfacePropertyId))
+        {
+            material.SetFloat(SurfacePropertyId, 1f);
+        }
+
+        if (material.HasProperty(BlendPropertyId))
+        {
+            material.SetFloat(BlendPropertyId, 0f);
+        }
+
+        if (material.HasProperty(SrcBlendPropertyId))
+        {
+            material.SetFloat(SrcBlendPropertyId, (float)BlendMode.SrcAlpha);
+        }
+
+        if (material.HasProperty(DstBlendPropertyId))
+        {
+            material.SetFloat(DstBlendPropertyId, (float)BlendMode.OneMinusSrcAlpha);
+        }
+
+        if (material.HasProperty(ZWritePropertyId))
+        {
+            material.SetFloat(ZWritePropertyId, 0f);
+        }
+
+        material.DisableKeyword("_ALPHATEST_ON");
+        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.renderQueue = (int)RenderQueue.Transparent;
+
+        ApplyPreviewMaterialColor(material, color);
+    }
+
+    private static void ApplyPreviewMaterialColor(Material material, Color color)
+    {
+        if (material.HasProperty(BaseColorPropertyId))
+        {
+            material.SetColor(BaseColorPropertyId, color);
+        }
+
+        if (material.HasProperty(ColorPropertyId))
+        {
+            material.SetColor(ColorPropertyId, color);
+        }
+    }
+
+    private void DestroyDraggedStonePreview(GameObject previewObject)
+    {
+        if (previewObject != null)
+        {
+            Destroy(previewObject);
+        }
+
+        foreach (Material material in draggedStonePreviewMaterials)
+        {
+            if (material != null)
+            {
+                Destroy(material);
+            }
+        }
+
+        draggedStonePreviewMaterials.Clear();
+    }
+
+    private static Transform GetBlockerAttachmentTarget(Collider blockerCollider)
+    {
+        if (blockerCollider == null)
+        {
+            return null;
+        }
+
+        OmokFallingStone fallingStone = blockerCollider.GetComponentInParent<OmokFallingStone>();
+        if (fallingStone != null && fallingStone.BlockerTarget != null)
+        {
+            return fallingStone.BlockerTarget;
+        }
+
+        return blockerCollider.attachedRigidbody != null
+            ? blockerCollider.attachedRigidbody.transform
+            : blockerCollider.transform;
+    }
+
 }
