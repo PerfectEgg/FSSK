@@ -3,31 +3,30 @@ using UnityEngine;
 // 쥐
 public class Rat : AnimalTroll
 {
-    private float danceTime = 1.5f;
 
     void Start()
     {
-        waittingTime = 3f;
+        _waittingTime = 3f;
     }
 
     protected override void OnStateEnter(AnimalState state)
     {
         if(state == AnimalState.Entering || state == AnimalState.Action || state == AnimalState.Exiting)
-            isInteractable = false;
+            _isInteractable = false;
         else
-            isInteractable = true;
+            _isInteractable = true;
     }
 
     protected override void UpdateState()
     {
-        switch(currentState)
+        switch(_currentState)
         {
             case AnimalState.Entering:
-                if (currentTime >= enteringTime)
+                if (_currentTime >= _enteringTime)
                     ChangeState(AnimalState.Waiting);
                 break;
             case AnimalState.Waiting:
-                if (currentTime >= waittingTime)
+                if (_currentTime >= _waittingTime)
                     ChangeState(AnimalState.Action);
                 break;
             case AnimalState.Action:

@@ -3,28 +3,49 @@ using UnityEngine;
 public class PlayerInteraction : MonoBehaviour
 {
     [Header("상호작용 세팅")]
-    public float reachDistance = 10f; // 동물을 집을 수 있는 최대 사거리
-    public LayerMask interactableLayer; // 인스펙터에서 'Interactable' 레이어 체크
+    [SerializeField] private float _reachDistance = 100f; // 사물을 집을 수 있는 최대 사거리
+    [SerializeField] private LayerMask _interactableLayer; // 인스펙터에서 'Interactable' 레이어 체크
 
-    public float throwForce = 500f;   // 던지는 힘
+    private GameObject _currentGrabbedObject;
+    private Transform _grabbedTransform;
+    private Rigidbody _grabbedRigidbody;
 
-    private GameObject currentGrabbedObject;
-    private Transform grabbedTransform;
-    private Rigidbody grabbedRigidbody;
+    private string _grabbedTag;         // 그랩 대상의 태그
 
-    private string grabbedTag;
+    private bool _canInteract = false;  // 상호작용 가능 여부
 
-    private bool canInteract = false;
+    private float _stunTimer = 0f;      // 자체 기절 타이머
 
-    private void OnEnable() => GameEvents.OnExpansionModeChanged += HandleCameraModeChanged;
-    private void OnDisable() => GameEvents.OnExpansionModeChanged -= HandleCameraModeChanged;
+    private void OnEnable()
+    { 
+        GameEvents.OnExpansionModeChanged += HandleCameraModeChanged;
+        GameEvents.OnStunEffect += HandleStunEffect;
+    }
+
+    private void OnDisable()
+    {
+        GameEvents.OnExpansionModeChanged -= HandleCameraModeChanged;
+        GameEvents.OnStunEffect -= HandleStunEffect;
+    }
 
     private void HandleCameraModeChanged(bool isExpansion)
     {
-        canInteract = isExpansion;
+        _canInteract = isExpansion;
 
         // 예외 처리: 확장 모드가 꺼질 때 무언가를 들고 있다면 강제로 놓기
-        if (!isExpansion && grabbedTransform != null)
+        if (!isExpansion && _grabbedTransform != null)
+        {
+            ReleaseItem();
+        }
+    }
+
+    private void HandleStunEffect(float stunDuration)
+    {
+        // 1. 기절 시간 갱신
+        _stunTimer = Mathf.Max(_stunTimer, stunDuration);
+
+        // 🟢 2. 기절하는 순간, 잡고 있는 물체가 있다면 강제로 놓아버림 (Drop)
+        if (_stunTimer > 0f && _currentGrabbedObject != null)
         {
             ReleaseItem();
         }
@@ -32,17 +53,29 @@ public class PlayerInteraction : MonoBehaviour
 
     void Update()
     {
+        // 기절 상태라면 모든 마우스 입력 처리를 무시 (return)
+        if (_stunTimer > 0f)
+        {
+            _stunTimer -= Time.deltaTime;
+            
+            if (_stunTimer <= 0f)
+            {
+                Debug.Log("✋ [상호작용] 기절 종료, 조작 가능");
+            }
+            return; 
+        }
+
         // 상호작용 상태 체크
-        if (!canInteract) return; 
+        if (!_canInteract) return; 
 
         // 테스트 용 레이저 쏘기
         DrawDebugRay();
 
         // 클릭 시도 (잡기)
-        if (Input.GetMouseButtonDown(0)&& currentGrabbedObject == null) TryGrab();
+        if (Input.GetMouseButtonDown(0)&& _currentGrabbedObject == null) TryGrab();
 
         // 마우스 놓기 (드롭)
-        if (Input.GetMouseButtonUp(0) && currentGrabbedObject != null) ReleaseItem();
+        if (Input.GetMouseButtonUp(0) && _currentGrabbedObject != null) ReleaseItem();
     }
 
     // 씬 뷰에 레이저를 그려주는 함수
@@ -52,7 +85,7 @@ public class PlayerInteraction : MonoBehaviour
         Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
         
         // Debug.DrawRay(시작점, 방향 * 길이, 색상)
-        Debug.DrawRay(ray.origin, ray.direction * reachDistance, Color.red);
+        Debug.DrawRay(ray.origin, ray.direction * _reachDistance, Color.red);
     }
 
     private void TryGrab()
@@ -60,16 +93,16 @@ public class PlayerInteraction : MonoBehaviour
         Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
         
         // 🟢 마지막 인자에 interactableLayer를 추가하여 다른 레이어(책상 등)는 무시하게 합니다.
-        if (Physics.Raycast(ray, out RaycastHit hit, reachDistance, interactableLayer))
+        if (Physics.Raycast(ray, out RaycastHit hit, _reachDistance, _interactableLayer))
         {
             Debug.Log($"상호작용 성공! 대상: {hit.collider.name}");
             
-            currentGrabbedObject = hit.collider.gameObject;
-            grabbedTag = hit.collider.tag;
-            grabbedTransform = hit.collider.transform;
-            GameEvents.TriggerTrollInteraction(true, grabbedTransform.gameObject);
+            _currentGrabbedObject = hit.collider.gameObject;
+            _grabbedTag = hit.collider.tag;
+            _grabbedTransform = hit.collider.transform;
+            GameEvents.TriggerTrollInteraction(true, _grabbedTransform.gameObject);
             
-            if (grabbedTransform.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
+            if (_grabbedTransform.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
         }
         else
         {
@@ -79,20 +112,20 @@ public class PlayerInteraction : MonoBehaviour
 
     private void ReleaseItem()
     {
-        if (grabbedTransform.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
+        if (_grabbedTransform.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
 
         // 던지는 힘 대신, 현재 위치에 정적으로 내려놓는 처리
         // 트롤일 경우 장외 판정 등을 체크하기 위해 이벤트 발송
-        if (grabbedTag == "Troll")
+        if (_grabbedTag == "Troll")
         {
-            GameEvents.TriggerTrollInteraction(false, grabbedTransform.gameObject);
+            GameEvents.TriggerTrollInteraction(false, _grabbedTransform.gameObject);
         }
-        else if (grabbedTag == "Item")
+        else if (_grabbedTag == "Item")
         {
-            GameEvents.TriggerItemCollected(grabbedTag, grabbedTransform.gameObject);
+            GameEvents.TriggerItemCollected(_grabbedTag, _grabbedTransform.gameObject);
         }
 
-        currentGrabbedObject = null;
-        grabbedTransform = null;
+        _currentGrabbedObject = null;
+        _grabbedTransform = null;
     }
 }

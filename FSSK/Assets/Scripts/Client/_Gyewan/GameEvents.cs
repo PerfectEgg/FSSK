@@ -18,6 +18,12 @@ public static class GameEvents
     // 바다 게: 자리를 다 쓰고 반납하는 이벤트
     public static Action<Vector3> OnPositionReleased;
 
+    // 세이렌: 매혹 동안 확장 시야 고정 이벤트
+    public static Action<bool, Transform> OnSirenEffect;
+
+    // 크라켄 & 세이렌: 기절 시 정지 이벤트
+    public static Action<float> OnStunEffect;
+
     // 바다 게: 편의성을 위한 래퍼 함수들
     public static Vector3 GetSafePosition() 
     {

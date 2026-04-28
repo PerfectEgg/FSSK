@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: -3068155085586898372}
   m_Layer: 6
   m_Name: Turtle
-  m_TagString: Troll
+  m_TagString: Item
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -153,5 +153,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c63e6f9f7ba63de4baf211e787421130, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Turtle
+  throwForce: 20
   holdDistance: 12.5
   moveSpeed: 2
