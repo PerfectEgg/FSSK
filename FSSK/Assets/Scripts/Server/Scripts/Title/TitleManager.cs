@@ -4,14 +4,14 @@ using UnityEngine.SceneManagement;
 public class TitleManager : MonoBehaviour
 {
     [SerializeField]
-    GameObject GameSettingPanel; // 게임 설정 패널 
+    private GameObject _gameSettingPanel; // 게임 설정 패널 
     bool isGameSetting; // 게임 설정 보임 여부
 
     void Awake()
     {
         isGameSetting = false;
 
-        if(GameSettingPanel != null) GameSettingPanel.SetActive(false);
+        if(_gameSettingPanel != null) _gameSettingPanel.SetActive(false);
     } 
 
     // 시작 버튼 클릭 시
@@ -25,12 +25,12 @@ public class TitleManager : MonoBehaviour
     {
         if (!isGameSetting)
         {
-            GameSettingPanel.SetActive(true);
+            _gameSettingPanel.SetActive(true);
             isGameSetting = true;
         }
         else
         {
-            GameSettingPanel.SetActive(false);
+            _gameSettingPanel.SetActive(false);
             isGameSetting = false;
         }
     }

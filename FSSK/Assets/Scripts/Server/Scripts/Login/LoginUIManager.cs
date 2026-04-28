@@ -1,61 +1,70 @@
 using BackEnd;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
 /// 로그인 씬 UI 연결 매니저.
+/// 로그인/회원가입
 ///
-/// 하이어라키 구성:
-///   LoginPanel
-///     ├ IDtxt          (TextMeshProUGUI - 레이블, 필요 없으면 없어도 됨)
-///     ├ PWtxt          (TextMeshProUGUI - 레이블)
-///     ├ ID             (TMP_InputField  - 아이디 입력)
-///     ├ PASS           (TMP_InputField  - 비밀번호 입력)
-///     ├ LoginBtn       (Button)
-///     └ RegisterBtn    (Button)
-///   NicknamePanel      (로그인 후 닉네임 미설정 시 표시)
-///     ├ NicknameInput  (TMP_InputField)
-///     ├ ConfirmBtn     (Button)
-///     └ StatusText     (TextMeshProUGUI - 오류/안내 메시지)
-///   StatusText         (TextMeshProUGUI - 로그인 상태 메시지)
 /// </summary>
 public class LoginUIManager : MonoBehaviour
 {
     // ── 로그인 패널 ──────────────────────────────────────────────
     [Header("Login Panel")]
-    [SerializeField] private GameObject loginPanel;
-    [SerializeField] private TMP_InputField idInput;
-    [SerializeField] private TMP_InputField passInput;
-    [SerializeField] private Button loginBtn;
-    [SerializeField] private Button registerBtn;
-    [SerializeField] private TextMeshProUGUI loginStatusText;
+    [SerializeField] private GameObject _loginPanel;
+    [SerializeField] private TMP_InputField _idInput;
+    [SerializeField] private TMP_InputField _pwInput;
+    [SerializeField] private Button _loginBtn;
+    [SerializeField] private Button _registerBtn;
+    [SerializeField] private TextMeshProUGUI _loginStatusText;
 
-    // ── 닉네임 설정 패널 (로그인 성공 후 닉네임 없을 때 표시) ───
-    [Header("Nickname Panel")]
-    [SerializeField] private GameObject nicknamePanel;
-    [SerializeField] private TMP_InputField nicknameInput;
-    [SerializeField] private Button nicknameConfirmBtn;
-    [SerializeField] private TextMeshProUGUI nicknameStatusText;
+    [Header("Scene Names")]
+    [SerializeField] private string _registerSceneName = "Register";
 
     // ─────────────────────────────────────────────────────────────
 
     void Start()
     {
-        ShowLoginPanel();
+        ShowloginPanel();
 
-        loginBtn.onClick.AddListener(OnLoginClick);
-        registerBtn.onClick.AddListener(OnRegisterClick);
-        nicknameConfirmBtn.onClick.AddListener(OnNicknameConfirmClick);
+        _loginBtn.onClick.AddListener(OnLoginClick);
+        _registerBtn.onClick.AddListener(OnRegisterClick);
     }
 
-    // ─────────────────────────────────────────────────────────────
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Tab))
+            FocusNextInput();
+    }
+
+    // Tab 키로 다음 입력창으로 포커스 이동
+    private void FocusNextInput()
+    {
+        if (EventSystem.current == null) return;
+
+        GameObject current = EventSystem.current.currentSelectedGameObject;
+        if (current == null) return;
+
+        if (current == _idInput.gameObject)
+        {
+            _pwInput.Select();
+            _pwInput.ActivateInputField();
+        }
+        else if (current == _pwInput.gameObject)
+        {
+            _idInput.Select();
+            _idInput.ActivateInputField();
+        }
+    }
+
     //  로그인 버튼
-    // ─────────────────────────────────────────────────────────────
     public void OnLoginClick()
     {
-        string id = idInput.text.Trim();
-        string pw = passInput.text;
+        string id = _idInput.text.Trim();
+        string pw = _pwInput.text;
 
         if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(pw))
         {
@@ -97,11 +106,6 @@ public class LoginUIManager : MonoBehaviour
                         SetLoginStatus("로그인 성공!");
                         BackendManager.Instance.LoadMatchingScene();
                     }
-                    else
-                    {
-                        // 닉네임 없음 → 닉네임 설정 패널 표시
-                        ShowNicknamePanel();
-                    }
                 }
                 else
                 {
@@ -117,101 +121,29 @@ public class LoginUIManager : MonoBehaviour
         );
     }
 
-    // ─────────────────────────────────────────────────────────────
-    //  회원가입 버튼
-    // ─────────────────────────────────────────────────────────────
+    //  회원가입 버튼 → Register 씬으로 이동
     public void OnRegisterClick()
     {
-        string id = idInput.text.Trim();
-        string pw = passInput.text;
-
-        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(pw))
-        {
-            SetLoginStatus("아이디와 비밀번호를 입력해주세요.");
-            return;
-        }
-
-        SetLoginStatus("회원가입 중...");
-        SetLoginInteractable(false);
-
-        BackendManager.Instance.SignUp(id, pw,
-            onSuccess: () =>
-            {
-                SetLoginStatus("회원가입 성공! 로그인 해주세요.");
-                SetLoginInteractable(true);
-            },
-            onFail: (err) =>
-            {
-                SetLoginStatus("회원가입 실패: " + err);
-                SetLoginInteractable(true);
-            }
-        );
+        SceneManager.LoadScene(_registerSceneName);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    //  닉네임 확인 버튼
-    //  BackendLogin 으로 서버에 저장 → BackendManager 에 로컬 반영
-    // ─────────────────────────────────────────────────────────────
-    public void OnNicknameConfirmClick()
-    {
-        string nickname = nicknameInput.text.Trim();
-
-        if (string.IsNullOrEmpty(nickname))
-        {
-            SetNicknameStatus("닉네임을 입력해주세요.");
-            return;
-        }
-
-        SetNicknameStatus("닉네임 설정 중...");
-        nicknameConfirmBtn.interactable = false;
-
-        // 1. BackendLogin 으로 뒤끝 서버에 직접 저장
-        bool ok = BackendLogin.Instance.UpdateNickname(nickname, out string errorMsg);
-
-        if (ok)
-        {
-            // 2. BackendManager 에 로컬 닉네임 동기화 (서버 재호출 없음)
-            BackendManager.Instance.ApplyNickname(nickname);
-
-            SetNicknameStatus("닉네임 설정 완료!");
-            BackendManager.Instance.LoadMatchingScene();
-        }
-        else
-        {
-            SetNicknameStatus("닉네임 설정 실패: " + errorMsg);
-            nicknameConfirmBtn.interactable = true;
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
     //  패널 전환 헬퍼
-    // ─────────────────────────────────────────────────────────────
-    private void ShowLoginPanel()
+    private void ShowloginPanel()
     {
-        if (loginPanel != null) loginPanel.SetActive(true);
-        if (nicknamePanel != null) nicknamePanel.SetActive(false);
+        if (_loginPanel != null) _loginPanel.SetActive(true);
     }
 
-    private void ShowNicknamePanel()
-    {
-        if (loginPanel != null) loginPanel.SetActive(false);
-        if (nicknamePanel != null) nicknamePanel.SetActive(true);
-        SetNicknameStatus("사용할 닉네임을 입력해주세요.");
-    }
-
+    // 로그인 상태
     private void SetLoginStatus(string msg)
     {
-        if (loginStatusText != null) loginStatusText.text = msg;
+        if (_loginStatusText != null) _loginStatusText.text = msg;
     }
 
-    private void SetNicknameStatus(string msg)
-    {
-        if (nicknameStatusText != null) nicknameStatusText.text = msg;
-    }
 
+    // 버튼 활성화 여부
     private void SetLoginInteractable(bool value)
     {
-        loginBtn.interactable = value;
-        registerBtn.interactable = value;
+        _loginBtn.interactable = value;
+        _registerBtn.interactable = value;
     }
 }
