@@ -13,14 +13,32 @@ public class PlayerController : MonoBehaviour
     // 현재 기울임 기능이 활성화되었는지 체크하는 변수
     private bool _canLean = false;
 
+    private float _stunTimer = 0f;      // 자체 기절 타이머
+
     // 이벤트 구독 및 해제
-    private void OnEnable() => GameEvents.OnExpansionModeChanged += HandleModeChanged;
-    private void OnDisable() => GameEvents.OnExpansionModeChanged -= HandleModeChanged;
+    private void OnEnable()
+    {
+        GameEvents.OnExpansionModeChanged += HandleModeChanged;
+        GameEvents.OnStunEffect += HandleStunEffect;
+    }
+
+    private void OnDisable()
+    {
+        GameEvents.OnExpansionModeChanged -= HandleModeChanged;
+        GameEvents.OnStunEffect -= HandleStunEffect;
+    }
 
     private void HandleModeChanged(bool isExpansionMode)
     {
         _canLean = isExpansionMode;
     }
+
+    private void HandleStunEffect(float stunDuration)
+    {
+        // 1. 기절 시간 갱신
+        _stunTimer = Mathf.Max(_stunTimer, stunDuration);
+    }
+
 
     private void Start()
     {
@@ -32,6 +50,18 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        // 기절 상태라면 모든 마우스 입력 처리를 무시 (return)
+        if (_stunTimer > 0f)
+        {
+            _stunTimer -= Time.deltaTime;
+            
+            if (_stunTimer <= 0f)
+            {
+                Debug.Log("✋ [상호작용] 기절 종료, 조작 가능");
+            }
+            return; 
+        }
+
         // 1. 입력 받기 (A키: -1, D키: 1, 안 누르면 0)
         float h = 0f;
 
