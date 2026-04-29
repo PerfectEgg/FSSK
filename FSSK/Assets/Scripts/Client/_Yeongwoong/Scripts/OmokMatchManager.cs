@@ -6,13 +6,13 @@ using UnityEngine.Events;
 [Serializable]
 public class OmokMatchRules
 {
-    [SerializeField] private OmokStoneColor openingTurn = OmokStoneColor.Black;
+    [SerializeField] private OmokStoneColor openingTurn = OmokStoneColor.Gold;
     [SerializeField] private bool allowOverline = true;
     [SerializeField] private bool blockedAttemptConsumesTurn = true;
     [SerializeField] private bool allowBlockerVerticalWin = true;
     [SerializeField, Min(1)] private int blockerVerticalWinLength = 5;
 
-    public OmokStoneColor OpeningTurn => openingTurn == OmokStoneColor.None ? OmokStoneColor.Black : openingTurn;
+    public OmokStoneColor OpeningTurn => openingTurn == OmokStoneColor.None ? OmokStoneColor.Gold : openingTurn;
     public bool AllowOverline => allowOverline;
     public bool BlockedAttemptConsumesTurn => blockedAttemptConsumesTurn;
     public bool AllowBlockerVerticalWin => allowBlockerVerticalWin;
@@ -31,14 +31,14 @@ public class OmokMatchRules
 
 public readonly struct OmokManualPlacementState
 {
-    public OmokManualPlacementState(bool allowBlack, bool allowWhite)
+    public OmokManualPlacementState(bool allowGold, bool allowSilver)
     {
-        AllowBlack = allowBlack;
-        AllowWhite = allowWhite;
+        AllowGold = allowGold;
+        AllowSilver = allowSilver;
     }
 
-    public bool AllowBlack { get; }
-    public bool AllowWhite { get; }
+    public bool AllowGold { get; }
+    public bool AllowSilver { get; }
 }
 
 public readonly struct OmokStoneRemovalResult
@@ -83,8 +83,8 @@ public static class OmokMatchFlow
 
         bool canControlAssignedColor = CanAct(currentTurn, isMatchEnded, localPlayerColor);
         return new OmokManualPlacementState(
-            canControlAssignedColor && localPlayerColor == OmokStoneColor.Black,
-            canControlAssignedColor && localPlayerColor == OmokStoneColor.White);
+            canControlAssignedColor && localPlayerColor == OmokStoneColor.Gold,
+            canControlAssignedColor && localPlayerColor == OmokStoneColor.Silver);
     }
 
     public static bool IsInsideBoard(int boardSize, Vector2Int coordinate)
@@ -99,8 +99,8 @@ public static class OmokMatchFlow
     {
         return stoneColor switch
         {
-            OmokStoneColor.Black => OmokStoneColor.White,
-            OmokStoneColor.White => OmokStoneColor.Black,
+            OmokStoneColor.Gold => OmokStoneColor.Silver,
+            OmokStoneColor.Silver => OmokStoneColor.Gold,
             _ => OmokStoneColor.None
         };
     }
@@ -183,15 +183,15 @@ public class OmokMatchManager : MonoBehaviour
     [SerializeField] private UnityEvent onMatchEnded;
 
     [Header("Random Removal")]
-    [SerializeField] private OmokStoneColor randomRemovalOpeningColor = OmokStoneColor.Black;
+    [SerializeField] private OmokStoneColor randomRemovalOpeningColor = OmokStoneColor.Gold;
 
     private OmokStoneColor[,] _boardState;
     private readonly List<Vector2Int> _winningCoordinates = new();
     private bool _isMatchEnded;
     private OmokStoneColor _winner = OmokStoneColor.None;
     private int _placedStoneCount;
-    private OmokStoneColor _currentTurn = OmokStoneColor.Black;
-    private OmokStoneColor _nextRandomRemovalColor = OmokStoneColor.Black;
+    private OmokStoneColor _currentTurn = OmokStoneColor.Gold;
+    private OmokStoneColor _nextRandomRemovalColor = OmokStoneColor.Gold;
 
     public bool IsMatchEnded => _isMatchEnded;
     public OmokStoneColor Winner => _winner;
@@ -200,6 +200,7 @@ public class OmokMatchManager : MonoBehaviour
     public int BoardSize => grid != null ? grid.BoardSize : _boardState != null ? _boardState.GetLength(0) : 0;
     public OmokMatchRules Rules => rules;
     public OmokStoneColor NextRandomRemovalColor => _nextRandomRemovalColor;
+    public OmokStoneColor NextRemovalColor => _nextRandomRemovalColor;
 
     public event Action<OmokStoneColor> OnTurnChanged;
     public event Action<OmokStoneColor> OnMatchEnded;
@@ -262,7 +263,7 @@ public class OmokMatchManager : MonoBehaviour
         _isMatchEnded = false;
         _winner = OmokStoneColor.None;
         _placedStoneCount = 0;
-        _currentTurn = rules != null ? rules.OpeningTurn : OmokStoneColor.Black;
+        _currentTurn = rules != null ? rules.OpeningTurn : OmokStoneColor.Gold;
         _nextRandomRemovalColor = NormalizeRemovalColor(randomRemovalOpeningColor);
 
         if (resultOverlayRoot != null)
@@ -299,15 +300,30 @@ public class OmokMatchManager : MonoBehaviour
     {
         removalResult = default;
 
-        OmokStoneColor targetColor = NormalizeRemovalColor(_nextRandomRemovalColor);
-        if (TryRemoveRandomStoneByColor(targetColor, out removalResult))
+        if (!TrySelectNextRemovalTarget(out OmokStoneRemovalResult removalTarget))
         {
-            AdvanceRandomRemovalColor(removalResult.StoneColor);
-            return true;
+            return false;
         }
 
-        OmokStoneColor fallbackColor = OmokMatchFlow.GetOppositeColor(targetColor);
-        if (fallbackColor != OmokStoneColor.None && TryRemoveRandomStoneByColor(fallbackColor, out removalResult))
+        return TryConfirmRemoveStone(removalTarget, out removalResult);
+    }
+
+    public bool TrySelectNextRemovalTarget(out OmokStoneRemovalResult removalTarget)
+    {
+        removalTarget = default;
+
+        OmokStoneColor targetColor = NormalizeRemovalColor(_nextRandomRemovalColor);
+        return TrySelectRemovalTargetByColor(targetColor, out removalTarget);
+    }
+
+    public bool TryConfirmRemoveStone(OmokStoneRemovalResult removalTarget)
+    {
+        return TryConfirmRemoveStone(removalTarget, out _);
+    }
+
+    public bool TryConfirmRemoveStone(OmokStoneRemovalResult removalTarget, out OmokStoneRemovalResult removalResult)
+    {
+        if (TryRemoveStone(removalTarget.Coordinate, removalTarget.StoneColor, out removalResult))
         {
             AdvanceRandomRemovalColor(removalResult.StoneColor);
             return true;
@@ -316,9 +332,9 @@ public class OmokMatchManager : MonoBehaviour
         return false;
     }
 
-    private bool TryRemoveRandomStoneByColor(OmokStoneColor targetColor, out OmokStoneRemovalResult removalResult)
+    private bool TrySelectRemovalTargetByColor(OmokStoneColor targetColor, out OmokStoneRemovalResult removalTarget)
     {
-        removalResult = default;
+        removalTarget = default;
 
         if (_boardState == null || _isMatchEnded || targetColor == OmokStoneColor.None)
         {
@@ -343,7 +359,8 @@ public class OmokMatchManager : MonoBehaviour
         }
 
         Vector2Int targetCoordinate = candidates[UnityEngine.Random.Range(0, candidates.Count)];
-        return TryRemoveStone(targetCoordinate, targetColor, out removalResult);
+        removalTarget = new OmokStoneRemovalResult(targetCoordinate, targetColor);
+        return true;
     }
 
     private bool TryRemoveStone(Vector2Int coordinate, OmokStoneColor expectedColor, out OmokStoneRemovalResult removalResult)
@@ -508,12 +525,12 @@ public class OmokMatchManager : MonoBehaviour
 
     private static OmokStoneColor NormalizeRemovalColor(OmokStoneColor stoneColor)
     {
-        return stoneColor == OmokStoneColor.White ? OmokStoneColor.White : OmokStoneColor.Black;
+        return stoneColor == OmokStoneColor.Silver ? OmokStoneColor.Silver : OmokStoneColor.Gold;
     }
 
     private void AdvanceRandomRemovalColor(OmokStoneColor removedColor)
     {
         OmokStoneColor nextColor = OmokMatchFlow.GetOppositeColor(removedColor);
-        _nextRandomRemovalColor = nextColor == OmokStoneColor.None ? OmokStoneColor.Black : nextColor;
+        _nextRandomRemovalColor = nextColor == OmokStoneColor.None ? OmokStoneColor.Gold : nextColor;
     }
 }

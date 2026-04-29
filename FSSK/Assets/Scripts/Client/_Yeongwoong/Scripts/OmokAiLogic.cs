@@ -169,8 +169,8 @@ internal static class OmokAiLogic
     {
         return stoneColor switch
         {
-            OmokStoneColor.Black => OmokStoneColor.White,
-            OmokStoneColor.White => OmokStoneColor.Black,
+            OmokStoneColor.Gold => OmokStoneColor.Silver,
+            OmokStoneColor.Silver => OmokStoneColor.Gold,
             _ => OmokStoneColor.None
         };
     }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 public enum OmokStoneSnapTiming
 {
@@ -18,8 +19,8 @@ public enum OmokBlockerAttachmentMode
 public enum OmokStoneColor
 {
     None,
-    Black,
-    White
+    Gold,
+    Silver
 }
 
 [Serializable]
@@ -97,13 +98,17 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField] private Transform stoneRoot;
 
     [Header("Launchers")]
-    [SerializeField] private OmokStoneLauncher blackLauncher = new();
-    [SerializeField] private OmokStoneLauncher whiteLauncher = new();
+    [FormerlySerializedAs("blackLauncher")]
+    [SerializeField] private OmokStoneLauncher goldLauncher = new();
+    [FormerlySerializedAs("whiteLauncher")]
+    [SerializeField] private OmokStoneLauncher silverLauncher = new();
 
     [Header("Manual Input")]
     [SerializeField] private bool useBuiltInMouseInput = true;
-    [SerializeField] private bool allowBlackManualPlacement = true;
-    [SerializeField] private bool allowWhiteManualPlacement = true;
+    [FormerlySerializedAs("allowBlackManualPlacement")]
+    [SerializeField] private bool allowGoldManualPlacement = true;
+    [FormerlySerializedAs("allowWhiteManualPlacement")]
+    [SerializeField] private bool allowSilverManualPlacement = true;
 
     [Header("Drag")]
     [SerializeField, Min(0f)] private float dragHoverHeight = 3f;
@@ -325,10 +330,10 @@ public class OmokStoneDropper : MonoBehaviour
         _reservedCoordinates.Remove(coordinate);
     }
 
-    public void SetManualPlacementState(bool allowBlack, bool allowWhite)
+    public void SetManualPlacementState(bool allowGold, bool allowSilver)
     {
-        allowBlackManualPlacement = allowBlack;
-        allowWhiteManualPlacement = allowWhite;
+        allowGoldManualPlacement = allowGold;
+        allowSilverManualPlacement = allowSilver;
     }
 
     public void SetBuiltInMouseInputEnabled(bool isEnabled)
@@ -380,6 +385,30 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         Destroy(stone.gameObject);
+        return true;
+    }
+
+    public bool TryGetStoneTransformAt(Vector2Int coordinate, out Transform stoneTransform)
+    {
+        return TryGetStoneTransformAt(coordinate, OmokStoneColor.None, out stoneTransform);
+    }
+
+    public bool TryGetStoneTransformAt(Vector2Int coordinate, OmokStoneColor expectedColor, out Transform stoneTransform)
+    {
+        stoneTransform = null;
+
+        if (!IsInsideBoard(coordinate))
+        {
+            return false;
+        }
+
+        OmokFallingStone stone = GetStoneAtCoordinate(coordinate);
+        if (stone == null || !MatchesExpectedColor(stone, expectedColor))
+        {
+            return false;
+        }
+
+        stoneTransform = stone.transform;
         return true;
     }
 
@@ -810,15 +839,15 @@ public class OmokStoneDropper : MonoBehaviour
     {
         launcher = null;
 
-        if (allowBlackManualPlacement && IsLauncherHit(collider, blackLauncher))
+        if (allowGoldManualPlacement && IsLauncherHit(collider, goldLauncher))
         {
-            launcher = blackLauncher;
+            launcher = goldLauncher;
             return true;
         }
 
-        if (allowWhiteManualPlacement && IsLauncherHit(collider, whiteLauncher))
+        if (allowSilverManualPlacement && IsLauncherHit(collider, silverLauncher))
         {
-            launcher = whiteLauncher;
+            launcher = silverLauncher;
             return true;
         }
 
@@ -843,14 +872,14 @@ public class OmokStoneDropper : MonoBehaviour
 
     private OmokStoneColor GetLauncherStoneColor(OmokStoneLauncher launcher)
     {
-        if (launcher == blackLauncher)
+        if (launcher == goldLauncher)
         {
-            return OmokStoneColor.Black;
+            return OmokStoneColor.Gold;
         }
 
-        if (launcher == whiteLauncher)
+        if (launcher == silverLauncher)
         {
-            return OmokStoneColor.White;
+            return OmokStoneColor.Silver;
         }
 
         return OmokStoneColor.None;
@@ -860,8 +889,8 @@ public class OmokStoneDropper : MonoBehaviour
     {
         launcher = stoneColor switch
         {
-            OmokStoneColor.Black => blackLauncher,
-            OmokStoneColor.White => whiteLauncher,
+            OmokStoneColor.Gold => goldLauncher,
+            OmokStoneColor.Silver => silverLauncher,
             _ => null
         };
 
@@ -1936,7 +1965,7 @@ public class OmokStoneDropper : MonoBehaviour
                 continue;
             }
 
-            if (IsLauncherHit(collider, blackLauncher) || IsLauncherHit(collider, whiteLauncher))
+            if (IsLauncherHit(collider, goldLauncher) || IsLauncherHit(collider, silverLauncher))
             {
                 continue;
             }
@@ -2150,8 +2179,8 @@ public class OmokStoneDropper : MonoBehaviour
     private int BuildLauncherLayerMask()
     {
         int mask = 0;
-        AddLauncherLayers(blackLauncher, ref mask);
-        AddLauncherLayers(whiteLauncher, ref mask);
+        AddLauncherLayers(goldLauncher, ref mask);
+        AddLauncherLayers(silverLauncher, ref mask);
         return mask;
     }
 
@@ -2233,9 +2262,9 @@ public class OmokStoneDropper : MonoBehaviour
     private Color GetDraggedStonePreviewColor(OmokStoneLauncher launcher)
     {
         OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
-        return stoneColor == OmokStoneColor.Black
-            ? new Color(0.18f, 0.18f, 0.18f, previewStoneAlpha)
-            : new Color(1f, 1f, 1f, previewStoneAlpha);
+        return stoneColor == OmokStoneColor.Gold
+            ? new Color(1f, 0.72f, 0.18f, previewStoneAlpha)
+            : new Color(0.82f, 0.86f, 0.9f, previewStoneAlpha);
     }
 
     private void ConfigurePreviewMaterial(Material material, Color color)

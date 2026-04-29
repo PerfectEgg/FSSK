@@ -12,7 +12,7 @@ public class OmokAiController : MonoBehaviour
     [FormerlySerializedAs("useEasyAi")]
     [SerializeField] private bool useAi;
     [SerializeField] private OmokAiType selectedAiType = OmokAiType.Normal;
-    [SerializeField] private OmokStoneColor playerStoneColor = OmokStoneColor.Black;
+    [SerializeField] private OmokStoneColor playerStoneColor = OmokStoneColor.Gold;
     [SerializeField, Min(0f)] private float aiTurnDelay = 0.35f;
 
     private Coroutine _pendingAiTurn;
@@ -65,7 +65,7 @@ public class OmokAiController : MonoBehaviour
     {
         if (playerStoneColor == OmokStoneColor.None)
         {
-            playerStoneColor = OmokStoneColor.Black;
+            playerStoneColor = OmokStoneColor.Gold;
         }
 
         _selectedAi = CreateAi(selectedAiType);
@@ -171,7 +171,7 @@ public class OmokAiController : MonoBehaviour
         }
 
         OmokManualPlacementState placementState = matchManager.GetManualPlacementState(playerStoneColor);
-        stoneDropper.SetManualPlacementState(placementState.AllowBlack, placementState.AllowWhite);
+        stoneDropper.SetManualPlacementState(placementState.AllowGold, placementState.AllowSilver);
     }
 
     private void TryQueueAiTurn()
@@ -236,7 +236,7 @@ public class OmokAiController : MonoBehaviour
 
     private OmokStoneColor GetAiStoneColor()
     {
-        return playerStoneColor == OmokStoneColor.Black ? OmokStoneColor.White : OmokStoneColor.Black;
+        return playerStoneColor == OmokStoneColor.Gold ? OmokStoneColor.Silver : OmokStoneColor.Gold;
     }
 
     private static IOmokAi CreateAi(OmokAiType aiType)

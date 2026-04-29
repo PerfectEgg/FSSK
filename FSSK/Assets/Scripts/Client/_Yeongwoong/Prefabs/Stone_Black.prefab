@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 3623805096202396558}
   - component: {fileID: 6780601048211371019}
   m_Layer: 0
-  m_Name: Stone_Black
+  m_Name: Stone_Gold
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
