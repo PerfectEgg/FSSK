@@ -7,13 +7,17 @@ public class TrollManager : MonoBehaviour
     [SerializeField] private Transform[] _airSpawnPoints;      // 공중 스폰 포인트
     [SerializeField] private Transform[] _monsterSpawnPoints;   // 크라켄 스폰 포인트
     
+    [Header("동물")]
     [SerializeField] private GameObject _parrotPrefab;
     [SerializeField] private GameObject _ratPrefab;
     [SerializeField] private GameObject _seaCrabPrefab;
+    [SerializeField] private float _safeRadius = 2.5f;       // 바다 게 최소 안전 거리
     [SerializeField] private GameObject _turtlePrefab;
 
+    [Header("아이템")]
     [SerializeField] private GameObject _rumPrefab;
 
+    [Header("몬스터")]
     [SerializeField] private GameObject _krakenPrefab;
     [SerializeField] private GameObject _sirenPrefab;
 
@@ -31,8 +35,6 @@ public class TrollManager : MonoBehaviour
     }
 
     private List<Vector3> _occupiedPositions = new List<Vector3>();
-
-    [SerializeField] private float _safeRadius = 2.5f;       // 바다 게 최소 안전 거리
 
     // 겹치지 않는 안전한 랜덤 위치를 찾아 반환하는 함수
     public Vector3 GetSafeRandomPosition()

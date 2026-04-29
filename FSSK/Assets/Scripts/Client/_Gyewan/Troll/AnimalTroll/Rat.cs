@@ -100,6 +100,12 @@ public class Rat : AnimalTroll
                         StealStone();
                     }
                 }
+                // 만약 쥐가 달려가고 있는데 돌이 사라졌다면? (플레이어가 먼저 주운 경우 등)
+                else if (_isTargetAssigned && _targetPosition == null)
+                {
+                    Debug.Log("🐀 [도둑쥐] 목표물이 사라졌습니다! 빈손으로 돌아갑니다.");
+                    ChangeState(AnimalState.Exiting);
+                }
                 break;
             case AnimalState.Exiting:
                 transform.position = Vector3.MoveTowards(transform.position, _startPosition, _moveSpeed * Time.deltaTime);
