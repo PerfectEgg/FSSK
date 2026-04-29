@@ -14,7 +14,6 @@ GameObject:
   - component: {fileID: 6607433911235596155}
   - component: {fileID: 1113468967240464118}
   - component: {fileID: -8009233325964306039}
-  - component: {fileID: 3796001537894051484}
   m_Layer: 6
   m_Name: SeaCrab
   m_TagString: Troll
@@ -154,24 +153,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 63c748039d2043f439141706ee844507, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SeaCrab
-  _throwForce: 20
-  _holdDistance: 12.5
-  _moveSpeed: 2.5
---- !u!114 &3796001537894051484
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8353737392247691479}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8b9fb50b6a6f478d8b7e3c4b6cb3f931, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::OmokBlockerTarget
-  blocksStone: 1
-  keepBlockedStone: 1
-  attachmentMode: 1
-  consumeTurnWhenBlocked: 1
-  countForBlockerStackWin: 1
-  attachmentTarget: {fileID: 0}
+  throwForce: 20
+  holdDistance: 12.5
+  moveSpeed: 2.5

@@ -125,6 +125,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a30a5714bce5e9a43b06838085c83508, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Kraken
-  _enterSpeed: 20
-  _warningTime: 3
-  _penaltyDuration: 3
+  enterSpeed: 5
+  warningTime: 3
+  penaltyDuration: 3
