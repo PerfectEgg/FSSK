@@ -34,3 +34,21 @@
 - 코드를 수정하거나 제안할 때는 기존의 네이밍 규칙(특히 `_camelCase`와 `PascalCase` 구분)을 엄격하게 지킬 것.
 - 새로운 UI 스크립트를 작성할 때는 Header 어트리뷰트(`[Header("UI Elements")]`)를 활용하여 인스펙터를 깔끔하게 정리해 줄 것.
 
+# Debugging & Logging Conventions
+1. 말머리(Prefix) 필수
+   - 모든 `Debug.Log` 호출 시 문자열 맨 앞에 `[클래스명]`을 반드시 포함하여 출처를 명확히 할 것. 
+   - 예: `Debug.Log("[BackendManager] ...");`
+
+2. 로그 언어 하이브리드 정책 (Language Policy)
+   - `Debug.Log` (일반 정보/상태 전환): 기획/아트 팀원과의 원활한 소통 및 빠른 테스트를 위해 직관적인 **한글**로 작성할 것.
+     - 예: `Debug.Log("[LobbyManager] 로비 씬 진입 완료");`
+   - `Debug.LogWarning` & `Debug.LogError` (예외/에러): 서버 전송 시 인코딩 깨짐을 방지하고 빠른 검색을 위해, 객체명과 에러 원인을 포함하여 반드시 **영어(English)**로 건조하고 명확하게 작성할 것.
+     - 예: `Debug.LogError("[CommonUIManager] _gameSettingPanel NullReference.");`
+
+3. 로그 타격 지점 (Log Placement)
+   - 씬(Scene) 이동, 서버 네트워크 통신(요청 및 응답), 치명적 예외 상황(Null) 등 **상태가 크게 변하는 마일스톤(Milestone)** 지점에만 로그를 배치할 것.
+   - 가독성 파괴 및 성능 저하(Log Spam)를 막기 위해, `Update()` 내부나 초당 여러 번 호출되는 자잘한 연산 함수에는 절대 로그를 남기지 말 것.
+
+4. 예외 처리와 방어적 프로그래밍 (Defensive Programming)
+   - `[SerializeField]`로 할당받는 UI 패널이나 필수 컴포넌트를 메서드에서 사용할 때는, 로직 실행 전 반드시 `null` 체크를 할 것.
+   - 컴포넌트가 비어있을 경우 `Debug.LogError`로 원인을 출력한 뒤, `return;`으로 함수를 강제 종료(Fail-Fast)하여 게임이 크래시되는 것을 막을 것.

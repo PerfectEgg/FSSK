@@ -88,6 +88,7 @@ public class RegisterUIManager : MonoBehaviour
         BackendManager.Instance.SignUp(id, pw,
             onSuccess: () =>
             {
+                Debug.Log($"[RegisterUIManager] 회원가입 성공");
                 SetRegisterStatus("회원가입 성공! 로그인 해주세요.");
                 SetRegisterInteractable(true);
 
@@ -95,7 +96,7 @@ public class RegisterUIManager : MonoBehaviour
                 bool ok = BackendLogin.Instance.UpdateNickname(id, out string errorMsg);
                 if (!ok)
                 {
-                    Debug.Log("닉네임 적용 오류: " + errorMsg);
+                    Debug.LogWarning($"[RegisterUIManager] UpdateNickname failed: {errorMsg}");
                     return;
                 }
 
@@ -117,6 +118,7 @@ public class RegisterUIManager : MonoBehaviour
             },
             onFail: (err) =>
             {
+                Debug.LogWarning($"[RegisterUIManager] SignUp failed : {err}");
                 SetRegisterStatus("회원가입 실패: " + err);
                 SetRegisterInteractable(true);
             }
@@ -126,6 +128,18 @@ public class RegisterUIManager : MonoBehaviour
     // 뒤로 가기 → 로그인 씬으로 이동
     public void OnBackBtnClick()
     {
+        if (string.IsNullOrEmpty(_loginSceneName))
+        {
+            Debug.LogError("[RegisterUIManager] _loginSceneName is empty.");
+            return;
+        }
+        if (!Application.CanStreamedLevelBeLoaded(_loginSceneName))
+        {
+            Debug.LogError($"[RegisterUIManager] Scene '{_loginSceneName}' is not in Build Settings.");
+            return;
+        }
+        Debug.Log($"[RegisterUIManager] 로그인 씬 이동: '{_loginSceneName}'");
+
         SceneManager.LoadScene(_loginSceneName);
     }
 

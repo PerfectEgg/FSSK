@@ -23,7 +23,7 @@ public class BackendManager : MonoBehaviour
 
     // 씬 이름 (Inspector 에서 변경 가능)
     [Header("Scene Names")]
-    [SerializeField] private string matchingSceneName = "Lobby";
+    [SerializeField] private string _matchingSceneName = "Lobby";
 
     // 초기화
     void Awake()
@@ -31,6 +31,7 @@ public class BackendManager : MonoBehaviour
         // 중복 방지
         if (Instance != null && Instance != this)
         {
+            Debug.LogWarning("[BackendManager] Duplicate instance detected, destroying.");
             Destroy(gameObject);
             return;
         }
@@ -44,9 +45,9 @@ public class BackendManager : MonoBehaviour
     {
         var bro = Backend.Initialize();
         if (bro.IsSuccess())
-            Debug.Log("뒤끝 초기화 성공 : " + bro);
+            Debug.Log("[BackendManager] 뒤끝 초기화 성공 : " + bro);
         else
-            Debug.LogError("뒤끝 초기화 실패 : " + bro);
+            Debug.LogError($"[BackendManager] Backend.Initialize failed: {bro}");
     }
 
     // 로그인 (성공/실패만 반환, 닉네임 조회는 LoginUIManager 에서 직접)
@@ -59,7 +60,6 @@ public class BackendManager : MonoBehaviour
         if (ok)
         {
             IsLoggedIn = true;
-            Debug.Log("[BackendManager] 로그인 성공");
             onSuccess?.Invoke();
         }
         else
@@ -80,7 +80,6 @@ public class BackendManager : MonoBehaviour
 
         if (ok)
         {
-            Debug.Log("[BackendManager] 회원가입 성공");
             onSuccess?.Invoke();
         }
         else
@@ -152,6 +151,7 @@ public class BackendManager : MonoBehaviour
     // 씬 이동 헬퍼
     public void LoadMatchingScene()
     {
-        SceneManager.LoadScene(matchingSceneName);
+        Debug.Log($"[BackendManager] 매칭 씬 이동: '{_matchingSceneName}'");
+        SceneManager.LoadScene(_matchingSceneName);
     }
 }

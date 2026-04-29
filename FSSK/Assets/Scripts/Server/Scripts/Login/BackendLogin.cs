@@ -26,19 +26,19 @@ public class BackendLogin
     public bool CustomSignUp(string id, string pw, out string errorMsg)
     {
         errorMsg = "";
-        Debug.Log("회원가입을 요청합니다.");
+        Debug.Log("[BackendLogin] 회원가입을 요청합니다.");
 
         var bro = Backend.BMember.CustomSignUp(id, pw);
 
         if (bro.IsSuccess())
         {
-            Debug.Log("회원가입에 성공했습니다. : " + bro);
+            Debug.Log("[BackendLogin] 회원가입에 성공했습니다. : " + bro);
             return true;
         }
         else
         {
             errorMsg = bro.ToString();
-            Debug.LogError("회원가입에 실패했습니다. : " + bro);
+            Debug.LogError($"[BackendLogin] CustomSignUp failed: {bro}");
             return false;
         }
     }
@@ -47,19 +47,19 @@ public class BackendLogin
     public bool CustomLogin(string id, string pw, out string errorMsg)
     {
         errorMsg = "";
-        Debug.Log("로그인을 요청합니다.");
+        Debug.Log("[BackendLogin] 로그인을 요청합니다.");
 
         var bro = Backend.BMember.CustomLogin(id, pw);
 
         if (bro.IsSuccess())
         {
-            Debug.Log("로그인이 성공했습니다. : " + bro);
+            Debug.Log("[BackendLogin] 로그인이 성공했습니다. : " + bro);
             return true;
         }
         else
         {
             errorMsg = bro.ToString();
-            Debug.LogError("로그인이 실패했습니다. : " + bro);
+            Debug.LogError($"[BackendLogin] CustomLogin failed: {bro}");
             return false;
         }
     }
@@ -67,19 +67,19 @@ public class BackendLogin
     public bool UpdateNickname(string nickname, out string errorMsg)
     {
         errorMsg = "";
-        Debug.Log("닉네임 변경을 요청합니다.");
+        Debug.Log("[BackendLogin] 닉네임 변경을 요청합니다.");
 
         var bro = Backend.BMember.UpdateNickname(nickname);
 
         if (bro.IsSuccess())
         {
-            Debug.Log("닉네임 변경에 성공했습니다 : " + bro);
+            Debug.Log("[BackendLogin] 닉네임 변경에 성공했습니다 : " + bro);
             return true;
         }
         else
         {
             errorMsg = bro.ToString();
-            Debug.LogError("닉네임 변경에 실패했습니다 : " + bro);
+            Debug.LogError($"[BackendLogin] UpdateNickname failed: {bro}");
             return false;
         }
     }

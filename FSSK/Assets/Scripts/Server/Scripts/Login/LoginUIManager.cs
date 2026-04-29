@@ -1,3 +1,4 @@
+using System;
 using BackEnd;
 using TMPro;
 using UnityEngine;
@@ -38,6 +39,9 @@ public class LoginUIManager : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Tab))
             FocusNextInput();
+
+        if (Input.GetKeyDown(KeyCode.Return)) // Enter 키
+            OnLoginClick();
     }
 
     // Tab 키로 다음 입력창으로 포커스 이동
@@ -84,7 +88,7 @@ public class LoginUIManager : MonoBehaviour
                 var userInfoBro = Backend.BMember.GetUserInfo();
                 if (userInfoBro.IsSuccess())
                 {
-                    Debug.Log("유저 정보 조회 성공 : " + userInfoBro);
+                    Debug.Log("[LoginUIManager] 유저 정보 조회 성공 : " + userInfoBro);
                     string nickname = "";
                     try
                     {
@@ -97,24 +101,30 @@ public class LoginUIManager : MonoBehaviour
                                 nickname = nick;
                         }
                     }
-                    catch { /* 닉네임 없음 */ }
+                    catch (Exception e)
+                    { 
+                        Debug.LogError($"[LoginUIManager] Failed to parse user info JSON: {e.Message}"); 
+                    }
 
                     if (!string.IsNullOrEmpty(nickname))
                     {
                         // 닉네임 있음 → BackendManager 에 저장 후 매칭 씬으로
                         BackendManager.Instance.ApplyNickname(nickname);
+                        Debug.Log($"[LoginUIManager] 로그인 성공 (nickname: '{nickname}')");
                         SetLoginStatus("로그인 성공!");
                         BackendManager.Instance.LoadMatchingScene();
                     }
                 }
                 else
                 {
+                    Debug.LogError($"[LoginUIManager] GetUserInfo failed: {userInfoBro}");
                     SetLoginStatus("유저 정보 조회 실패: " + userInfoBro);
                     SetLoginInteractable(true);
                 }
             },
             onFail: (err) =>
             {
+                Debug.LogWarning($"[LoginUIManager] Login failed : {err}");
                 SetLoginStatus("로그인 실패: " + err);
                 SetLoginInteractable(true);
             }
@@ -124,6 +134,18 @@ public class LoginUIManager : MonoBehaviour
     //  회원가입 버튼 → Register 씬으로 이동
     public void OnRegisterClick()
     {
+        if (string.IsNullOrEmpty(_registerSceneName))
+        {
+            Debug.LogError("[LoginUIManager] _registerSceneName is empty.");
+            return;
+        }
+        if (!Application.CanStreamedLevelBeLoaded(_registerSceneName))
+        {
+            Debug.LogError($"[LoginUIManager] Scene '{_registerSceneName}' is not in Build Settings.");
+            return;
+        }
+        Debug.Log($"[LoginUIManager] 회원가입 씬 이동: '{_registerSceneName}'");
+        
         SceneManager.LoadScene(_registerSceneName);
     }
 

@@ -28,6 +28,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         _matchButton.interactable = false;
         SetStatus("서버 연결 중...");
 
+        Debug.Log("[MatchingManager] Photon 마스터 서버 연결 시도");
         PhotonNetwork.ConnectUsingSettings();
     }
 
@@ -44,6 +45,8 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 매칭 버튼 클릭 → 랜덤 매칭 시도 (실패 시 OnJoinRandomFailed 에서 새 방 생성)
     public void OnClickMatchButton()
     {
+        Debug.Log("[MatchingManager] 랜덤 매칭 시작...");
+
         _matchButton.interactable = false;
         _isMatching = true;
         _matchingTime = 0f;
@@ -56,7 +59,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 랜덤 매칭 실패 (입장 가능한 방 없음) → 새 방 생성 (이름 null = Photon 자동 생성)
     public override void OnJoinRandomFailed(short returnCode, string message)
     {
-        Debug.Log($"랜덤 매칭 실패 - 새 방 생성: {message}");
+        Debug.Log($"[MatchingManager] 랜덤 매칭 실패 - 새 방 생성: {message}");
 
         RoomOptions options = new()
         {
@@ -70,12 +73,14 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 대기실 입장
     public override void OnConnectedToMaster()
     {
+        Debug.Log($"[MatchingManager] 마스터 서버 연결 완료 - 로비 입장 Region: '{PhotonNetwork.CloudRegion}', AppVersion: '{PhotonNetwork.AppVersion}'");
         PhotonNetwork.JoinLobby();
     }
 
     // 매칭 버튼 활성화
     public override void OnJoinedLobby()
     {
+        Debug.Log("[MatchingManager] 로비 입장 완료");
         _matchButton.interactable = true;
         SetStatus("매칭 버튼을 눌러 시작하세요");
     }
@@ -83,6 +88,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 로비 입장 및 인원 수 체크
     public override void OnJoinedRoom()
     {
+        Debug.Log($"[MatchingManager] 플레이어 인원 수 : ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         SetStatus($"대기 중... ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         CheckStartGame();
     }
@@ -90,6 +96,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 다른 플레이어 입장
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
+        Debug.Log($"[MatchingManager] 플레이어 입장: '{newPlayer.NickName}' ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         SetStatus($"대기 중... ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         CheckStartGame();
     }
@@ -97,13 +104,14 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 다른 플레이어 퇴장
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
+        Debug.Log($"[MatchingManager] 플레이어 퇴장: '{otherPlayer.NickName}' ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         SetStatus($"대기 중... ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
     }
 
     // 방 생성 실패 (드물게 발생 — 네트워크 이슈 등) → 매칭 상태 해제
     public override void OnCreateRoomFailed(short returnCode, string message)
     {
-        Debug.LogWarning($"방 생성 실패: {message}");
+        Debug.LogWarning($"[MatchingManager] CreateRoom failed (code: {returnCode}): {message}");
         _isMatching = false;
         _matchButton.interactable = true;
         SetStatus("방 생성 실패. 다시 시도해주세요.");
@@ -112,6 +120,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 연결 끊김
     public override void OnDisconnected(DisconnectCause cause)
     {
+        Debug.LogWarning($"[MatchingManager] Disconnected (cause: {cause}) — reconnecting.");
         _isMatching = false;
         _matchButton.interactable = false;
         SetStatus("연결 끊김. 재연결 중...");
@@ -123,8 +132,20 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     {
         if (!PhotonNetwork.IsMasterClient) return;
         if (PhotonNetwork.CurrentRoom.PlayerCount < _maxPlayers) return;
+        if (string.IsNullOrEmpty(_gameSceneName))
+        {
+            Debug.LogError("[MatchingManager] _gameSceneName is empty.");
+            return;
+        }
+        // Build Settings에 등록되어있지 않은 경우
+        if (!Application.CanStreamedLevelBeLoaded(_gameSceneName))
+        {
+            Debug.LogError($"[MatchingManager] Scene '{_gameSceneName}' is not in Build Settings.");
+            return;
+        }
 
         PhotonNetwork.CurrentRoom.IsOpen = false;
+        Debug.Log($"[MatchingManager] 인원 충족 — 게임 씬 이동: '{_gameSceneName}'");
         PhotonNetwork.LoadLevel(_gameSceneName);
     }
 
