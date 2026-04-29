@@ -12,11 +12,14 @@ EditorBuildSettings:
     path: Assets/Scenes/Login.unity
     guid: 9a282dc4fefd4044589ba793712c3017
   - enabled: 1
+    path: Assets/Scenes/Register.unity
+    guid: 09e5fe7a9e5730d448a080aa118c7dde
+  - enabled: 1
     path: Assets/Scenes/Lobby.unity
     guid: 3c6cf14fb64353b4891818d19d545d64
   - enabled: 1
-    path: Assets/Scenes/Register.unity
-    guid: 09e5fe7a9e5730d448a080aa118c7dde
+    path: Assets/Scenes/Game.unity
+    guid: 544d35f8d0859264d86f409330b2d000
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
