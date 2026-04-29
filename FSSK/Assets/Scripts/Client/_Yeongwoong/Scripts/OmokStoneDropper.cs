@@ -941,6 +941,7 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        Physics.SyncTransforms();
         Collider[] startOverlaps = Physics.OverlapSphere(startPosition, probeRadius, ~0, QueryTriggerInteraction.Collide);
         if (TryGetNearestBlockerCollider(startOverlaps, startPosition, out blockerCollider))
         {
@@ -1189,6 +1190,7 @@ public class OmokStoneDropper : MonoBehaviour
 
     private Vector3 GetBlockerStackStonePosition(Collider blockerCollider, OmokFallingStone stone, Transform stackKey)
     {
+        Physics.SyncTransforms();
         Vector3 up = GetGridUp();
         Vector3 centerPosition = GetBlockerStackCenter(blockerCollider);
         float halfHeight = stone != null ? stone.GetSnapOffsetAlongNormal(up) : 0f;
@@ -1226,6 +1228,7 @@ public class OmokStoneDropper : MonoBehaviour
         Vector3 direction = -up;
         float distance = Vector3.Distance(start, end);
 
+        Physics.SyncTransforms();
         RaycastHit[] sphereHits = Physics.SphereCastAll(
             start,
             probeRadius,
@@ -1258,6 +1261,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         Vector3 up = GetGridUp();
+        Physics.SyncTransforms();
         Transform stackKey = GetBlockerAttachmentTarget(blockerCollider);
         stackKey = stackKey != null ? stackKey : blockerCollider.transform;
         Vector3 centerPosition = GetBlockerStackCenter(blockerCollider);
@@ -1278,6 +1282,22 @@ public class OmokStoneDropper : MonoBehaviour
         if (TryGetExplicitAttachmentTarget(blockerCollider, out Transform explicitTarget))
         {
             return explicitTarget.position;
+        }
+
+        OmokBlockerTarget blockerTarget = blockerCollider != null
+            ? blockerCollider.GetComponentInParent<OmokBlockerTarget>()
+            : null;
+        if (blockerTarget != null)
+        {
+            return blockerTarget.transform.position;
+        }
+
+        OmokFallingStone fallingStone = blockerCollider != null
+            ? blockerCollider.GetComponentInParent<OmokFallingStone>()
+            : null;
+        if (fallingStone != null && fallingStone.BlockerTarget != null)
+        {
+            return fallingStone.BlockerTarget.position;
         }
 
         return blockerCollider != null ? blockerCollider.bounds.center : transform.position;
@@ -1423,6 +1443,7 @@ public class OmokStoneDropper : MonoBehaviour
         float contactPadding = Mathf.Max(0.02f, GetEffectivePreviewTargetHeightOffset(), blockerProbeExtraRadius);
         bounds.Expand(contactPadding * 2f);
 
+        Physics.SyncTransforms();
         Collider[] overlappingColliders = Physics.OverlapBox(
             bounds.center,
             bounds.extents,

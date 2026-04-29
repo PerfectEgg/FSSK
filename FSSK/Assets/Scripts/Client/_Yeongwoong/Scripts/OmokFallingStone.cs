@@ -22,8 +22,11 @@ public class OmokFallingStone : MonoBehaviour
     private Vector3 _targetWorldPosition;
     private float _gravityScale = 1f;
     private bool _guideStraightToTarget;
+    private bool _hasBlockerAnchor;
     private Vector3 _straightGuideStartPosition;
     private Vector3 _previousBlockerProbePosition;
+    private Vector3 _blockerAnchorLocalPosition;
+    private Quaternion _blockerAnchorLocalRotation;
 
     public Vector2Int Coordinate { get; private set; }
     public bool IsSnapped => _isSnapped;
@@ -63,6 +66,7 @@ public class OmokFallingStone : MonoBehaviour
         _isFailed = false;
         BlockerTarget = null;
         _hasBoardContact = false;
+        _hasBlockerAnchor = false;
         _spawnTime = Time.time;
         StoneColor = stoneColor;
         _snapTiming = timing;
@@ -97,6 +101,17 @@ public class OmokFallingStone : MonoBehaviour
         {
             TryResolveLanding();
         }
+    }
+
+    private void LateUpdate()
+    {
+        if (!_isBlockedByBlocker || !_hasBlockerAnchor || BlockerTarget == null)
+        {
+            return;
+        }
+
+        transform.localPosition = _blockerAnchorLocalPosition;
+        transform.localRotation = _blockerAnchorLocalRotation;
     }
 
     private void FixedUpdate()
@@ -254,6 +269,9 @@ public class OmokFallingStone : MonoBehaviour
         if (blockerTarget != null)
         {
             transform.SetParent(blockerTarget, true);
+            _blockerAnchorLocalPosition = transform.localPosition;
+            _blockerAnchorLocalRotation = transform.localRotation;
+            _hasBlockerAnchor = true;
         }
 
         if (blockerLayer >= 0)
