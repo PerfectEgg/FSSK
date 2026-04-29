@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 4337514736187990494}
   - component: {fileID: 4997744974824507401}
   - component: {fileID: 9079133452499754677}
+  - component: {fileID: -9195455124189376770}
   m_Layer: 6
   m_Name: Parrot
   m_TagString: Troll
@@ -155,6 +156,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7eaa080fe0aa5147b5097e66191d694, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Parrot
-  throwForce: 20
-  holdDistance: 12.5
-  flyHeight: 2
+  _throwForce: 20
+  _holdDistance: 12.5
+  _flyHeight: 5
+--- !u!114 &-9195455124189376770
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9007209712626027920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b9fb50b6a6f478d8b7e3c4b6cb3f931, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OmokBlockerTarget
+  blocksStone: 1
+  keepBlockedStone: 1
+  attachmentMode: 1
+  consumeTurnWhenBlocked: 1
+  countForBlockerStackWin: 1
+  attachmentTarget: {fileID: 0}
