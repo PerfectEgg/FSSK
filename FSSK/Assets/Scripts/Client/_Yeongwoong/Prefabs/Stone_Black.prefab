@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 790883446256670950}
   - component: {fileID: 1822683880016401058}
   - component: {fileID: 3623805096202396558}
-  - component: {fileID: 4911100418967945643}
+  - component: {fileID: 6780601048211371019}
   m_Layer: 0
   m_Name: Stone_Black
   m_TagString: Untagged
@@ -91,8 +91,8 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!135 &4911100418967945643
-SphereCollider:
+--- !u!65 &6780601048211371019
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -110,5 +110,5 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.5
+  m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}

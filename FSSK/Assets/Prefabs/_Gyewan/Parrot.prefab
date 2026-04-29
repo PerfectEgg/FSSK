@@ -155,6 +155,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7eaa080fe0aa5147b5097e66191d694, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Parrot
-  throwForce: 20
-  holdDistance: 12.5
-  flyHeight: 2
+  _throwForce: 20
+  _holdDistance: 12.5
+  _flyHeight: 5

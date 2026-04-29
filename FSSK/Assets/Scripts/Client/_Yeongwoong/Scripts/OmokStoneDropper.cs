@@ -71,9 +71,12 @@ public class OmokStoneDropper : MonoBehaviour
 {
     private const string BOARD_LAYER_NAME = "Board";
     private const string BLOCKER_LAYER_NAME = "Blocker";
-    private const float DRAG_HOVER_HEIGHT_CELL_MULTIPLIER = 1.4f;
+    private const float DRAG_HOVER_HEIGHT_MAX_CELL_MULTIPLIER = 6f;
     private const float PREVIEW_LINE_WIDTH_CELL_MULTIPLIER = 0.06f;
-    private const float PREVIEW_RAY_LINE_WIDTH_MULTIPLIER = 0.35f;
+    private const float PREVIEW_RAY_LINE_WIDTH_MULTIPLIER = 0.22f;
+    private const float PREVIEW_RAY_TARGET_GAP_CELL_MULTIPLIER = 0.08f;
+    private const float PREVIEW_LINE_INSET_CELL_MULTIPLIER = 0.06f;
+    private const float PREVIEW_LINE_HEIGHT_MIN_CELL_MULTIPLIER = 0.03f;
     private const float PREVIEW_TARGET_HEIGHT_CELL_MULTIPLIER = 0.06f;
     private const float SETTLE_OFFSET_CELL_MULTIPLIER = 0.002f;
     private const float BLOCKER_STACK_GAP_CELL_MULTIPLIER = 0.002f;
@@ -103,7 +106,7 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField] private bool allowWhiteManualPlacement = true;
 
     [Header("Drag")]
-    [SerializeField, Min(0f)] private float dragHoverHeight = 20f;
+    [SerializeField, Min(0f)] private float dragHoverHeight = 3f;
 
     [Header("Placement Offset")]
     [SerializeField] private bool usePlacementTargetOffset;
@@ -133,7 +136,6 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField, Min(0.005f)] private float previewLineWidth = 1f;
     [SerializeField, Min(0f)] private float previewTargetHeightOffset = 0.1f;
     [SerializeField, Range(0.15f, 0.85f)] private float previewStoneAlpha = 0.45f;
-    [SerializeField, Range(0f, 1f)] private float blockedPreviewTintStrength = 0.65f;
     [SerializeField, Range(0.85f, 1f)] private float previewStoneScaleMultiplier = 0.97f;
 
     private readonly HashSet<Vector2Int> _occupiedCoordinates = new();
@@ -591,12 +593,19 @@ public class OmokStoneDropper : MonoBehaviour
 
         Vector2Int targetCoordinate = GetPlacementTargetCoordinate(aimState.Coordinate);
         _currentDragCoordinate = targetCoordinate;
+        _currentDragReleasePosition = aimState.AimWorldPosition;
+        if (!IsInsideBoard(targetCoordinate))
+        {
+            UpdateDraggedStonePreviewVisual();
+            HidePreview();
+            return;
+        }
+
         _hasDragBoardTarget = true;
 
-        _currentDragReleasePosition = aimState.AimWorldPosition;
         Vector3 draggedStoneCenter = GetDraggedStonePreviewProbeCenter(_currentDragReleasePosition);
         PlacementPreviewState previewState = BuildPlacementPreviewState(targetCoordinate, _currentDragReleasePosition, draggedStoneCenter);
-        UpdateDraggedStonePreviewVisual(previewState.IsBlocked);
+        UpdateDraggedStonePreviewVisual();
         DrawPreview(targetCoordinate, previewState);
     }
 
@@ -1073,7 +1082,7 @@ public class OmokStoneDropper : MonoBehaviour
         if (!isCoordinateBlocked &&
             TryGetBlockerPreviewStonePosition(coordinate, blockerProbeOrigin, out Vector3 blockerPreviewPosition))
         {
-            return new PlacementPreviewState(true, true, blockerPreviewPosition, stoneProbeCenter, blockerPreviewPosition);
+            return new PlacementPreviewState(false, true, blockerPreviewPosition, stoneProbeCenter, blockerPreviewPosition, true);
         }
 
         return new PlacementPreviewState(isCoordinateBlocked, false, default, stoneProbeCenter, boardTargetPosition);
@@ -1127,12 +1136,23 @@ public class OmokStoneDropper : MonoBehaviour
 
     private float GetEffectiveDragHoverHeight()
     {
-        return GetCellClampedDistance(dragHoverHeight, DRAG_HOVER_HEIGHT_CELL_MULTIPLIER);
+        float requestedCellHeight = Mathf.Max(0f, dragHoverHeight);
+        float cellSize = GetGridCellSize();
+        if (cellSize <= 0f)
+        {
+            return requestedCellHeight;
+        }
+
+        return Mathf.Min(requestedCellHeight * cellSize, cellSize * DRAG_HOVER_HEIGHT_MAX_CELL_MULTIPLIER);
     }
 
     private float GetEffectivePreviewLineWidth()
     {
-        return Mathf.Max(0.005f, GetCellClampedDistance(previewLineWidth, PREVIEW_LINE_WIDTH_CELL_MULTIPLIER));
+        float baseWidth = Mathf.Max(0.005f, previewLineWidth);
+        float cellSize = GetGridCellSize();
+        return cellSize > 0f
+            ? Mathf.Max(0.005f, cellSize * PREVIEW_LINE_WIDTH_CELL_MULTIPLIER * baseWidth)
+            : baseWidth;
     }
 
     private float GetEffectivePreviewRayLineWidth()
@@ -1142,7 +1162,11 @@ public class OmokStoneDropper : MonoBehaviour
 
     private float GetEffectivePreviewTargetHeightOffset()
     {
-        return GetCellClampedDistance(previewTargetHeightOffset, PREVIEW_TARGET_HEIGHT_CELL_MULTIPLIER);
+        float offset = GetCellClampedDistance(previewTargetHeightOffset, PREVIEW_TARGET_HEIGHT_CELL_MULTIPLIER);
+        float cellSize = GetGridCellSize();
+        return cellSize > 0f
+            ? Mathf.Max(offset, cellSize * PREVIEW_LINE_HEIGHT_MIN_CELL_MULTIPLIER)
+            : offset;
     }
 
     private float GetEffectiveSettleOffset()
@@ -1582,12 +1606,28 @@ public class OmokStoneDropper : MonoBehaviour
         _previewRenderer.startColor = color;
         _previewRenderer.endColor = color;
 
-        Vector3[] corners = GetPreviewCorners(coordinate);
+        Vector3 previewTargetPosition = GetPreviewTargetPosition(previewState);
+        Vector3[] corners = previewState.IsBlockerStackTarget
+            ? GetPreviewCorners(previewTargetPosition)
+            : GetPreviewCorners(coordinate);
         _previewRenderer.positionCount = corners.Length;
         _previewRenderer.SetPositions(corners);
         _previewRenderer.enabled = true;
 
-        DrawPreviewRay(previewState.RayStartPosition, previewState.RayTargetPosition, color);
+        DrawPreviewRay(previewState.RayStartPosition, previewTargetPosition, color);
+    }
+
+    private Vector3 GetPreviewTargetPosition(PlacementPreviewState previewState)
+    {
+        if (!previewState.IsBlockerStackTarget || !previewState.HasStoneWorldPosition)
+        {
+            return previewState.RayTargetPosition;
+        }
+
+        Vector3 up = GetGridUp();
+        float stoneHalfHeight = GetDraggedStonePreviewExtent(up);
+        float markerHeight = Mathf.Max(GetEffectivePreviewTargetHeightOffset(), GetEffectivePreviewLineWidth());
+        return previewState.StoneWorldPosition - (up * Mathf.Max(0f, stoneHalfHeight - markerHeight));
     }
 
     private void DrawPreviewRay(Vector3 startPosition, Vector3 targetPosition, Color color)
@@ -1601,9 +1641,42 @@ public class OmokStoneDropper : MonoBehaviour
         _previewRayRenderer.startColor = color;
         _previewRayRenderer.endColor = color;
         _previewRayRenderer.positionCount = 2;
-        _previewRayRenderer.SetPosition(0, startPosition);
-        _previewRayRenderer.SetPosition(1, targetPosition);
+        Vector3 rayStartPosition = GetPreviewRayStartPosition(startPosition, targetPosition);
+        _previewRayRenderer.SetPosition(0, rayStartPosition);
+        _previewRayRenderer.SetPosition(1, GetPreviewRayEndPosition(rayStartPosition, targetPosition));
         _previewRayRenderer.enabled = true;
+    }
+
+    private Vector3 GetPreviewRayStartPosition(Vector3 startPosition, Vector3 targetPosition)
+    {
+        Vector3 ray = targetPosition - startPosition;
+        float distance = ray.magnitude;
+        if (distance <= 0.001f)
+        {
+            return startPosition;
+        }
+
+        float startGap = Mathf.Max(GetEffectivePreviewLineWidth() * 1.5f, GetDraggedStonePreviewProbeRadius() * 0.65f);
+        return startPosition + (ray / distance * Mathf.Min(startGap, distance * 0.45f));
+    }
+
+    private Vector3 GetPreviewRayEndPosition(Vector3 startPosition, Vector3 targetPosition)
+    {
+        Vector3 ray = targetPosition - startPosition;
+        float distance = ray.magnitude;
+        if (distance <= 0.001f)
+        {
+            return targetPosition;
+        }
+
+        float cellSize = GetGridCellSize();
+        float targetGap = Mathf.Max(GetEffectivePreviewLineWidth() * 1.5f, cellSize * PREVIEW_RAY_TARGET_GAP_CELL_MULTIPLIER);
+        if (distance <= targetGap)
+        {
+            return targetPosition;
+        }
+
+        return targetPosition - (ray / distance * targetGap);
     }
 
     private bool TryCreateDraggedStone(OmokStoneLauncher launcher)
@@ -1681,6 +1754,9 @@ public class OmokStoneDropper : MonoBehaviour
         Vector3 center = grid.GetWorldPosition(coordinate);
         Vector3 horizontalHalfStep = GetHorizontalHalfStep(coordinate);
         Vector3 verticalHalfStep = GetVerticalHalfStep(coordinate);
+        float inset = Mathf.Max(GetEffectivePreviewLineWidth(), GetGridCellSize() * PREVIEW_LINE_INSET_CELL_MULTIPLIER);
+        horizontalHalfStep = GetInsetHalfStep(horizontalHalfStep, inset);
+        verticalHalfStep = GetInsetHalfStep(verticalHalfStep, inset);
         Vector3 offset = grid.transform.up * GetEffectivePreviewTargetHeightOffset();
 
         Vector3 bottomLeft = center - horizontalHalfStep - verticalHalfStep + offset;
@@ -1693,8 +1769,7 @@ public class OmokStoneDropper : MonoBehaviour
             bottomLeft,
             topLeft,
             topRight,
-            bottomRight,
-            bottomLeft
+            bottomRight
         };
     }
 
@@ -1716,9 +1791,19 @@ public class OmokStoneDropper : MonoBehaviour
             bottomLeft,
             topLeft,
             topRight,
-            bottomRight,
-            bottomLeft
+            bottomRight
         };
+    }
+
+    private static Vector3 GetInsetHalfStep(Vector3 halfStep, float inset)
+    {
+        float magnitude = halfStep.magnitude;
+        if (magnitude <= 0.001f)
+        {
+            return halfStep;
+        }
+
+        return halfStep.normalized * Mathf.Max(0.001f, magnitude - inset);
     }
 
     private Vector3 GetHorizontalHalfStep(Vector2Int coordinate)
@@ -1774,8 +1859,8 @@ public class OmokStoneDropper : MonoBehaviour
         if (_previewRenderer == null)
         {
             _previewRenderer = CreatePreviewLineRenderer("StonePlacementPreviewOutline");
-            _previewRenderer.loop = false;
-            _previewRenderer.numCornerVertices = 2;
+            _previewRenderer.loop = true;
+            _previewRenderer.numCornerVertices = 4;
         }
 
         if (_previewRayRenderer == null)
@@ -1797,6 +1882,8 @@ public class OmokStoneDropper : MonoBehaviour
         renderer.textureMode = LineTextureMode.Stretch;
         renderer.numCapVertices = 2;
         renderer.widthMultiplier = GetEffectivePreviewLineWidth();
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
         renderer.enabled = false;
 
         if (_previewMaterial != null)
@@ -2115,7 +2202,7 @@ public class OmokStoneDropper : MonoBehaviour
                 }
 
                 Material previewMaterialInstance = new Material(sourceMaterial);
-                ConfigurePreviewMaterial(previewMaterialInstance, GetDraggedStonePreviewColor(launcher, false));
+                ConfigurePreviewMaterial(previewMaterialInstance, GetDraggedStonePreviewColor(launcher));
                 previewMaterials[i] = previewMaterialInstance;
                 _draggedStonePreviewMaterials.Add(previewMaterialInstance);
             }
@@ -2124,14 +2211,14 @@ public class OmokStoneDropper : MonoBehaviour
         }
     }
 
-    private void UpdateDraggedStonePreviewVisual(bool isBlocked)
+    private void UpdateDraggedStonePreviewVisual()
     {
         if (_draggedStoneObject == null || _activeLauncher == null)
         {
             return;
         }
 
-        Color previewColor = GetDraggedStonePreviewColor(_activeLauncher, isBlocked);
+        Color previewColor = GetDraggedStonePreviewColor(_activeLauncher);
         foreach (Material material in _draggedStonePreviewMaterials)
         {
             if (material == null)
@@ -2143,21 +2230,12 @@ public class OmokStoneDropper : MonoBehaviour
         }
     }
 
-    private Color GetDraggedStonePreviewColor(OmokStoneLauncher launcher, bool isBlocked)
+    private Color GetDraggedStonePreviewColor(OmokStoneLauncher launcher)
     {
         OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
-        Color baseColor = stoneColor == OmokStoneColor.Black
+        return stoneColor == OmokStoneColor.Black
             ? new Color(0.18f, 0.18f, 0.18f, previewStoneAlpha)
             : new Color(1f, 1f, 1f, previewStoneAlpha);
-
-        if (!isBlocked)
-        {
-            return baseColor;
-        }
-
-        Color tinted = Color.Lerp(baseColor, blockedPreviewColor, blockedPreviewTintStrength);
-        tinted.a = Mathf.Max(baseColor.a, previewStoneAlpha);
-        return tinted;
     }
 
     private void ConfigurePreviewMaterial(Material material, Color color)
@@ -2300,16 +2378,19 @@ public class OmokStoneDropper : MonoBehaviour
             bool hasStoneWorldPosition,
             Vector3 stoneWorldPosition,
             Vector3 rayStartPosition,
-            Vector3 rayTargetPosition)
+            Vector3 rayTargetPosition,
+            bool isBlockerStackTarget = false)
         {
             IsBlocked = isBlocked;
             HasStoneWorldPosition = hasStoneWorldPosition;
             StoneWorldPosition = stoneWorldPosition;
             RayStartPosition = rayStartPosition;
             RayTargetPosition = rayTargetPosition;
+            IsBlockerStackTarget = isBlockerStackTarget;
         }
 
         public bool IsBlocked { get; }
+        public bool IsBlockerStackTarget { get; }
         public bool HasStoneWorldPosition { get; }
         public Vector3 StoneWorldPosition { get; }
         public Vector3 RayStartPosition { get; }
