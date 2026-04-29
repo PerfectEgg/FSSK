@@ -1185,15 +1185,15 @@ MonoBehaviour:
   aimController: {fileID: 652747162}
   targetCamera: {fileID: 961739752}
   stoneRoot: {fileID: 498662154}
-  blackLauncher:
+  goldLauncher:
     source: {fileID: 1504384495}
     stonePrefab: {fileID: 1854090534794992118, guid: 3e8e9f69dae7ec84890ec374b36a6a2d, type: 3}
-  whiteLauncher:
+  silverLauncher:
     source: {fileID: 187038046}
     stonePrefab: {fileID: 2311593576938644908, guid: a820e1a4ca2b9ac44989bafa40ec6398, type: 3}
   useBuiltInMouseInput: 1
-  allowBlackManualPlacement: 1
-  allowWhiteManualPlacement: 1
+  allowGoldManualPlacement: 1
+  allowSilverManualPlacement: 1
   dragHoverHeight: 3
   usePlacementTargetOffset: 0
   placementTargetOffset: {x: 0, y: 0}
@@ -2228,7 +2228,7 @@ MonoBehaviour:
   - {fileID: 654905470}
   - {fileID: 1225001173}
   _parrotPrefab: {fileID: 9007209712626027920, guid: 82082c311dec5124cb2e566f8a7c4f22, type: 3}
-  _ratPrefab: {fileID: 0}
+  _ratPrefab: {fileID: 9007209712626027920, guid: b58d7c22fc1ff134fbcc4f8db7474921, type: 3}
   _seaCrabPrefab: {fileID: 8353737392247691479, guid: 6297302d10d0dbb4fa1710eb84441a9e, type: 3}
   _turtlePrefab: {fileID: 8353737392247691479, guid: 6af3fa2bf018cca42a7993e968d323dd, type: 3}
   _rumPrefab: {fileID: 6098799951655430639, guid: 7629b1ecadc64c64bb7292d69ef3a7f6, type: 3}
