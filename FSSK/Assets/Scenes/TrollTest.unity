@@ -920,8 +920,13 @@ MonoBehaviour:
   windAimBaseSensitivity: 1
   windAimSameDirectionSensitivity: 1.35
   windAimOppositeDirectionSensitivity: 0.6
-  windAimMaxDistanceFromMouseCells: 10
   windAimInputDeadZoneCells: 0.02
+  useRelativeMouseForWindAim: 1
+  windAimRelativeMousePixelScale: 20
+  clampWindAimToScreen: 1
+  windAimScreenPadding: 0.03
+  windAimScreenSoftZone: 0.12
+  windAimScreenEdgeMinSpeed: 0.08
 --- !u!114 &652747163
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -936,6 +941,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OmokStoneDropper
   grid: {fileID: 652747160}
   aimController: {fileID: 652747162}
+  matchManager: {fileID: 0}
   targetCamera: {fileID: 961739752}
   stoneRoot: {fileID: 498662154}
   goldLauncher:
@@ -947,12 +953,17 @@ MonoBehaviour:
   useBuiltInMouseInput: 1
   allowGoldManualPlacement: 1
   allowSilverManualPlacement: 1
+  restrictManualDragToCurrentTurn: 1
+  localManualStoneColor: 0
   dragHoverHeight: 3
+  keepDraggedStoneOnScreen: 1
+  draggedStoneScreenPadding: 0.015
   usePlacementTargetOffset: 0
   placementTargetOffset: {x: 0, y: 0}
   snapTiming: 1
   raycastDistance: 50
   settleOffset: 0.001
+  alignPlacedStoneToBoard: 1
   blockerAttachmentMode: 1
   blockerCenterStackGap: 0.001
   blockerProbeRadiusMultiplier: 1.15
@@ -4817,8 +4828,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OmokAiController
   matchManager: {fileID: 2073535677}
   stoneDropper: {fileID: 652747163}
-  useAi: 0
-  selectedAiType: 1
+  useAi: 1
+  selectedAiType: 0
   playerStoneColor: 2
   aiTurnDelay: 0.35
 --- !u!4 &2073535676

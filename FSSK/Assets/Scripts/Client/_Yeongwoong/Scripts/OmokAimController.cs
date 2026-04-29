@@ -39,12 +39,18 @@ public class OmokAimController : MonoBehaviour
     [SerializeField, Min(0f)] private float windAimBaseSensitivity = 1f;
     [SerializeField, Min(0f)] private float windAimSameDirectionSensitivity = 1.35f;
     [SerializeField, Min(0f)] private float windAimOppositeDirectionSensitivity = 0.6f;
-    [SerializeField, Min(0f)] private float windAimMaxDistanceFromMouseCells = 3f;
     [SerializeField, Min(0f)] private float windAimInputDeadZoneCells = 0.02f;
+    [SerializeField] private bool useRelativeMouseForWindAim = true;
+    [SerializeField, Min(0.01f)] private float windAimRelativeMousePixelScale = 20f;
+    [SerializeField] private bool clampWindAimToScreen = true;
+    [SerializeField, Range(0f, 0.49f)] private float windAimScreenPadding = 0.03f;
+    [SerializeField, Range(0.01f, 0.5f)] private float windAimScreenSoftZone = 0.12f;
+    [SerializeField, Range(0f, 1f)] private float windAimScreenEdgeMinSpeed = 0.08f;
 
     private bool _hasWindAimPosition;
     private Vector3 _windAimPosition;
     private Vector3 _previousPointerDragPosition;
+    private Vector3 _previousPointerScreenPosition;
     private bool _shouldReanchorPointerOnNextAim;
     private bool _hasCursorOverride;
     private bool _previousCursorVisible;
@@ -136,10 +142,21 @@ public class OmokAimController : MonoBehaviour
         _hasWindAimPosition = false;
         _windAimPosition = default;
         _previousPointerDragPosition = default;
+        _previousPointerScreenPosition = default;
         _shouldReanchorPointerOnNextAim = false;
     }
 
     public void BeginAimSession()
+    {
+        BeginAimSession(default, false);
+    }
+
+    public void BeginAimSession(Vector3 initialAimPosition)
+    {
+        BeginAimSession(initialAimPosition, true);
+    }
+
+    private void BeginAimSession(Vector3 initialAimPosition, bool useInitialAimPosition)
     {
         if (useWindAim && keepAimPositionAfterDrop && _hasWindAimPosition)
         {
@@ -150,7 +167,15 @@ public class OmokAimController : MonoBehaviour
             ResetAimState();
         }
 
-        if ((!hideSystemCursorWhileAiming && !unlockSystemCursorWhileAiming) || _hasCursorOverride)
+        if (useWindAim && useInitialAimPosition)
+        {
+            _windAimPosition = initialAimPosition;
+            _hasWindAimPosition = true;
+            _shouldReanchorPointerOnNextAim = true;
+        }
+
+        bool lockRelativeCursor = ShouldUseLockedRelativeWindAim();
+        if ((!hideSystemCursorWhileAiming && !unlockSystemCursorWhileAiming && !lockRelativeCursor) || _hasCursorOverride)
         {
             return;
         }
@@ -159,12 +184,17 @@ public class OmokAimController : MonoBehaviour
         _previousCursorLockState = Cursor.lockState;
         _hasCursorOverride = true;
 
-        if (unlockSystemCursorWhileAiming)
+        if (lockRelativeCursor)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+        else if (unlockSystemCursorWhileAiming)
         {
             Cursor.lockState = CursorLockMode.None;
         }
 
-        if (hideSystemCursorWhileAiming)
+        if (!lockRelativeCursor && hideSystemCursorWhileAiming)
         {
             Cursor.visible = false;
         }
@@ -197,6 +227,16 @@ public class OmokAimController : MonoBehaviour
         _windAimPosition = aimWorldPosition;
         _hasWindAimPosition = true;
         _shouldReanchorPointerOnNextAim = true;
+    }
+
+    public void SetCurrentAimPosition(Vector3 aimWorldPosition)
+    {
+        if (!useWindAim || !_hasWindAimPosition)
+        {
+            return;
+        }
+
+        _windAimPosition = aimWorldPosition;
     }
 
     public void SetHideSystemCursorWhileAiming(bool shouldHide)
@@ -293,10 +333,13 @@ public class OmokAimController : MonoBehaviour
             return pointerDragPosition;
         }
 
+        Vector3 pointerScreenPosition = GetClampedPointerScreenPosition();
+
         if (!_hasWindAimPosition)
         {
             _windAimPosition = pointerDragPosition;
             _previousPointerDragPosition = pointerDragPosition;
+            _previousPointerScreenPosition = pointerScreenPosition;
             _hasWindAimPosition = true;
             return _windAimPosition;
         }
@@ -304,14 +347,21 @@ public class OmokAimController : MonoBehaviour
         if (_shouldReanchorPointerOnNextAim)
         {
             _previousPointerDragPosition = pointerDragPosition;
+            _previousPointerScreenPosition = pointerScreenPosition;
             _shouldReanchorPointerOnNextAim = false;
             return _windAimPosition;
         }
 
-        Vector3 pointerDelta = pointerDragPosition - _previousPointerDragPosition;
+        bool useRelativeMouse = ShouldUseLockedRelativeWindAim();
+        Vector3 pointerDelta = useRelativeMouse
+            ? GetRelativeMouseAimDelta(_windAimPosition)
+            : TryGetScreenSpaceAimDelta(pointerScreenPosition, _previousPointerScreenPosition, _windAimPosition, out Vector3 screenSpaceDelta)
+                ? screenSpaceDelta
+                : pointerDragPosition - _previousPointerDragPosition;
         float deadZoneDistance = windAimInputDeadZoneCells * cellSize;
         float deadZoneSqrDistance = deadZoneDistance * deadZoneDistance;
 
+        Vector3 aimDelta = Vector3.zero;
         if (pointerDelta.sqrMagnitude > deadZoneSqrDistance)
         {
             float windDot = Vector3.Dot(pointerDelta.normalized, windDirection);
@@ -326,30 +376,182 @@ public class OmokAimController : MonoBehaviour
                 sensitivity = Mathf.Lerp(windAimBaseSensitivity, windAimOppositeDirectionSensitivity, -windDot);
             }
 
-            _windAimPosition += pointerDelta * Mathf.Max(0f, sensitivity);
+            aimDelta += pointerDelta * Mathf.Max(0f, sensitivity);
         }
 
-        _windAimPosition += windDirection * (windAimDriftCellsPerSecond * cellSize * Time.deltaTime);
-        _windAimPosition = ClampWindAimDistance(pointerDragPosition, _windAimPosition, cellSize);
+        aimDelta += windDirection * (windAimDriftCellsPerSecond * cellSize * Time.deltaTime);
+        _windAimPosition = useRelativeMouse
+            ? _windAimPosition + aimDelta
+            : ClampWindAimToScreen(ApplyWindAimScreenEdgeDamping(_windAimPosition, aimDelta));
         _previousPointerDragPosition = pointerDragPosition;
+        _previousPointerScreenPosition = pointerScreenPosition;
         return _windAimPosition;
     }
 
-    private Vector3 ClampWindAimDistance(Vector3 pointerDragPosition, Vector3 aimPosition, float cellSize)
+    private bool ShouldUseLockedRelativeWindAim()
     {
-        if (windAimMaxDistanceFromMouseCells <= 0f)
+        return useWindAim && useRelativeMouseForWindAim;
+    }
+
+    private Vector3 GetRelativeMouseAimDelta(Vector3 aimPosition)
+    {
+        Vector3 screenDelta = new Vector3(
+            Input.GetAxisRaw("Mouse X"),
+            Input.GetAxisRaw("Mouse Y"),
+            0f) * Mathf.Max(0.01f, windAimRelativeMousePixelScale);
+
+        return TryConvertScreenDeltaToWorldDelta(screenDelta, aimPosition, out Vector3 worldDelta)
+            ? worldDelta
+            : Vector3.zero;
+    }
+
+    private Vector3 GetClampedPointerScreenPosition()
+    {
+        Vector3 pointerPosition = Input.mousePosition;
+        pointerPosition.x = Mathf.Clamp(pointerPosition.x, 0f, Mathf.Max(0f, Screen.width - 1f));
+        pointerPosition.y = Mathf.Clamp(pointerPosition.y, 0f, Mathf.Max(0f, Screen.height - 1f));
+        return pointerPosition;
+    }
+
+    private bool TryGetScreenSpaceAimDelta(Vector3 pointerScreenPosition, Vector3 previousPointerScreenPosition, Vector3 aimPosition, out Vector3 worldDelta)
+    {
+        worldDelta = default;
+
+        Vector3 screenDelta = pointerScreenPosition - previousPointerScreenPosition;
+        if (screenDelta.sqrMagnitude <= 0.0001f)
+        {
+            return true;
+        }
+
+        return TryConvertScreenDeltaToWorldDelta(screenDelta, aimPosition, out worldDelta);
+    }
+
+    private bool TryConvertScreenDeltaToWorldDelta(Vector3 screenDelta, Vector3 aimPosition, out Vector3 worldDelta)
+    {
+        worldDelta = default;
+
+        if (screenDelta.sqrMagnitude <= 0.0001f)
+        {
+            return true;
+        }
+
+        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
+        if (cameraToUse == null)
+        {
+            return false;
+        }
+
+        Vector3 aimScreenPosition = cameraToUse.WorldToScreenPoint(aimPosition);
+        if (aimScreenPosition.z <= 0f)
+        {
+            return false;
+        }
+
+        Vector3 planeNormal = grid != null ? grid.transform.up : Vector3.up;
+        Plane aimPlane = new Plane(planeNormal, aimPosition);
+        Ray currentAimRay = cameraToUse.ScreenPointToRay(aimScreenPosition);
+        Ray nextAimRay = cameraToUse.ScreenPointToRay(aimScreenPosition + screenDelta);
+        if (!aimPlane.Raycast(currentAimRay, out float currentDistance) ||
+            !aimPlane.Raycast(nextAimRay, out float nextDistance))
+        {
+            return false;
+        }
+
+        worldDelta = nextAimRay.GetPoint(nextDistance) - currentAimRay.GetPoint(currentDistance);
+        return true;
+    }
+
+    private Vector3 ApplyWindAimScreenEdgeDamping(Vector3 aimPosition, Vector3 worldDelta)
+    {
+        if (!clampWindAimToScreen || worldDelta.sqrMagnitude <= 0.000001f)
+        {
+            return aimPosition + worldDelta;
+        }
+
+        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
+        if (cameraToUse == null)
+        {
+            return aimPosition + worldDelta;
+        }
+
+        Vector3 currentViewportPosition = cameraToUse.WorldToViewportPoint(aimPosition);
+        Vector3 proposedViewportPosition = cameraToUse.WorldToViewportPoint(aimPosition + worldDelta);
+        if (currentViewportPosition.z <= 0f || proposedViewportPosition.z <= 0f)
+        {
+            return aimPosition + worldDelta;
+        }
+
+        float padding = Mathf.Clamp(windAimScreenPadding, 0f, 0.49f);
+        float softZone = Mathf.Clamp(windAimScreenSoftZone, 0.01f, 0.5f);
+        float minSpeed = Mathf.Clamp01(windAimScreenEdgeMinSpeed);
+        float min = padding;
+        float max = 1f - padding;
+        Vector3 adjustedViewportPosition = currentViewportPosition;
+        adjustedViewportPosition.x += GetDampedViewportDelta(currentViewportPosition.x, proposedViewportPosition.x - currentViewportPosition.x, min, max, softZone, minSpeed);
+        adjustedViewportPosition.y += GetDampedViewportDelta(currentViewportPosition.y, proposedViewportPosition.y - currentViewportPosition.y, min, max, softZone, minSpeed);
+        adjustedViewportPosition.x = Mathf.Clamp(adjustedViewportPosition.x, min, max);
+        adjustedViewportPosition.y = Mathf.Clamp(adjustedViewportPosition.y, min, max);
+
+        Vector3 planeNormal = grid != null ? grid.transform.up : Vector3.up;
+        Plane aimPlane = new Plane(planeNormal, aimPosition);
+        Ray adjustedRay = cameraToUse.ViewportPointToRay(adjustedViewportPosition);
+        return aimPlane.Raycast(adjustedRay, out float hitDistance)
+            ? adjustedRay.GetPoint(hitDistance)
+            : aimPosition + worldDelta;
+    }
+
+    private float GetDampedViewportDelta(float current, float delta, float min, float max, float softZone, float minSpeed)
+    {
+        if (Mathf.Approximately(delta, 0f))
+        {
+            return 0f;
+        }
+
+        float distanceToEdge = delta < 0f ? current - min : max - current;
+        if (distanceToEdge >= softZone)
+        {
+            return delta;
+        }
+
+        float edgeRatio = Mathf.Clamp01(distanceToEdge / softZone);
+        float speed = Mathf.SmoothStep(minSpeed, 1f, edgeRatio);
+        return delta * speed;
+    }
+
+    private Vector3 ClampWindAimToScreen(Vector3 aimPosition)
+    {
+        if (!clampWindAimToScreen)
         {
             return aimPosition;
         }
 
-        float maxDistance = windAimMaxDistanceFromMouseCells * cellSize;
-        Vector3 offsetFromPointer = aimPosition - pointerDragPosition;
-        if (offsetFromPointer.sqrMagnitude <= maxDistance * maxDistance)
+        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
+        if (cameraToUse == null)
         {
             return aimPosition;
         }
 
-        return pointerDragPosition + (offsetFromPointer.normalized * maxDistance);
+        Vector3 viewportPosition = cameraToUse.WorldToViewportPoint(aimPosition);
+        if (viewportPosition.z <= 0f)
+        {
+            return aimPosition;
+        }
+
+        float padding = Mathf.Clamp(windAimScreenPadding, 0f, 0.49f);
+        float clampedX = Mathf.Clamp(viewportPosition.x, padding, 1f - padding);
+        float clampedY = Mathf.Clamp(viewportPosition.y, padding, 1f - padding);
+        if (Mathf.Approximately(viewportPosition.x, clampedX) &&
+            Mathf.Approximately(viewportPosition.y, clampedY))
+        {
+            return aimPosition;
+        }
+
+        Vector3 up = grid != null ? grid.transform.up : Vector3.up;
+        Plane aimPlane = new(up, aimPosition);
+        Ray clampedRay = cameraToUse.ViewportPointToRay(new Vector3(clampedX, clampedY, viewportPosition.z));
+        return aimPlane.Raycast(clampedRay, out float hitDistance)
+            ? clampedRay.GetPoint(hitDistance)
+            : aimPosition;
     }
 
     private bool TryGetWindAimWorldDirection(out Vector3 worldDirection, out float cellSize)
@@ -418,7 +620,7 @@ public class OmokAimController : MonoBehaviour
         }
 
         Vector3 planeNormal = grid != null ? grid.transform.up : Vector3.up;
-        Vector3 planePoint = (grid != null ? grid.transform.position : transform.position) + (planeNormal * hoverHeight);
+        Vector3 planePoint = GetGridPlaneBasePosition() + (planeNormal * hoverHeight);
         Plane dragPlane = new Plane(planeNormal, planePoint);
         Ray mouseRay = cameraToUse.ScreenPointToRay(Input.mousePosition);
 
@@ -429,6 +631,16 @@ public class OmokAimController : MonoBehaviour
 
         dragPosition = mouseRay.GetPoint(hitDistance);
         return true;
+    }
+
+    private Vector3 GetGridPlaneBasePosition()
+    {
+        if (grid != null && grid.IsReady)
+        {
+            return grid.GetWorldPosition(0, 0);
+        }
+
+        return grid != null ? grid.transform.position : transform.position;
     }
 
     private bool TryGetCoordinate(Vector3 worldPosition, out Vector2Int coordinate)

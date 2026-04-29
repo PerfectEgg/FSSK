@@ -4,6 +4,8 @@ public class OmokFallingStone : MonoBehaviour
 {
     [Header("Landing")]
     [SerializeField, Min(0f)] private float minLifetimeBeforeSnap = 0.05f;
+    [SerializeField, Min(0f)] private float minBoardContactDurationBeforeSnap = 0.18f;
+    [SerializeField, Min(0f)] private float landingHeightTolerance = 0.02f;
     [SerializeField, Min(0f)] private float fallbackSnapDelay = 5f;
 
     private OmokStoneDropper _owner;
@@ -18,8 +20,12 @@ public class OmokFallingStone : MonoBehaviour
     private OmokStoneSnapTiming _snapTiming;
     private bool _hasReservedTarget;
     private bool _hasBoardContact;
+    private float _boardContactTime;
     private Vector2Int _targetCoordinate;
     private Vector3 _targetWorldPosition;
+    private Quaternion _targetWorldRotation = Quaternion.identity;
+    private float _targetSnapOffsetAlongGridUp;
+    private bool _hasTargetSnapOffset;
     private float _gravityScale = 1f;
     private bool _guideStraightToTarget;
     private bool _hasBlockerAnchor;
@@ -53,6 +59,7 @@ public class OmokFallingStone : MonoBehaviour
         bool reservedTarget,
         Vector2Int reservedCoordinate,
         Vector3 snappedWorldPosition,
+        Quaternion snappedWorldRotation,
         float fallGravityScale,
         bool guideStraight = false)
     {
@@ -66,13 +73,22 @@ public class OmokFallingStone : MonoBehaviour
         _isFailed = false;
         BlockerTarget = null;
         _hasBoardContact = false;
+        _boardContactTime = 0f;
         _hasBlockerAnchor = false;
+        _hasTargetSnapOffset = false;
         _spawnTime = Time.time;
         StoneColor = stoneColor;
         _snapTiming = timing;
         _hasReservedTarget = reservedTarget;
         _targetCoordinate = reservedCoordinate;
         _targetWorldPosition = snappedWorldPosition;
+        _targetWorldRotation = snappedWorldRotation;
+        if (_grid != null)
+        {
+            _targetSnapOffsetAlongGridUp = CalculateSnapOffsetAlongNormal(_grid.transform.up);
+            _hasTargetSnapOffset = true;
+        }
+
         _gravityScale = Mathf.Max(0f, fallGravityScale);
         _guideStraightToTarget = guideStraight;
         _straightGuideStartPosition = transform.position;
@@ -91,13 +107,16 @@ public class OmokFallingStone : MonoBehaviour
             return;
         }
 
-        if (_hasBoardContact && _cachedRigidbody != null && _cachedRigidbody.IsSleeping())
+        if (HasReachedLandingHeight())
         {
             TryResolveLanding();
             return;
         }
 
-        if (_hasBoardContact && fallbackSnapDelay > 0f && Time.time - _spawnTime >= fallbackSnapDelay)
+        if (_hasBoardContact &&
+            fallbackSnapDelay > 0f &&
+            Time.time - _boardContactTime >= minBoardContactDurationBeforeSnap &&
+            Time.time - _spawnTime >= fallbackSnapDelay)
         {
             TryResolveLanding();
         }
@@ -189,6 +208,16 @@ public class OmokFallingStone : MonoBehaviour
 
     public float GetSnapOffsetAlongNormal(Vector3 normal)
     {
+        if (CanUseTargetSnapOffset(normal))
+        {
+            return _targetSnapOffsetAlongGridUp;
+        }
+
+        return CalculateSnapOffsetAlongNormal(normal);
+    }
+
+    private float CalculateSnapOffsetAlongNormal(Vector3 normal)
+    {
         if (_cachedCollider == null)
         {
             return 0f;
@@ -197,6 +226,32 @@ public class OmokFallingStone : MonoBehaviour
         Bounds bounds = _cachedCollider.bounds;
         Vector3 absoluteNormal = new Vector3(Mathf.Abs(normal.x), Mathf.Abs(normal.y), Mathf.Abs(normal.z));
         return Vector3.Dot(bounds.extents, absoluteNormal);
+    }
+
+    private bool HasReachedLandingHeight()
+    {
+        if (_grid == null)
+        {
+            return true;
+        }
+
+        Vector3 up = _grid.transform.up;
+        if (up.sqrMagnitude <= 0.0001f)
+        {
+            return true;
+        }
+
+        up.Normalize();
+        Vector3 currentPosition = _cachedRigidbody != null ? _cachedRigidbody.position : transform.position;
+        float currentHeight = Vector3.Dot(currentPosition, up);
+        float targetHeight = Vector3.Dot(_targetWorldPosition, up);
+        return currentHeight <= targetHeight + GetLandingHeightTolerance(up);
+    }
+
+    private float GetLandingHeightTolerance(Vector3 up)
+    {
+        float snapOffset = _hasTargetSnapOffset ? _targetSnapOffsetAlongGridUp : CalculateSnapOffsetAlongNormal(up);
+        return Mathf.Max(landingHeightTolerance, snapOffset * 0.03f);
     }
 
     public float GetMaxExtentOnAxes(Vector3 firstAxis, Vector3 secondAxis)
@@ -218,7 +273,7 @@ public class OmokFallingStone : MonoBehaviour
         _targetWorldPosition = worldPosition;
         Coordinate = coordinate;
         _isSnapped = true;
-        transform.position = worldPosition;
+        transform.SetPositionAndRotation(worldPosition, _targetWorldRotation);
 
         if (_cachedRigidbody == null)
         {
@@ -229,6 +284,22 @@ public class OmokFallingStone : MonoBehaviour
         _cachedRigidbody.angularVelocity = Vector3.zero;
         _cachedRigidbody.useGravity = false;
         _cachedRigidbody.isKinematic = true;
+        _cachedRigidbody.position = worldPosition;
+        _cachedRigidbody.rotation = _targetWorldRotation;
+    }
+
+    private bool CanUseTargetSnapOffset(Vector3 normal)
+    {
+        if (!_isInitialized || !_hasTargetSnapOffset || _grid == null)
+        {
+            return false;
+        }
+
+        Vector3 normalizedNormal = normal.normalized;
+        Vector3 gridUp = _grid.transform.up.normalized;
+        return normalizedNormal.sqrMagnitude > 0.0001f &&
+               gridUp.sqrMagnitude > 0.0001f &&
+               Vector3.Dot(normalizedNormal, gridUp) > 0.999f;
     }
 
     public void StickToBlocker(Transform blockerTarget, int blockerLayer)
@@ -344,8 +415,13 @@ public class OmokFallingStone : MonoBehaviour
 
         if (_owner != null && _owner.IsBoardHit(collider))
         {
+            if (!_hasBoardContact)
+            {
+                _boardContactTime = Time.time;
+            }
+
             _hasBoardContact = true;
-            TryResolveLanding();
+            IgnoreUnrelatedCollision(collider);
             return;
         }
 

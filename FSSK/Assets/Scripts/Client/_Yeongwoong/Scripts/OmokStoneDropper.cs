@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Serialization;
@@ -83,6 +84,7 @@ public class OmokStoneDropper : MonoBehaviour
     private const float BLOCKER_STACK_GAP_CELL_MULTIPLIER = 0.002f;
     private const float INITIAL_FALL_SPEED_CELL_MULTIPLIER = 0.08f;
     private const float FALL_GRAVITY_SCALE_MAX = 0.35f;
+    private const int CURSOR_WARP_MAX_ATTEMPTS = 4;
     private static readonly int _baseColorPropertyId = Shader.PropertyToID("_BaseColor");
     private static readonly int _colorPropertyId = Shader.PropertyToID("_Color");
     private static readonly int _surfacePropertyId = Shader.PropertyToID("_Surface");
@@ -91,9 +93,25 @@ public class OmokStoneDropper : MonoBehaviour
     private static readonly int _dstBlendPropertyId = Shader.PropertyToID("_DstBlend");
     private static readonly int _zWritePropertyId = Shader.PropertyToID("_ZWrite");
 
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeCursorPoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativeCursorPoint point);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+#endif
+
     [Header("References")]
     [SerializeField] private OmokGrid grid;
     [SerializeField] private OmokAimController aimController;
+    [SerializeField] private OmokMatchManager matchManager;
     [SerializeField] private Camera targetCamera;
     [SerializeField] private Transform stoneRoot;
 
@@ -109,9 +127,16 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField] private bool allowGoldManualPlacement = true;
     [FormerlySerializedAs("allowWhiteManualPlacement")]
     [SerializeField] private bool allowSilverManualPlacement = true;
+    [SerializeField] private bool restrictManualDragToCurrentTurn = true;
+    [SerializeField] private OmokStoneColor localManualStoneColor = OmokStoneColor.None;
 
     [Header("Drag")]
     [SerializeField, Min(0f)] private float dragHoverHeight = 3f;
+    [SerializeField] private bool keepDraggedStoneOnScreen = true;
+    [SerializeField, Range(0f, 0.2f)] private float draggedStoneScreenPadding = 0.015f;
+
+    [Header("Cursor")]
+    [SerializeField] private bool warpCursorToDropPositionOnRelease = true;
 
     [Header("Placement Offset")]
     [SerializeField] private bool usePlacementTargetOffset;
@@ -123,6 +148,7 @@ public class OmokStoneDropper : MonoBehaviour
 
     [Header("Landing")]
     [SerializeField, Min(0f)] private float settleOffset = 0.01f;
+    [SerializeField] private bool alignPlacedStoneToBoard = true;
 
     [Header("Blocker")]
     [SerializeField] private OmokBlockerAttachmentMode blockerAttachmentMode = OmokBlockerAttachmentMode.SurfaceContact;
@@ -158,10 +184,17 @@ public class OmokStoneDropper : MonoBehaviour
     private bool _hasDragBoardTarget;
     private Vector2Int _currentDragCoordinate;
     private Vector3 _currentDragReleasePosition;
+    private bool _hasCurrentDragDropSpawnPosition;
+    private Vector3 _currentDragDropSpawnPosition;
     private GameObject _draggedStoneObject;
     private int _boardLayer = -1;
     private int _blockerLayer = -1;
     private int _launcherLayerMask;
+    private OmokMatchManager _subscribedMatchManager;
+    private bool _hasPendingCursorWarp;
+    private Vector3 _pendingCursorWarpWorldPosition;
+    private int _pendingCursorWarpFrame;
+    private int _pendingCursorWarpAttempts;
 
     public OmokStoneSnapTiming SnapTiming => snapTiming;
     public bool UsePlacementTargetOffset => usePlacementTargetOffset;
@@ -172,6 +205,8 @@ public class OmokStoneDropper : MonoBehaviour
     public bool UnlockSystemCursorWhileAiming => aimController != null && aimController.UnlockSystemCursorWhileAiming;
     public bool KeepAimPositionAfterDrop => aimController != null && aimController.KeepAimPositionAfterDrop;
     public bool UseBuiltInMouseInput => useBuiltInMouseInput;
+    public bool RestrictManualDragToCurrentTurn => restrictManualDragToCurrentTurn;
+    public OmokStoneColor LocalManualStoneColor => localManualStoneColor;
     public bool IsDragging => _isDraggingLauncher;
     public event Action<OmokStonePlacementRequest> OnPlacementRequested;
     public event Action<Vector2Int, OmokStoneColor> OnStonePlaced;
@@ -181,6 +216,7 @@ public class OmokStoneDropper : MonoBehaviour
     {
         grid = GetComponent<OmokGrid>();
         aimController = GetComponent<OmokAimController>();
+        matchManager = GetComponent<OmokMatchManager>();
     }
 
     private void Awake()
@@ -197,8 +233,16 @@ public class OmokStoneDropper : MonoBehaviour
             targetCamera = Camera.main;
         }
 
+        EnsureMatchManager();
         EnsureAimController(true);
         CacheExistingStoneCoordinates();
+    }
+
+    private void OnEnable()
+    {
+        EnsureMatchManager();
+        SubscribeToMatchManager();
+        CancelDragIfActiveLauncherNoLongerAllowed();
     }
 
     private void OnValidate()
@@ -231,8 +275,76 @@ public class OmokStoneDropper : MonoBehaviour
         return true;
     }
 
+    private bool EnsureMatchManager()
+    {
+        if (matchManager == null)
+        {
+            matchManager = GetComponent<OmokMatchManager>();
+        }
+
+        if (matchManager == null)
+        {
+            matchManager = GetComponentInParent<OmokMatchManager>();
+        }
+
+        if (matchManager == null)
+        {
+            matchManager = FindFirstObjectByType<OmokMatchManager>();
+        }
+
+        if (isActiveAndEnabled)
+        {
+            SubscribeToMatchManager();
+        }
+
+        return matchManager != null;
+    }
+
+    private void SubscribeToMatchManager()
+    {
+        if (_subscribedMatchManager == matchManager)
+        {
+            return;
+        }
+
+        UnsubscribeFromMatchManager();
+
+        if (matchManager == null)
+        {
+            return;
+        }
+
+        matchManager.OnTurnChanged += HandleTurnChanged;
+        matchManager.OnMatchEnded += HandleMatchEnded;
+        _subscribedMatchManager = matchManager;
+    }
+
+    private void UnsubscribeFromMatchManager()
+    {
+        if (_subscribedMatchManager == null)
+        {
+            return;
+        }
+
+        _subscribedMatchManager.OnTurnChanged -= HandleTurnChanged;
+        _subscribedMatchManager.OnMatchEnded -= HandleMatchEnded;
+        _subscribedMatchManager = null;
+    }
+
+    private void HandleTurnChanged(OmokStoneColor nextTurn)
+    {
+        CancelDragIfActiveLauncherNoLongerAllowed();
+    }
+
+    private void HandleMatchEnded(OmokStoneColor resultWinner)
+    {
+        CancelDrag();
+    }
+
     private void Update()
     {
+        ApplyPendingCursorWarp();
+
         if (!useBuiltInMouseInput)
         {
             return;
@@ -334,13 +446,50 @@ public class OmokStoneDropper : MonoBehaviour
     {
         allowGoldManualPlacement = allowGold;
         allowSilverManualPlacement = allowSilver;
+        CancelDragIfActiveLauncherNoLongerAllowed();
+    }
+
+    public void SetLocalManualStoneColor(OmokStoneColor stoneColor)
+    {
+        localManualStoneColor = stoneColor;
+        CancelDragIfActiveLauncherNoLongerAllowed();
+    }
+
+    public void ClearLocalManualStoneColor()
+    {
+        SetLocalManualStoneColor(OmokStoneColor.None);
+    }
+
+    public void SetRestrictManualDragToCurrentTurn(bool shouldRestrict)
+    {
+        restrictManualDragToCurrentTurn = shouldRestrict;
+        CancelDragIfActiveLauncherNoLongerAllowed();
+    }
+
+    public bool CanBeginManualDrag(OmokStoneColor stoneColor)
+    {
+        if (!useBuiltInMouseInput ||
+            stoneColor == OmokStoneColor.None ||
+            !IsManualStoneColorEnabled(stoneColor))
+        {
+            return false;
+        }
+
+        if (localManualStoneColor != OmokStoneColor.None && localManualStoneColor != stoneColor)
+        {
+            return false;
+        }
+
+        return !restrictManualDragToCurrentTurn ||
+               !EnsureMatchManager() ||
+               matchManager.CanTakeTurn(stoneColor);
     }
 
     public void SetBuiltInMouseInputEnabled(bool isEnabled)
     {
         useBuiltInMouseInput = isEnabled;
 
-        if (!useBuiltInMouseInput && _isDraggingLauncher)
+        if (!useBuiltInMouseInput)
         {
             CancelDrag();
         }
@@ -573,6 +722,11 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        if (!CanBeginManualDragFromLauncher(launcher))
+        {
+            return false;
+        }
+
         if (!TryCreateDraggedStone(launcher))
         {
             return false;
@@ -583,11 +737,33 @@ public class OmokStoneDropper : MonoBehaviour
         _hasDragBoardTarget = false;
         if (EnsureAimController(true))
         {
-            aimController.BeginAimSession();
+            aimController.BeginAimSession(GetInitialDragAimPosition(launcher));
         }
 
         UpdateDragState();
         return true;
+    }
+
+    private Vector3 GetInitialDragAimPosition(OmokStoneLauncher launcher)
+    {
+        Vector3 sourcePosition = transform.position;
+        if (_draggedStoneObject != null)
+        {
+            sourcePosition = _draggedStoneObject.transform.position;
+        }
+        else if (launcher != null && launcher.Source != null)
+        {
+            sourcePosition = launcher.Source.position;
+        }
+
+        if (aimController == null || !aimController.UseWindAim || grid == null || !grid.IsReady)
+        {
+            return sourcePosition;
+        }
+
+        Vector3 up = GetGridUp();
+        Vector3 hoverPlanePoint = GetGridPlaneBasePosition() + (up * GetEffectiveDragHoverHeight());
+        return MovePointAlongAxis(sourcePosition, up, Vector3.Dot(hoverPlanePoint, up));
     }
 
     public void UpdateDrag()
@@ -603,6 +779,7 @@ public class OmokStoneDropper : MonoBehaviour
     private void UpdateDragState()
     {
         _hasDragBoardTarget = false;
+        ClearCurrentDragDropSpawnPosition();
 
         if (!EnsureAimController(true) ||
             !aimController.TryGetBoardAim(GetEffectiveDragHoverHeight(), raycastDistance, out OmokAimState aimState))
@@ -612,7 +789,12 @@ public class OmokStoneDropper : MonoBehaviour
             return;
         }
 
-        UpdateDraggedStoneAtPosition(aimState.AimWorldPosition);
+        Vector3 dragAimPosition = ClampDraggedStoneToScreen(aimState.AimWorldPosition);
+        UpdateDraggedStoneAtPosition(dragAimPosition);
+        if (aimController != null)
+        {
+            aimController.SetCurrentAimPosition(dragAimPosition);
+        }
 
         if (!aimState.HasCoordinate)
         {
@@ -620,9 +802,12 @@ public class OmokStoneDropper : MonoBehaviour
             return;
         }
 
-        Vector2Int targetCoordinate = GetPlacementTargetCoordinate(aimState.Coordinate);
+        Vector2Int rawCoordinate = TryGetCoordinate(dragAimPosition, out Vector2Int clampedCoordinate)
+            ? clampedCoordinate
+            : aimState.Coordinate;
+        Vector2Int targetCoordinate = GetPlacementTargetCoordinate(rawCoordinate);
         _currentDragCoordinate = targetCoordinate;
-        _currentDragReleasePosition = aimState.AimWorldPosition;
+        _currentDragReleasePosition = dragAimPosition;
         if (!IsInsideBoard(targetCoordinate))
         {
             UpdateDraggedStonePreviewVisual();
@@ -634,8 +819,37 @@ public class OmokStoneDropper : MonoBehaviour
 
         Vector3 draggedStoneCenter = GetDraggedStonePreviewProbeCenter(_currentDragReleasePosition);
         PlacementPreviewState previewState = BuildPlacementPreviewState(targetCoordinate, _currentDragReleasePosition, draggedStoneCenter);
+        UpdateCurrentDragDropSpawnPosition(previewState, draggedStoneCenter);
+
         UpdateDraggedStonePreviewVisual();
         DrawPreview(targetCoordinate, previewState);
+    }
+
+    private void UpdateCurrentDragDropSpawnPosition(PlacementPreviewState previewState, Vector3 draggedStoneCenter)
+    {
+        if (!previewState.IsBlockerStackTarget || !previewState.HasStoneWorldPosition)
+        {
+            ClearCurrentDragDropSpawnPosition();
+            return;
+        }
+
+        Vector3 centerToTransformOffset = _currentDragReleasePosition - draggedStoneCenter;
+        Vector3 dropSpawnPosition = previewState.StoneWorldPosition + centerToTransformOffset;
+        Vector3 up = GetGridUp();
+        float spawnHeight = Vector3.Dot(dropSpawnPosition, up) + GetMinimumVisibleFallDistance();
+        _currentDragDropSpawnPosition = MovePointAlongAxis(dropSpawnPosition, up, spawnHeight);
+        _hasCurrentDragDropSpawnPosition = true;
+    }
+
+    private void ClearCurrentDragDropSpawnPosition()
+    {
+        _hasCurrentDragDropSpawnPosition = false;
+        _currentDragDropSpawnPosition = default;
+    }
+
+    private Vector3 GetCurrentDragReleasePosition()
+    {
+        return _hasCurrentDragDropSpawnPosition ? _currentDragDropSpawnPosition : _currentDragReleasePosition;
     }
 
     public bool TryReleaseDrag()
@@ -649,7 +863,7 @@ public class OmokStoneDropper : MonoBehaviour
         bool canPlace = _hasDragBoardTarget;
         Vector2Int targetCoordinate = _currentDragCoordinate;
         GameObject releasedPreviewObject = _draggedStoneObject;
-        Vector3 releasePosition = _currentDragReleasePosition;
+        Vector3 releasePosition = GetCurrentDragReleasePosition();
         bool isCoordinateBlocked = canPlace &&
                                    releasedPreviewObject != null &&
                                    (!IsInsideBoard(targetCoordinate) || IsCoordinateBlocked(targetCoordinate));
@@ -668,7 +882,13 @@ public class OmokStoneDropper : MonoBehaviour
             aimController.StoreAimPosition(GetDropAimWorldPosition(request.TargetCoordinate));
         }
 
+        Vector3 cursorWarpPosition = hasPlacementRequest ? request.ReleasePosition : default;
         ClearDragState();
+        if (hasPlacementRequest)
+        {
+            QueueCursorWarpToDropPosition(cursorWarpPosition);
+        }
+
         DestroyDraggedStonePreview(releasedPreviewObject);
 
         if (!hasPlacementRequest)
@@ -687,6 +907,11 @@ public class OmokStoneDropper : MonoBehaviour
             return;
         }
 
+        if (aimController != null)
+        {
+            aimController.ResetAimState();
+        }
+
         GameObject draggedPreviewObject = _draggedStoneObject;
         ClearDragState();
         DestroyDraggedStonePreview(draggedPreviewObject);
@@ -698,6 +923,7 @@ public class OmokStoneDropper : MonoBehaviour
         _isDraggingLauncher = false;
         _hasDragBoardTarget = false;
         _currentDragReleasePosition = default;
+        ClearCurrentDragDropSpawnPosition();
         if (aimController != null)
         {
             aimController.EndAimSession();
@@ -729,6 +955,8 @@ public class OmokStoneDropper : MonoBehaviour
             ? grid.GetWorldPosition(request.TargetCoordinate) + (grid.transform.up * GetEffectiveDragHoverHeight())
             : request.ReleasePosition;
         GameObject stoneObject = Instantiate(launcher.StonePrefab, spawnPosition, launcher.StonePrefab.transform.rotation, stoneRoot);
+        Quaternion snappedRotation = GetStableStoneRotation(stoneObject.transform);
+        stoneObject.transform.rotation = snappedRotation;
 
         if (spawnAtTarget)
         {
@@ -758,6 +986,12 @@ public class OmokStoneDropper : MonoBehaviour
         Vector3 targetWorldPosition = grid.GetWorldPosition(request.TargetCoordinate);
         Vector3 snappedPosition = targetWorldPosition +
                                   (grid.transform.up * (fallingStone.GetSnapOffsetAlongNormal(grid.transform.up) + GetEffectiveSettleOffset()));
+        if (!spawnAtTarget)
+        {
+            spawnPosition = EnsureDropStartsAboveTarget(spawnPosition, snappedPosition);
+            stoneObject.transform.position = spawnPosition;
+            rigidbody.position = spawnPosition;
+        }
 
         fallingStone.Initialize(this,
                                 grid,
@@ -767,6 +1001,7 @@ public class OmokStoneDropper : MonoBehaviour
                                 reserveTarget,
                                 request.TargetCoordinate,
                                 snappedPosition,
+                                snappedRotation,
                                 GetEffectiveFallGravityScale(),
                                 guideStraightToTarget);
 
@@ -794,6 +1029,33 @@ public class OmokStoneDropper : MonoBehaviour
 
         Vector3 up = grid != null ? grid.transform.up : Vector3.up;
         rigidbody.linearVelocity = -up * GetEffectiveInitialFallSpeed();
+    }
+
+    private Vector3 EnsureDropStartsAboveTarget(Vector3 spawnPosition, Vector3 targetPosition)
+    {
+        Vector3 up = GetGridUp();
+        float currentHeight = Vector3.Dot(spawnPosition, up);
+        float minimumHeight = Vector3.Dot(targetPosition, up) + GetMinimumVisibleFallDistance();
+        return currentHeight >= minimumHeight
+            ? spawnPosition
+            : MovePointAlongAxis(spawnPosition, up, minimumHeight);
+    }
+
+    private Quaternion GetStableStoneRotation(Transform stoneTransform)
+    {
+        if (!alignPlacedStoneToBoard || stoneTransform == null || grid == null)
+        {
+            return stoneTransform != null ? stoneTransform.rotation : Quaternion.identity;
+        }
+
+        Vector3 stoneUp = stoneTransform.up;
+        Vector3 boardUp = grid.transform.up;
+        if (stoneUp.sqrMagnitude <= 0.0001f || boardUp.sqrMagnitude <= 0.0001f)
+        {
+            return stoneTransform.rotation;
+        }
+
+        return Quaternion.FromToRotation(stoneUp, boardUp) * stoneTransform.rotation;
     }
 
     private bool TryGetLauncherAtMouse(out OmokStoneLauncher launcher)
@@ -852,6 +1114,34 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         return false;
+    }
+
+    private bool CanBeginManualDragFromLauncher(OmokStoneLauncher launcher)
+    {
+        return CanBeginManualDrag(GetLauncherStoneColor(launcher));
+    }
+
+    private bool IsManualStoneColorEnabled(OmokStoneColor stoneColor)
+    {
+        return stoneColor switch
+        {
+            OmokStoneColor.Gold => allowGoldManualPlacement,
+            OmokStoneColor.Silver => allowSilverManualPlacement,
+            _ => false
+        };
+    }
+
+    private void CancelDragIfActiveLauncherNoLongerAllowed()
+    {
+        if (!_isDraggingLauncher)
+        {
+            return;
+        }
+
+        if (!CanBeginManualDragFromLauncher(_activeLauncher))
+        {
+            CancelDrag();
+        }
     }
 
     private bool IsLauncherHit(Collider collider, OmokStoneLauncher launcher)
@@ -945,7 +1235,8 @@ public class OmokStoneDropper : MonoBehaviour
         }
         else
         {
-            stone.StickToBlocker(blockerTarget, _blockerLayer);
+            Vector3 stickPosition = GetBlockerSurfaceStonePosition(blockerCollider, stone, stone.transform.position);
+            stone.StickToBlocker(blockerTarget, _blockerLayer, stickPosition);
         }
 
         int consecutiveSameColorStackCount = blockerSettings.CountForBlockerStackWin
@@ -1149,6 +1440,16 @@ public class OmokStoneDropper : MonoBehaviour
         return origin + (xStep * coordinate.x) + (yStep * coordinate.y);
     }
 
+    private Vector3 GetGridPlaneBasePosition()
+    {
+        if (grid != null && grid.IsReady)
+        {
+            return grid.GetWorldPosition(0, 0);
+        }
+
+        return grid != null ? grid.transform.position : transform.position;
+    }
+
     private void GetGridStepVectors(out Vector3 xStep, out Vector3 yStep)
     {
         if (grid == null || !grid.IsReady)
@@ -1173,6 +1474,13 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         return Mathf.Min(requestedCellHeight * cellSize, cellSize * DRAG_HOVER_HEIGHT_MAX_CELL_MULTIPLIER);
+    }
+
+    private float GetMinimumVisibleFallDistance()
+    {
+        float cellSize = GetGridCellSize();
+        float minimumByCell = cellSize > 0f ? cellSize * 0.75f : 0.05f;
+        return Mathf.Max(0.05f, minimumByCell, GetEffectiveDragHoverHeight());
     }
 
     private float GetEffectivePreviewLineWidth()
@@ -1256,6 +1564,21 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         return MovePointAlongAxis(centerPosition, up, targetHeight);
+    }
+
+    private Vector3 GetBlockerSurfaceStonePosition(Collider blockerCollider, OmokFallingStone stone, Vector3 fallbackPosition)
+    {
+        if (blockerCollider == null)
+        {
+            return fallbackPosition;
+        }
+
+        Physics.SyncTransforms();
+        Vector3 up = GetGridUp();
+        float halfHeight = stone != null ? stone.GetSnapOffsetAlongNormal(up) : 0f;
+        float gap = GetEffectiveBlockerCenterStackGap();
+        float targetHeight = GetBoundsMaxAlongAxis(blockerCollider.bounds, up) + halfHeight + gap;
+        return MovePointAlongAxis(fallbackPosition, up, targetHeight);
     }
 
     private bool TryGetBlockerAtCoordinate(Vector2Int coordinate, float probeRadius, out Collider blockerCollider)
@@ -1454,13 +1777,28 @@ public class OmokStoneDropper : MonoBehaviour
     private Vector3 BuildBlockerPreviewStonePosition(Collider blockerCollider, Vector3 impactStoneCenter)
     {
         if (!TryResolveBlockerSettings(blockerCollider, out ResolvedBlockerSettings blockerSettings) ||
-            !blockerSettings.KeepBlockedStone ||
-            blockerSettings.AttachmentMode != OmokBlockerAttachmentMode.ObjectCenterXZ)
+            !blockerSettings.KeepBlockedStone)
         {
             return impactStoneCenter;
         }
 
-        return GetBlockerPreviewStackStonePosition(blockerCollider, impactStoneCenter);
+        return blockerSettings.AttachmentMode == OmokBlockerAttachmentMode.ObjectCenterXZ
+            ? GetBlockerPreviewStackStonePosition(blockerCollider, impactStoneCenter)
+            : GetBlockerPreviewSurfaceStonePosition(blockerCollider, impactStoneCenter);
+    }
+
+    private Vector3 GetBlockerPreviewSurfaceStonePosition(Collider blockerCollider, Vector3 fallbackPosition)
+    {
+        if (blockerCollider == null)
+        {
+            return fallbackPosition;
+        }
+
+        Vector3 up = GetGridUp();
+        float halfHeight = GetDraggedStonePreviewExtent(up);
+        float gap = GetEffectiveBlockerCenterStackGap();
+        float targetHeight = GetBoundsMaxAlongAxis(blockerCollider.bounds, up) + halfHeight + gap;
+        return MovePointAlongAxis(fallbackPosition, up, targetHeight);
     }
 
     private float GetDraggedStonePreviewProbeRadius()
@@ -1751,7 +2089,9 @@ public class OmokStoneDropper : MonoBehaviour
             return;
         }
 
-        UpdateDraggedStoneAtPosition(aimPosition);
+        Vector3 dragAimPosition = ClampDraggedStoneToScreen(aimPosition);
+        UpdateDraggedStoneAtPosition(dragAimPosition);
+        aimController.SetCurrentAimPosition(dragAimPosition);
     }
 
     private void UpdateDraggedStoneAtPosition(Vector3 position)
@@ -1762,6 +2102,224 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         _draggedStoneObject.transform.position = position;
+    }
+
+    private Vector3 ClampDraggedStoneToScreen(Vector3 aimPosition)
+    {
+        if (!keepDraggedStoneOnScreen || _draggedStoneObject == null)
+        {
+            return aimPosition;
+        }
+
+        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
+        if (cameraToUse == null)
+        {
+            return aimPosition;
+        }
+
+        UpdateDraggedStoneAtPosition(aimPosition);
+        if (!TryGetDraggedStoneViewportRect(cameraToUse, out Rect viewportRect))
+        {
+            return aimPosition;
+        }
+
+        float padding = Mathf.Clamp(draggedStoneScreenPadding, 0f, 0.2f);
+        float min = padding;
+        float max = 1f - padding;
+        Vector2 viewportDelta = Vector2.zero;
+
+        if (viewportRect.xMin < min)
+        {
+            viewportDelta.x = min - viewportRect.xMin;
+        }
+        else if (viewportRect.xMax > max)
+        {
+            viewportDelta.x = max - viewportRect.xMax;
+        }
+
+        if (viewportRect.yMin < min)
+        {
+            viewportDelta.y = min - viewportRect.yMin;
+        }
+        else if (viewportRect.yMax > max)
+        {
+            viewportDelta.y = max - viewportRect.yMax;
+        }
+
+        if (viewportDelta.sqrMagnitude <= 0.000001f)
+        {
+            return aimPosition;
+        }
+
+        return TryConvertViewportDeltaToWorldDelta(cameraToUse, aimPosition, viewportDelta, out Vector3 worldDelta)
+            ? aimPosition + worldDelta
+            : aimPosition;
+    }
+
+    private void QueueCursorWarpToDropPosition(Vector3 worldPosition)
+    {
+        if (!warpCursorToDropPositionOnRelease)
+        {
+            return;
+        }
+
+        _pendingCursorWarpWorldPosition = worldPosition;
+        _pendingCursorWarpFrame = Time.frameCount + 1;
+        _pendingCursorWarpAttempts = 0;
+        _hasPendingCursorWarp = true;
+    }
+
+    private void ApplyPendingCursorWarp()
+    {
+        if (!_hasPendingCursorWarp || Time.frameCount < _pendingCursorWarpFrame)
+        {
+            return;
+        }
+
+        if (Cursor.lockState != CursorLockMode.None)
+        {
+            DelayOrCancelPendingCursorWarp();
+            return;
+        }
+
+        if (WarpCursorToDropPosition(_pendingCursorWarpWorldPosition))
+        {
+            _hasPendingCursorWarp = false;
+            return;
+        }
+
+        DelayOrCancelPendingCursorWarp();
+    }
+
+    private void DelayOrCancelPendingCursorWarp()
+    {
+        _pendingCursorWarpAttempts++;
+        if (_pendingCursorWarpAttempts >= CURSOR_WARP_MAX_ATTEMPTS)
+        {
+            _hasPendingCursorWarp = false;
+            return;
+        }
+
+        _pendingCursorWarpFrame = Time.frameCount + 1;
+    }
+
+    private bool WarpCursorToDropPosition(Vector3 worldPosition)
+    {
+        if (!warpCursorToDropPositionOnRelease)
+        {
+            return false;
+        }
+
+        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
+        if (cameraToUse == null)
+        {
+            return false;
+        }
+
+        Vector3 screenPosition = cameraToUse.WorldToScreenPoint(worldPosition);
+        if (screenPosition.z <= 0f)
+        {
+            return false;
+        }
+
+        return TryWarpCursorPosition(new Vector2(
+            Mathf.Clamp(screenPosition.x, 0f, Mathf.Max(0f, Screen.width - 1f)),
+            Mathf.Clamp(screenPosition.y, 0f, Mathf.Max(0f, Screen.height - 1f))));
+    }
+
+    private static bool TryWarpCursorPosition(Vector2 targetScreenPosition)
+    {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        if (!GetCursorPos(out NativeCursorPoint currentCursorPosition))
+        {
+            return false;
+        }
+
+        Vector3 currentScreenPosition = Input.mousePosition;
+        int targetX = Mathf.RoundToInt(currentCursorPosition.X + targetScreenPosition.x - currentScreenPosition.x);
+        int targetY = Mathf.RoundToInt(currentCursorPosition.Y - (targetScreenPosition.y - currentScreenPosition.y));
+        return SetCursorPos(targetX, targetY);
+#else
+        return false;
+#endif
+    }
+
+    private bool TryGetDraggedStoneViewportRect(Camera cameraToUse, out Rect viewportRect)
+    {
+        viewportRect = default;
+
+        if (!TryGetDraggedStonePreviewBounds(out Bounds bounds))
+        {
+            return false;
+        }
+
+        bool hasPoint = false;
+        Vector2 min = default;
+        Vector2 max = default;
+
+        Vector3 boundsMin = bounds.min;
+        Vector3 boundsMax = bounds.max;
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMin.x, boundsMin.y, boundsMin.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMin.x, boundsMin.y, boundsMax.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMin.x, boundsMax.y, boundsMin.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMin.x, boundsMax.y, boundsMax.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMax.x, boundsMin.y, boundsMin.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMax.x, boundsMin.y, boundsMax.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMax.x, boundsMax.y, boundsMin.z), ref hasPoint, ref min, ref max);
+        EncapsulateViewportCorner(cameraToUse, new Vector3(boundsMax.x, boundsMax.y, boundsMax.z), ref hasPoint, ref min, ref max);
+
+        if (!hasPoint)
+        {
+            return false;
+        }
+
+        viewportRect = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        return true;
+    }
+
+    private static void EncapsulateViewportCorner(Camera cameraToUse, Vector3 worldPoint, ref bool hasPoint, ref Vector2 min, ref Vector2 max)
+    {
+        Vector3 viewportPoint = cameraToUse.WorldToViewportPoint(worldPoint);
+        if (viewportPoint.z <= 0f)
+        {
+            return;
+        }
+
+        Vector2 point = new(viewportPoint.x, viewportPoint.y);
+        if (!hasPoint)
+        {
+            min = point;
+            max = point;
+            hasPoint = true;
+            return;
+        }
+
+        min = Vector2.Min(min, point);
+        max = Vector2.Max(max, point);
+    }
+
+    private bool TryConvertViewportDeltaToWorldDelta(Camera cameraToUse, Vector3 aimPosition, Vector2 viewportDelta, out Vector3 worldDelta)
+    {
+        worldDelta = default;
+
+        Vector3 aimViewportPosition = cameraToUse.WorldToViewportPoint(aimPosition);
+        if (aimViewportPosition.z <= 0f)
+        {
+            return false;
+        }
+
+        Vector3 up = grid != null ? grid.transform.up : Vector3.up;
+        Plane aimPlane = new(up, aimPosition);
+        Ray currentRay = cameraToUse.ViewportPointToRay(aimViewportPosition);
+        Ray adjustedRay = cameraToUse.ViewportPointToRay(aimViewportPosition + new Vector3(viewportDelta.x, viewportDelta.y, 0f));
+        if (!aimPlane.Raycast(currentRay, out float currentDistance) ||
+            !aimPlane.Raycast(adjustedRay, out float adjustedDistance))
+        {
+            return false;
+        }
+
+        worldDelta = adjustedRay.GetPoint(adjustedDistance) - currentRay.GetPoint(currentDistance);
+        return true;
     }
 
     private void ActivateStoneColliders(GameObject stoneObject)
@@ -1987,6 +2545,7 @@ public class OmokStoneDropper : MonoBehaviour
 
     private void OnDisable()
     {
+        UnsubscribeFromMatchManager();
         DestroyDraggedStonePreview(_draggedStoneObject);
 
         ClearDragState();

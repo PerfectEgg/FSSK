@@ -341,6 +341,31 @@ public class OmokTrollInputBridge : MonoBehaviour
         }
     }
 
+    public void SetLocalOmokStoneColor(OmokStoneColor stoneColor)
+    {
+        ResolveReferences();
+
+        if (stoneDropper != null)
+        {
+            stoneDropper.SetLocalManualStoneColor(stoneColor);
+        }
+    }
+
+    public void ClearLocalOmokStoneColor()
+    {
+        SetLocalOmokStoneColor(OmokStoneColor.None);
+    }
+
+    public void SetOmokTurnDragGateEnabled(bool isEnabled)
+    {
+        ResolveReferences();
+
+        if (stoneDropper != null)
+        {
+            stoneDropper.SetRestrictManualDragToCurrentTurn(isEnabled);
+        }
+    }
+
     private void HandleExpansionModeChanged(bool isExpansion)
     {
         _isExpansionMode = isExpansion;
