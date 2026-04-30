@@ -914,7 +914,7 @@ MonoBehaviour:
   unlockSystemCursorWhileAiming: 1
   showOutOfBoardAimPreview: 1
   keepAimPositionAfterDrop: 1
-  useWindAim: 0
+  useWindAim: 1
   windAimDirection: {x: -2, y: 0}
   windAimDriftCellsPerSecond: 0.35
   windAimBaseSensitivity: 1
@@ -946,10 +946,10 @@ MonoBehaviour:
   stoneRoot: {fileID: 498662154}
   goldLauncher:
     source: {fileID: 1504384495}
-    stonePrefab: {fileID: 1854090534794992118, guid: 3e8e9f69dae7ec84890ec374b36a6a2d, type: 3}
+    stonePrefab: {fileID: 7188919359512715136, guid: de3cb92baf5d9e9439ee95d06b93d4d0, type: 3}
   silverLauncher:
     source: {fileID: 187038046}
-    stonePrefab: {fileID: 2311593576938644908, guid: a820e1a4ca2b9ac44989bafa40ec6398, type: 3}
+    stonePrefab: {fileID: 6460034516728088667, guid: 3bd79bf7fa14a134285c700f9a3b0c2e, type: 3}
   useBuiltInMouseInput: 1
   allowGoldManualPlacement: 1
   allowSilverManualPlacement: 1
@@ -958,12 +958,15 @@ MonoBehaviour:
   dragHoverHeight: 3
   keepDraggedStoneOnScreen: 1
   draggedStoneScreenPadding: 0.015
+  warpCursorToDropPositionOnRelease: 1
   usePlacementTargetOffset: 0
   placementTargetOffset: {x: 0, y: 0}
   snapTiming: 1
   raycastDistance: 50
   settleOffset: 0.001
   alignPlacedStoneToBoard: 1
+  goldStoneRotationOffsetEuler: {x: 0, y: 0, z: 0}
+  silverStoneRotationOffsetEuler: {x: 0, y: 180, z: 0}
   blockerAttachmentMode: 1
   blockerCenterStackGap: 0.001
   blockerProbeRadiusMultiplier: 1.15
@@ -975,7 +978,7 @@ MonoBehaviour:
   blockedPreviewColor: {r: 1, g: 0.3, b: 0.3, a: 0.95}
   previewLineWidth: 1.5
   previewTargetHeightOffset: 0.01
-  previewStoneAlpha: 0.45
+  previewStoneAlpha: 0.65
   previewStoneScaleMultiplier: 0.97
 --- !u!1 &654905469
 GameObject:
@@ -2038,11 +2041,11 @@ MonoBehaviour:
   _parrotPrefab: {fileID: 9007209712626027920, guid: 82082c311dec5124cb2e566f8a7c4f22, type: 3}
   _ratPrefab: {fileID: 9007209712626027920, guid: b58d7c22fc1ff134fbcc4f8db7474921, type: 3}
   _seaCrabPrefab: {fileID: 8353737392247691479, guid: 6297302d10d0dbb4fa1710eb84441a9e, type: 3}
+  _safeRadius: 2.5
   _turtlePrefab: {fileID: 8353737392247691479, guid: 6af3fa2bf018cca42a7993e968d323dd, type: 3}
   _rumPrefab: {fileID: 6098799951655430639, guid: 7629b1ecadc64c64bb7292d69ef3a7f6, type: 3}
   _krakenPrefab: {fileID: 4793174993922422824, guid: 6e2d039c45b04da4bab08b0ff0642b41, type: 3}
   _sirenPrefab: {fileID: 7882202695067215425, guid: 10afbe466be1d764282924c5fcffb1ef, type: 3}
-  _safeRadius: 2.5
 --- !u!1 &1019639803
 GameObject:
   m_ObjectHideFlags: 0

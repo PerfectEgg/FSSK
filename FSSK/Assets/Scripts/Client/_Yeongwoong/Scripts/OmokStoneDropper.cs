@@ -150,6 +150,10 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField, Min(0f)] private float settleOffset = 0.01f;
     [SerializeField] private bool alignPlacedStoneToBoard = true;
 
+    [Header("Stone Orientation")]
+    [SerializeField] private Vector3 goldStoneRotationOffsetEuler;
+    [SerializeField] private Vector3 silverStoneRotationOffsetEuler = new(0f, 180f, 0f);
+
     [Header("Blocker")]
     [SerializeField] private OmokBlockerAttachmentMode blockerAttachmentMode = OmokBlockerAttachmentMode.SurfaceContact;
     [SerializeField, Min(0f)] private float blockerCenterStackGap = 0.01f;
@@ -955,7 +959,7 @@ public class OmokStoneDropper : MonoBehaviour
             ? grid.GetWorldPosition(request.TargetCoordinate) + (grid.transform.up * GetEffectiveDragHoverHeight())
             : request.ReleasePosition;
         GameObject stoneObject = Instantiate(launcher.StonePrefab, spawnPosition, launcher.StonePrefab.transform.rotation, stoneRoot);
-        Quaternion snappedRotation = GetStableStoneRotation(stoneObject.transform);
+        Quaternion snappedRotation = GetStoneRotation(stoneObject.transform, request.StoneColor);
         stoneObject.transform.rotation = snappedRotation;
 
         if (spawnAtTarget)
@@ -1039,6 +1043,23 @@ public class OmokStoneDropper : MonoBehaviour
         return currentHeight >= minimumHeight
             ? spawnPosition
             : MovePointAlongAxis(spawnPosition, up, minimumHeight);
+    }
+
+    private Quaternion GetStoneRotation(Transform stoneTransform, OmokStoneColor stoneColor)
+    {
+        Quaternion stableRotation = GetStableStoneRotation(stoneTransform);
+        Vector3 offsetEuler = GetStoneRotationOffsetEuler(stoneColor);
+        return stableRotation * Quaternion.Euler(offsetEuler);
+    }
+
+    private Vector3 GetStoneRotationOffsetEuler(OmokStoneColor stoneColor)
+    {
+        return stoneColor switch
+        {
+            OmokStoneColor.Gold => goldStoneRotationOffsetEuler,
+            OmokStoneColor.Silver => silverStoneRotationOffsetEuler,
+            _ => Vector3.zero
+        };
     }
 
     private Quaternion GetStableStoneRotation(Transform stoneTransform)
@@ -2054,6 +2075,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         _draggedStoneObject = Instantiate(launcher.StonePrefab, launcher.Source.position, launcher.StonePrefab.transform.rotation, stoneRoot);
+        _draggedStoneObject.transform.rotation = GetStoneRotation(_draggedStoneObject.transform, GetLauncherStoneColor(launcher));
         Collider[] dragColliders = _draggedStoneObject.GetComponentsInChildren<Collider>(true);
 
         foreach (Collider collider in dragColliders)
