@@ -49,6 +49,15 @@ public class Rat : AnimalTroll
         // 이미 목표가 있거나 움직이는 중이면 무시
         if (_currentState != AnimalState.Action) return;
 
+        if (pos == null || color == 0)
+        {
+            _targetStoneColor = 0;
+            _targetPosition = null;
+            _isTargetAssigned = false;
+            ChangeState(AnimalState.Exiting);
+            return;
+        }
+
         _targetStoneColor = color;
         _targetPosition = pos;
         _isTargetAssigned = true;

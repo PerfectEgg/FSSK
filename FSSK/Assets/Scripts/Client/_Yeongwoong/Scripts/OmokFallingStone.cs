@@ -16,6 +16,7 @@ public class OmokFallingStone : MonoBehaviour
     private bool _isSnapped;
     private bool _isBlockedByBlocker;
     private bool _isFailed;
+    private bool _isRemoved;
     private float _spawnTime;
     private OmokStoneSnapTiming _snapTiming;
     private bool _hasReservedTarget;
@@ -37,6 +38,7 @@ public class OmokFallingStone : MonoBehaviour
     public Vector2Int Coordinate { get; private set; }
     public bool IsSnapped => _isSnapped;
     public bool IsBlockedByBlocker => _isBlockedByBlocker;
+    public bool IsRemoved => _isRemoved;
     public Transform BlockerTarget { get; private set; }
     public OmokStoneColor StoneColor { get; private set; }
     public OmokStoneSnapTiming SnapTiming => _snapTiming;
@@ -71,6 +73,7 @@ public class OmokFallingStone : MonoBehaviour
         _isSnapped = false;
         _isBlockedByBlocker = false;
         _isFailed = false;
+        _isRemoved = false;
         BlockerTarget = null;
         _hasBoardContact = false;
         _boardContactTime = 0f;
@@ -286,6 +289,24 @@ public class OmokFallingStone : MonoBehaviour
         _cachedRigidbody.isKinematic = true;
         _cachedRigidbody.position = worldPosition;
         _cachedRigidbody.rotation = _targetWorldRotation;
+    }
+
+    public void MarkRemovedFromBoard()
+    {
+        _isRemoved = true;
+        _isSnapped = false;
+        _isBlockedByBlocker = false;
+        _hasReservedTarget = false;
+
+        if (_cachedRigidbody != null)
+        {
+            _cachedRigidbody.linearVelocity = Vector3.zero;
+            _cachedRigidbody.angularVelocity = Vector3.zero;
+            _cachedRigidbody.useGravity = false;
+            _cachedRigidbody.isKinematic = true;
+        }
+
+        gameObject.SetActive(false);
     }
 
     private bool CanUseTargetSnapOffset(Vector3 normal)

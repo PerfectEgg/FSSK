@@ -190,12 +190,27 @@ public class OmokTrollInputBridge : MonoBehaviour
         stoneTransform = null;
         stoneId = 0;
 
-        if (!TryGetNextRemovalCoordinate(out _, out stoneId))
+        ResolveReferences();
+
+        int boardSize = matchManager != null ? matchManager.BoardSize : 0;
+        int maxAttempts = boardSize > 0 ? boardSize * boardSize : 32;
+        for (int i = 0; i < maxAttempts; i++)
         {
-            return false;
+            if (!TryGetNextRemovalCoordinate(out _, out stoneId))
+            {
+                return false;
+            }
+
+            if (TryGetPendingRemovalTransform(out stoneTransform))
+            {
+                return true;
+            }
+
+            ClearPendingRemovalTarget();
         }
 
-        return TryGetPendingRemovalTransform(out stoneTransform);
+        stoneId = 0;
+        return false;
     }
 
     public bool TryGetPendingRemovalTransform(out Transform stoneTransform)

@@ -40,18 +40,21 @@ public readonly struct OmokStonePlacementRequest
         OmokStoneColor stoneColor,
         Vector2Int targetCoordinate,
         Vector3 releasePosition,
-        bool lockToTargetCoordinate = false)
+        bool lockToTargetCoordinate = false,
+        bool allowBlockedCoordinateForBlocker = false)
     {
         StoneColor = stoneColor;
         TargetCoordinate = targetCoordinate;
         ReleasePosition = releasePosition;
         LockToTargetCoordinate = lockToTargetCoordinate;
+        AllowBlockedCoordinateForBlocker = allowBlockedCoordinateForBlocker;
     }
 
     public OmokStoneColor StoneColor { get; }
     public Vector2Int TargetCoordinate { get; }
     public Vector3 ReleasePosition { get; }
     public bool LockToTargetCoordinate { get; }
+    public bool AllowBlockedCoordinateForBlocker { get; }
 }
 
 public readonly struct OmokBlockedStoneResult
@@ -177,7 +180,7 @@ public class OmokStoneDropper : MonoBehaviour
     private readonly HashSet<Vector2Int> _reservedCoordinates = new();
     private readonly Dictionary<Vector2Int, OmokFallingStone> _stonesByCoordinate = new();
     private readonly Dictionary<Transform, float> _blockerCenterStackTopY = new();
-    private readonly Dictionary<Transform, List<OmokStoneColor>> _blockerStoneStacks = new();
+    private readonly Dictionary<Transform, List<OmokFallingStone>> _blockerStoneStacks = new();
     private readonly List<Material> _draggedStonePreviewMaterials = new();
     private LineRenderer _previewRenderer;
     private LineRenderer _previewRayRenderer;
@@ -537,6 +540,7 @@ public class OmokStoneDropper : MonoBehaviour
             return hadOccupiedCoordinate;
         }
 
+        stone.MarkRemovedFromBoard();
         Destroy(stone.gameObject);
         return true;
     }
@@ -561,8 +565,24 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        if (TryGetBlockerAtCoordinate(coordinate, GetFallingStoneBlockerProbeRadius(stone), out _))
+        {
+            return false;
+        }
+
         stoneTransform = stone.transform;
         return true;
+    }
+
+    public bool HasLiveStoneAt(Vector2Int coordinate, OmokStoneColor expectedColor)
+    {
+        if (!IsInsideBoard(coordinate))
+        {
+            return false;
+        }
+
+        OmokFallingStone stone = GetStoneAtCoordinate(coordinate);
+        return stone != null && !stone.IsRemoved && MatchesExpectedColor(stone, expectedColor);
     }
 
     public void SetPlacementTargetOffsetEnabled(bool isEnabled)
@@ -868,9 +888,18 @@ public class OmokStoneDropper : MonoBehaviour
         Vector2Int targetCoordinate = _currentDragCoordinate;
         GameObject releasedPreviewObject = _draggedStoneObject;
         Vector3 releasePosition = GetCurrentDragReleasePosition();
+        bool isBlockerStackTarget = false;
+        if (canPlace && releasedPreviewObject != null && IsInsideBoard(targetCoordinate))
+        {
+            Vector3 draggedStoneCenter = GetDraggedStonePreviewProbeCenter(_currentDragReleasePosition);
+            PlacementPreviewState releasePreviewState = BuildPlacementPreviewState(targetCoordinate, _currentDragReleasePosition, draggedStoneCenter);
+            isBlockerStackTarget = releasePreviewState.IsBlockerStackTarget;
+        }
+
         bool isCoordinateBlocked = canPlace &&
                                    releasedPreviewObject != null &&
-                                   (!IsInsideBoard(targetCoordinate) || IsCoordinateBlocked(targetCoordinate));
+                                   (!IsInsideBoard(targetCoordinate) ||
+                                    (IsCoordinateBlocked(targetCoordinate) && !isBlockerStackTarget));
         OmokStonePlacementRequest request = default;
         bool hasPlacementRequest = false;
         if (canPlace && releasedPreviewObject != null && !isCoordinateBlocked)
@@ -878,6 +907,7 @@ public class OmokStoneDropper : MonoBehaviour
             hasPlacementRequest = TryBuildPlacementRequest(releasedLauncher,
                                                            releasePosition,
                                                            targetCoordinate,
+                                                           isBlockerStackTarget,
                                                            out request);
         }
 
@@ -948,7 +978,8 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
-        if (IsCoordinateBlocked(request.TargetCoordinate))
+        if (!request.AllowBlockedCoordinateForBlocker &&
+            IsCoordinateBlocked(request.TargetCoordinate))
         {
             return false;
         }
@@ -1261,7 +1292,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         int consecutiveSameColorStackCount = blockerSettings.CountForBlockerStackWin
-            ? RegisterBlockedStone(stackKey, stone.StoneColor)
+            ? RegisterBlockedStone(stackKey, stone)
             : 0;
 
         if (blockerSettings.ConsumeTurnWhenBlocked)
@@ -1388,7 +1419,7 @@ public class OmokStoneDropper : MonoBehaviour
         OmokFallingStone[] stones = FindObjectsByType<OmokFallingStone>(FindObjectsSortMode.None);
         foreach (OmokFallingStone stone in stones)
         {
-            if (stone == null || stone.IsBlockedByBlocker)
+            if (stone == null || stone.IsRemoved || stone.IsBlockedByBlocker)
             {
                 continue;
             }
@@ -1420,8 +1451,7 @@ public class OmokStoneDropper : MonoBehaviour
 
         bool isCoordinateBlocked = IsCoordinateBlocked(coordinate);
         Vector3 blockerProbeOrigin = GetBlockerPreviewProbeOrigin(coordinate, releasePosition, stoneProbeCenter);
-        if (!isCoordinateBlocked &&
-            TryGetBlockerPreviewStonePosition(coordinate, blockerProbeOrigin, out Vector3 blockerPreviewPosition))
+        if (TryGetBlockerPreviewStonePosition(coordinate, blockerProbeOrigin, out Vector3 blockerPreviewPosition))
         {
             return new PlacementPreviewState(false, true, blockerPreviewPosition, stoneProbeCenter, blockerPreviewPosition, true);
         }
@@ -1924,6 +1954,7 @@ public class OmokStoneDropper : MonoBehaviour
         OmokStoneLauncher launcher,
         Vector3 releasePosition,
         Vector2Int targetCoordinate,
+        bool allowBlockedCoordinateForBlocker,
         out OmokStonePlacementRequest request)
     {
         request = default;
@@ -1932,7 +1963,7 @@ public class OmokStoneDropper : MonoBehaviour
             grid == null ||
             !grid.IsReady ||
             !IsInsideBoard(targetCoordinate) ||
-            IsCoordinateBlocked(targetCoordinate))
+            (!allowBlockedCoordinateForBlocker && IsCoordinateBlocked(targetCoordinate)))
         {
             return false;
         }
@@ -1943,7 +1974,12 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
-        request = new OmokStonePlacementRequest(stoneColor, targetCoordinate, releasePosition, usePlacementTargetOffset);
+        request = new OmokStonePlacementRequest(
+            stoneColor,
+            targetCoordinate,
+            releasePosition,
+            usePlacementTargetOffset,
+            allowBlockedCoordinateForBlocker);
         return true;
     }
 
@@ -2704,25 +2740,29 @@ public class OmokStoneDropper : MonoBehaviour
         return foundHit;
     }
 
-    private int RegisterBlockedStone(Transform stackKey, OmokStoneColor stoneColor)
+    private int RegisterBlockedStone(Transform stackKey, OmokFallingStone stone)
     {
-        if (stackKey == null || stoneColor == OmokStoneColor.None)
+        if (stackKey == null || stone == null || stone.StoneColor == OmokStoneColor.None)
         {
             return 0;
         }
 
-        if (!_blockerStoneStacks.TryGetValue(stackKey, out List<OmokStoneColor> stack))
+        PruneBlockerStoneStacks();
+
+        if (!_blockerStoneStacks.TryGetValue(stackKey, out List<OmokFallingStone> stack))
         {
-            stack = new List<OmokStoneColor>();
+            stack = new List<OmokFallingStone>();
             _blockerStoneStacks.Add(stackKey, stack);
         }
 
-        stack.Add(stoneColor);
+        stack.Add(stone);
+        PruneBlockerStoneStack(stackKey, stack);
 
         int consecutiveCount = 0;
         for (int i = stack.Count - 1; i >= 0; i--)
         {
-            if (stack[i] != stoneColor)
+            OmokFallingStone stackedStone = stack[i];
+            if (stackedStone == null || stackedStone.StoneColor != stone.StoneColor)
             {
                 break;
             }
@@ -2731,6 +2771,59 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         return consecutiveCount;
+    }
+
+    private void PruneBlockerStoneStacks()
+    {
+        List<Transform> emptyStackKeys = null;
+        foreach (KeyValuePair<Transform, List<OmokFallingStone>> pair in _blockerStoneStacks)
+        {
+            Transform stackKey = pair.Key;
+            if (stackKey == null)
+            {
+                emptyStackKeys ??= new List<Transform>();
+                emptyStackKeys.Add(stackKey);
+                continue;
+            }
+
+            PruneBlockerStoneStack(stackKey, pair.Value);
+            if (pair.Value.Count == 0)
+            {
+                emptyStackKeys ??= new List<Transform>();
+                emptyStackKeys.Add(stackKey);
+            }
+        }
+
+        if (emptyStackKeys == null)
+        {
+            return;
+        }
+
+        foreach (Transform stackKey in emptyStackKeys)
+        {
+            _blockerStoneStacks.Remove(stackKey);
+            _blockerCenterStackTopY.Remove(stackKey);
+        }
+    }
+
+    private static void PruneBlockerStoneStack(Transform stackKey, List<OmokFallingStone> stack)
+    {
+        if (stack == null)
+        {
+            return;
+        }
+
+        for (int i = stack.Count - 1; i >= 0; i--)
+        {
+            OmokFallingStone stone = stack[i];
+            if (stone == null ||
+                stone.IsRemoved ||
+                !stone.IsBlockedByBlocker ||
+                stone.BlockerTarget != stackKey)
+            {
+                stack.RemoveAt(i);
+            }
+        }
     }
 
     private static Transform GetBlockerStackKey(Transform blockerTarget, Collider blockerCollider)
