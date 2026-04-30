@@ -29,12 +29,12 @@ public class Rat : AnimalTroll
     private void OnEnable()
     {
         // 매니저가 보내주는 타겟 정보를 수신 대기
-        GameEvents.OnStoneTargetCallback += HandleTargetAssigned;
+        TrollEvents.OnStoneTargetCallback += HandleTargetAssigned;
     }
 
     private void OnDisable()
     {
-        GameEvents.OnStoneTargetCallback -= HandleTargetAssigned;
+        TrollEvents.OnStoneTargetCallback -= HandleTargetAssigned;
     }
 
     // 매니저로부터 목표 정보를 받았을 때 호출됨
@@ -68,7 +68,7 @@ public class Rat : AnimalTroll
         if (state == AnimalState.Action)
         {
             _isTargetAssigned = false;
-            GameEvents.TriggerRequestStoneToSteal();
+            TrollEvents.TriggerRequestStoneToSteal();
         }
         else if (state == AnimalState.Exiting)
         {
@@ -124,7 +124,7 @@ public class Rat : AnimalTroll
         Debug.Log("🐀 [도둑쥐] 돌을 훔쳤습니다! 도망갑니다!");
 
         // 1. 매니저에게 이 좌표의 돌을 완전히 지워달라고 요청
-        GameEvents.TriggerExecuteSteal();
+        TrollEvents.TriggerExecuteSteal();
 
         // 2. 비주얼 업데이트 (1: 금화/흑돌, 2: 은화/백돌)
         if (_targetStoneColor == 1 && _heldGoldStoneVisual != null)

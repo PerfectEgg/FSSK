@@ -37,19 +37,19 @@ public class OmokTrollInputBridge : MonoBehaviour
 
     private void OnEnable()
     {
-        GameEvents.OnExpansionModeChanged += HandleExpansionModeChanged;
-        GameEvents.OnStunEffect += HandleStunEffect;
-        GameEvents.OnRequestStoneToSteal += HandleStoneStealRequested;
-        GameEvents.OnExecuteSteal += HandleExecuteSteal;
+        TrollEvents.OnExpansionModeChanged += HandleExpansionModeChanged;
+        TrollEvents.OnStunEffect += HandleStunEffect;
+        TrollEvents.OnRequestStoneToSteal += HandleStoneStealRequested;
+        TrollEvents.OnExecuteSteal += HandleExecuteSteal;
         ApplyInputState();
     }
 
     private void OnDisable()
     {
-        GameEvents.OnExpansionModeChanged -= HandleExpansionModeChanged;
-        GameEvents.OnStunEffect -= HandleStunEffect;
-        GameEvents.OnRequestStoneToSteal -= HandleStoneStealRequested;
-        GameEvents.OnExecuteSteal -= HandleExecuteSteal;
+        TrollEvents.OnExpansionModeChanged -= HandleExpansionModeChanged;
+        TrollEvents.OnStunEffect -= HandleStunEffect;
+        TrollEvents.OnRequestStoneToSteal -= HandleStoneStealRequested;
+        TrollEvents.OnExecuteSteal -= HandleExecuteSteal;
     }
 
     private void Update()
@@ -381,11 +381,11 @@ public class OmokTrollInputBridge : MonoBehaviour
     {
         if (TryGetNextRemovalTransform(out Transform stoneTransform, out int stoneId))
         {
-            GameEvents.TriggerStoneTargetCallback(stoneId, stoneTransform);
+            TrollEvents.TriggerStoneTargetCallback(stoneId, stoneTransform);
             return;
         }
 
-        GameEvents.TriggerStoneTargetCallback(0, null);
+        TrollEvents.TriggerStoneTargetCallback(0, null);
     }
 
     private void HandleExecuteSteal()

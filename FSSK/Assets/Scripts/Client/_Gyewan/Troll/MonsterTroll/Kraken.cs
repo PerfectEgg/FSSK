@@ -17,8 +17,8 @@ public class Kraken : MonsterTroll
     private bool _isExpansionMode = false;
 
     // 이벤트 구독 및 해제
-    private void OnEnable() => GameEvents.OnExpansionModeChanged += HandleModeChanged;
-    private void OnDisable() => GameEvents.OnExpansionModeChanged -= HandleModeChanged;
+    private void OnEnable() => TrollEvents.OnExpansionModeChanged += HandleModeChanged;
+    private void OnDisable() => TrollEvents.OnExpansionModeChanged -= HandleModeChanged;
 
     private void HandleModeChanged(bool expansionModeActive)
     {
@@ -31,7 +31,7 @@ public class Kraken : MonsterTroll
         Debug.Log("💥 [기절] 크라켄에게 한 대 맞았습니다!! 스턴 및 어지러움!");
         
         // TODO: UI 매니저 호출하여 3초 스턴 및 시야 암전 이벤트 발생
-        GameEvents.OnStunEffect?.Invoke(_penaltyDuration);
+        TrollEvents.OnStunEffect?.Invoke(_penaltyDuration);
     }
     
     public override void EndTroll() { }

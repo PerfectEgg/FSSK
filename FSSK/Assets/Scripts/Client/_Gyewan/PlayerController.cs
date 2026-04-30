@@ -18,14 +18,14 @@ public class PlayerController : MonoBehaviour
     // 이벤트 구독 및 해제
     private void OnEnable()
     {
-        GameEvents.OnExpansionModeChanged += HandleModeChanged;
-        GameEvents.OnStunEffect += HandleStunEffect;
+        TrollEvents.OnExpansionModeChanged += HandleModeChanged;
+        TrollEvents.OnStunEffect += HandleStunEffect;
     }
 
     private void OnDisable()
     {
-        GameEvents.OnExpansionModeChanged -= HandleModeChanged;
-        GameEvents.OnStunEffect -= HandleStunEffect;
+        TrollEvents.OnExpansionModeChanged -= HandleModeChanged;
+        TrollEvents.OnStunEffect -= HandleStunEffect;
     }
 
     private void HandleModeChanged(bool isExpansionMode)

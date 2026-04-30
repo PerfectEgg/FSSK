@@ -10,7 +10,7 @@ public class SeaCrab : AnimalTroll
     void Start()
     {
         // 생성 시 겹치지 않는 위치를 파악 후 이동
-        Vector3 safePos = GameEvents.GetSafePosition();
+        Vector3 safePos = TrollEvents.GetSafePosition();
 
         _targetPosition = new Vector3(safePos.x, transform.position.y, safePos.z);
 
@@ -43,7 +43,7 @@ public class SeaCrab : AnimalTroll
             case AnimalState.Exiting:
                 // 퇴치될 때 이벤트를 통해 자리를 반납합니다!
                 Vector3 releasePos = new Vector3(_targetPosition.x, 0, _targetPosition.z);
-                GameEvents.TriggerPositionReleased(releasePos);
+                TrollEvents.TriggerPositionReleased(releasePos);
 
                 EndTroll();
                 break;

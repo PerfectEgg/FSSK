@@ -21,8 +21,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [SerializeField] private float _holdDistance = 12.5f;    // 잡고 있을 때의 거리
     private Vector3 _originalPosition;   // 움직이는 위치를 저장하고 되돌릴 때 사용할 변수
 
-    private void OnEnable() => GameEvents.OnTrollInteraction += HandleTrollInteraction;
-    private void OnDisable() => GameEvents.OnTrollInteraction -= HandleTrollInteraction;
+    private void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
+    private void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
 
     private void HandleTrollInteraction(bool isGrabbedEvent, GameObject target)
     {

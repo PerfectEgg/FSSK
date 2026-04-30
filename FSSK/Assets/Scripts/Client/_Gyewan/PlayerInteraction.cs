@@ -18,14 +18,14 @@ public class PlayerInteraction : MonoBehaviour
 
     private void OnEnable()
     { 
-        GameEvents.OnExpansionModeChanged += HandleCameraModeChanged;
-        GameEvents.OnStunEffect += HandleStunEffect;
+        TrollEvents.OnExpansionModeChanged += HandleCameraModeChanged;
+        TrollEvents.OnStunEffect += HandleStunEffect;
     }
 
     private void OnDisable()
     {
-        GameEvents.OnExpansionModeChanged -= HandleCameraModeChanged;
-        GameEvents.OnStunEffect -= HandleStunEffect;
+        TrollEvents.OnExpansionModeChanged -= HandleCameraModeChanged;
+        TrollEvents.OnStunEffect -= HandleStunEffect;
     }
 
     private void HandleCameraModeChanged(bool isExpansion)
@@ -100,7 +100,7 @@ public class PlayerInteraction : MonoBehaviour
             _currentGrabbedObject = hit.collider.gameObject;
             _grabbedTag = hit.collider.tag;
             _grabbedTransform = hit.collider.transform;
-            GameEvents.TriggerTrollInteraction(true, _grabbedTransform.gameObject);
+            TrollEvents.TriggerTrollInteraction(true, _grabbedTransform.gameObject);
             
             if (_grabbedTransform.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
         }
@@ -118,11 +118,11 @@ public class PlayerInteraction : MonoBehaviour
         // 트롤일 경우 장외 판정 등을 체크하기 위해 이벤트 발송
         if (_grabbedTag == "Troll")
         {
-            GameEvents.TriggerTrollInteraction(false, _grabbedTransform.gameObject);
+            TrollEvents.TriggerTrollInteraction(false, _grabbedTransform.gameObject);
         }
         else if (_grabbedTag == "Item")
         {
-            GameEvents.TriggerItemCollected(_grabbedTag, _grabbedTransform.gameObject);
+            TrollEvents.TriggerItemCollected(_grabbedTag, _grabbedTransform.gameObject);
         }
 
         _currentGrabbedObject = null;

@@ -8,8 +8,8 @@ public class RainController : MonoBehaviour
 
     private int _currentLevel = 0;  // 현재 레벨
 
-    private void OnEnable() => GameEvents.OnWaveStageChanged += HandleWaveStage;
-    private void OnDisable() => GameEvents.OnWaveStageChanged -= HandleWaveStage;
+    private void OnEnable() => TrollEvents.OnWaveStageChanged += HandleWaveStage;
+    private void OnDisable() => TrollEvents.OnWaveStageChanged -= HandleWaveStage;
 
     private void HandleWaveStage(int stage)
     {

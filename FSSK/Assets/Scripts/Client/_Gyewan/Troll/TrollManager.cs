@@ -24,14 +24,14 @@ public class TrollManager : MonoBehaviour
     // 이벤트 구독 및 해제 (핵심!)
     private void OnEnable()
     {
-        GameEvents.RequestSafePosition += GetSafeRandomPosition;
-        GameEvents.OnPositionReleased += ReleasePosition;
+        TrollEvents.RequestSafePosition += GetSafeRandomPosition;
+        TrollEvents.OnPositionReleased += ReleasePosition;
     }
 
     private void OnDisable()
     {
-        GameEvents.RequestSafePosition -= GetSafeRandomPosition;
-        GameEvents.OnPositionReleased -= ReleasePosition;
+        TrollEvents.RequestSafePosition -= GetSafeRandomPosition;
+        TrollEvents.OnPositionReleased -= ReleasePosition;
     }
 
     private List<Vector3> _occupiedPositions = new List<Vector3>();

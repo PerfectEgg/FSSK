@@ -26,14 +26,14 @@ public class CameraModeController : MonoBehaviour
 
     private void OnEnable()
     {
-        GameEvents.OnSirenEffect += HandleSirenEffect;  // 세이렌 이벤트 구독
-        GameEvents.OnStunEffect += HandleStunEffect;   // 기절 이벤트 구독
+        TrollEvents.OnSirenEffect += HandleSirenEffect;  // 세이렌 이벤트 구독
+        TrollEvents.OnStunEffect += HandleStunEffect;   // 기절 이벤트 구독
     }
 
     private void OnDisable()
     {
-        GameEvents.OnSirenEffect -= HandleSirenEffect;
-        GameEvents.OnStunEffect -= HandleStunEffect;
+        TrollEvents.OnSirenEffect -= HandleSirenEffect;
+        TrollEvents.OnStunEffect -= HandleStunEffect;
     }
 
     private void HandleSirenEffect(bool isSinging, Transform target)
@@ -138,7 +138,7 @@ public class CameraModeController : MonoBehaviour
         }
 
         // UI나 다른 스크립트에도 현재 상태 방송
-        GameEvents.TriggerExpansionMode(expansion);
+        TrollEvents.TriggerExpansionMode(expansion);
     }
 
     // 세이렌을 강제로 바라보게 Pan/Tilt 값을 조작하는 함수

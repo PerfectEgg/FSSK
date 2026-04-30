@@ -36,7 +36,7 @@ public class Siren : MonsterTroll
         _stunTimer = _stunDuration;
         
         // TODO: UI 매니저 호출하여 3초 스턴 및 시야 암전 이벤트 발생
-        GameEvents.OnStunEffect?.Invoke(_stunDuration);
+        TrollEvents.OnStunEffect?.Invoke(_stunDuration);
     }
 
     public override void EndTroll() { }
@@ -130,6 +130,6 @@ public class Siren : MonsterTroll
         if (_isCameraPulled == isPulling) return;
 
         _isCameraPulled = isPulling;
-        GameEvents.OnSirenEffect?.Invoke(isPulling, isPulling ? transform : null);
+        TrollEvents.OnSirenEffect?.Invoke(isPulling, isPulling ? transform : null);
     }
 }

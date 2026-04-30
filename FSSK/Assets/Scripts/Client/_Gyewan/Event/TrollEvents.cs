@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
 
-public static class GameEvents
+// 트롤 및 환경, 웨이브 관련 이벤트
+public static class TrollEvents
 {
     // 트롤 관련 이벤트: (상태, 대상 오브젝트)
     public static Action<bool, GameObject> OnTrollInteraction;

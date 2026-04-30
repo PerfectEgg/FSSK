@@ -11,8 +11,8 @@ public abstract class ItemTroll : TrollBase, IDraggable
     [SerializeField] protected float _throwForce = 100f; // 던지는 힘
     [SerializeField] private float _holdDistance = 10f;    // 잡고 있을 때의 거리
 
-    private void OnEnable() => GameEvents.OnTrollInteraction += HandleTrollInteraction;
-    private void OnDisable() => GameEvents.OnTrollInteraction -= HandleTrollInteraction;
+    private void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
+    private void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
 
     private void HandleTrollInteraction(bool isGrabbedEvent, GameObject target)
     {

@@ -35,7 +35,7 @@ public class WaveManager : MonoBehaviour
         _waveTimer = 0f;
         _isWaveActive = true;
         
-        GameEvents.OnWaveStageChanged?.Invoke(_currentStage); // 0단계 시작 방송
+        TrollEvents.OnWaveStageChanged?.Invoke(_currentStage); // 0단계 시작 방송
     }
 
     private void Update()
@@ -53,7 +53,7 @@ public class WaveManager : MonoBehaviour
             Debug.Log($"🌊 [WaveManager] {_currentStage}단계 진입!");
             
             // 🟢 지휘자는 그저 현재 몇 단계인지만 동네방네 소문냅니다.
-            GameEvents.OnWaveStageChanged?.Invoke(_currentStage);
+            TrollEvents.OnWaveStageChanged?.Invoke(_currentStage);
         }
     }
 }
