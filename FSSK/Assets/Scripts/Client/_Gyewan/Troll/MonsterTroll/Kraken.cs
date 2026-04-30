@@ -34,8 +34,18 @@ public class Kraken : MonsterTroll
         TrollEvents.OnStunEffect?.Invoke(_penaltyDuration);
     }
     
-    public override void EndTroll() { }
-    
+    public override void EndTroll()
+    {
+        // 연출 종료 후 파괴
+        Destroy(gameObject, 2f);
+    }
+
+    void OnDestroy()
+    {
+        // 트롤이 제거될 때 매니저에게 종료 알림
+        TrollEvents.TriggerTrollFinished();
+    }
+
 
     void Start()
     {
@@ -91,7 +101,6 @@ public class Kraken : MonsterTroll
             ApplyEffect();
         }
 
-        // 연출 종료 후 파괴
-        Destroy(gameObject, 2f);
+        EndTroll(); // 공격 판정 후 트롤 종료
     }
 }

@@ -26,6 +26,12 @@ public class Rat : AnimalTroll
         if (_heldSilverStoneVisual != null) _heldSilverStoneVisual.SetActive(false);
     }
 
+    void OnDestroy()
+    {
+        // 트롤이 제거될 때 매니저에게 종료 알림
+        TrollEvents.TriggerTrollFinished();
+    }
+
     private void OnEnable()
     {
         // 매니저가 보내주는 타겟 정보를 수신 대기
@@ -90,7 +96,7 @@ public class Rat : AnimalTroll
                 break;
             case AnimalState.Action:
                 // 🟢 타겟이 할당되었고, 타겟 Transform이 파괴되지 않고 존재하는지 체크
-                if (_isTargetAssigned && _targetPosition != null)
+                if ( _targetPosition != null && _isTargetAssigned)
                 {
                     // _targetPosition.position을 참조하여 이동
                     transform.position = Vector3.MoveTowards(transform.position, _targetPosition.position, _moveSpeed * Time.deltaTime);
@@ -101,7 +107,7 @@ public class Rat : AnimalTroll
                     }
                 }
                 // 만약 쥐가 달려가고 있는데 돌이 사라졌다면? (플레이어가 먼저 주운 경우 등)
-                else if (_isTargetAssigned && _targetPosition == null)
+                else if (_targetPosition == null && _isTargetAssigned)
                 {
                     Debug.Log("🐀 [도둑쥐] 목표물이 사라졌습니다! 빈손으로 돌아갑니다.");
                     ChangeState(AnimalState.Exiting);

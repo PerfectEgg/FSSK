@@ -20,6 +20,12 @@ public class Turtle : AnimalTroll
         }
     }
 
+    void OnDestroy()
+    {
+        // 트롤이 제거될 때 매니저에게 종료 알림
+        TrollEvents.TriggerTrollFinished();
+    }
+
     protected override void UpdateState()
     {
         switch(_currentState)

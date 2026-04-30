@@ -32,6 +32,12 @@ public class Parrot : AnimalTroll
         LookAtTarget(_targetPos);
     }
 
+    void OnDestroy()
+    {
+        // 트롤이 제거될 때 매니저에게 종료 알림
+        TrollEvents.TriggerTrollFinished();
+    }
+
     // 목표 지점을 바라보는 함수
     private void LookAtTarget(Vector3 target)
     {

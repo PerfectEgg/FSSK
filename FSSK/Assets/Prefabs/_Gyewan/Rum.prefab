@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: 1047319855823566135}
   m_Layer: 6
   m_Name: Rum
-  m_TagString: Troll
+  m_TagString: Item
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -153,5 +153,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5ea41831d7557c34aa60a4d9be2ebaef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Rum
-  throwForce: 100
-  holdDistance: 10
+  _throwForce: 100
+  _holdDistance: 10

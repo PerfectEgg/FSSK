@@ -119,6 +119,48 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &71806306
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 71806307}
+  m_Layer: 5
+  m_Name: TestButton
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &71806307
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 71806306}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 466572573}
+  - {fileID: 1483294507}
+  - {fileID: 700614700}
+  - {fileID: 1413668744}
+  - {fileID: 1842364595}
+  - {fileID: 1622416918}
+  - {fileID: 1614883231}
+  m_Father: {fileID: 1019639807}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 1920, y: 1080}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &78943331
 GameObject:
   m_ObjectHideFlags: 0
@@ -495,6 +537,67 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!1 &238824529
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 238824531}
+  - component: {fileID: 238824530}
+  m_Layer: 0
+  m_Name: Test Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 2147483647
+  m_IsActive: 1
+--- !u!114 &238824530
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 238824529}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1810a0c00a42cc47be2a35570a30291, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TestManager
+  _groundSpawnPoints:
+  - {fileID: 918055725}
+  - {fileID: 1541111430}
+  - {fileID: 1988158860}
+  - {fileID: 911297110}
+  _airSpawnPoints: []
+  _monsterSpawnPoints:
+  - {fileID: 654905470}
+  - {fileID: 1225001173}
+  _parrotPrefab: {fileID: 0}
+  _ratPrefab: {fileID: 9007209712626027920, guid: b58d7c22fc1ff134fbcc4f8db7474921, type: 3}
+  _seaCrabPrefab: {fileID: 0}
+  _safeRadius: 2.5
+  _turtlePrefab: {fileID: 0}
+  _rumPrefab: {fileID: 0}
+  _krakenPrefab: {fileID: 4793174993922422824, guid: 6e2d039c45b04da4bab08b0ff0642b41, type: 3}
+  _sirenPrefab: {fileID: 0}
+--- !u!4 &238824531
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 238824529}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &340148140
 GameObject:
   m_ObjectHideFlags: 0
@@ -697,17 +800,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 466572572}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1962237665}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -50, y: 200}
+  m_AnchoredPosition: {x: -158, y: 200}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 1, y: 0.5}
 --- !u!114 &466572574
@@ -914,7 +1017,7 @@ MonoBehaviour:
   unlockSystemCursorWhileAiming: 1
   showOutOfBoardAimPreview: 1
   keepAimPositionAfterDrop: 1
-  useWindAim: 1
+  useWindAim: 0
   windAimDirection: {x: -2, y: 0}
   windAimDriftCellsPerSecond: 0.35
   windAimBaseSensitivity: 1
@@ -1118,17 +1221,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 700614699}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1770954074}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -50, y: -200}
+  m_AnchoredPosition: {x: -158, y: -200}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 1, y: 0.5}
 --- !u!114 &700614701
@@ -1999,7 +2102,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &988971593
 Transform:
   m_ObjectHideFlags: 0
@@ -2027,25 +2130,34 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8155e5e76eb8b541934efa81a5504e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TrollManager
+  _trollDatabase:
+  - trollType: 1
+    trollPrefab: {fileID: 4793174993922422824, guid: 6e2d039c45b04da4bab08b0ff0642b41, type: 3}
+    spawnWeight: 10
+  - trollType: 2
+    trollPrefab: {fileID: 7882202695067215425, guid: 10afbe466be1d764282924c5fcffb1ef, type: 3}
+    spawnWeight: 10
+  - trollType: 3
+    trollPrefab: {fileID: 9007209712626027920, guid: 82082c311dec5124cb2e566f8a7c4f22, type: 3}
+    spawnWeight: 20
+  - trollType: 4
+    trollPrefab: {fileID: 9007209712626027920, guid: b58d7c22fc1ff134fbcc4f8db7474921, type: 3}
+    spawnWeight: 20
+  - trollType: 5
+    trollPrefab: {fileID: 8353737392247691479, guid: 6af3fa2bf018cca42a7993e968d323dd, type: 3}
+    spawnWeight: 20
+  - trollType: 6
+    trollPrefab: {fileID: 8353737392247691479, guid: 6297302d10d0dbb4fa1710eb84441a9e, type: 3}
+    spawnWeight: 20
   _groundSpawnPoints:
   - {fileID: 918055725}
   - {fileID: 1541111430}
   - {fileID: 1988158860}
   - {fileID: 911297110}
-  _airSpawnPoints:
-  - {fileID: 1107067885}
-  - {fileID: 744521546}
   _monsterSpawnPoints:
   - {fileID: 654905470}
   - {fileID: 1225001173}
-  _parrotPrefab: {fileID: 9007209712626027920, guid: 82082c311dec5124cb2e566f8a7c4f22, type: 3}
-  _ratPrefab: {fileID: 9007209712626027920, guid: b58d7c22fc1ff134fbcc4f8db7474921, type: 3}
-  _seaCrabPrefab: {fileID: 8353737392247691479, guid: 6297302d10d0dbb4fa1710eb84441a9e, type: 3}
   _safeRadius: 2.5
-  _turtlePrefab: {fileID: 8353737392247691479, guid: 6af3fa2bf018cca42a7993e968d323dd, type: 3}
-  _rumPrefab: {fileID: 6098799951655430639, guid: 7629b1ecadc64c64bb7292d69ef3a7f6, type: 3}
-  _krakenPrefab: {fileID: 4793174993922422824, guid: 6e2d039c45b04da4bab08b0ff0642b41, type: 3}
-  _sirenPrefab: {fileID: 7882202695067215425, guid: 10afbe466be1d764282924c5fcffb1ef, type: 3}
 --- !u!1 &1019639803
 GameObject:
   m_ObjectHideFlags: 0
@@ -2140,13 +2252,7 @@ RectTransform:
   m_LocalScale: {x: 0, y: 0, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 466572573}
-  - {fileID: 1483294507}
-  - {fileID: 700614700}
-  - {fileID: 1413668744}
-  - {fileID: 1842364595}
-  - {fileID: 1622416918}
-  - {fileID: 1614883231}
+  - {fileID: 71806307}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -2963,17 +3069,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1413668743}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 340148141}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 50, y: 300}
+  m_AnchoredPosition: {x: 158, y: 300}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &1413668745
@@ -3140,17 +3246,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1483294506}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1349008941}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -50, y: 0}
+  m_AnchoredPosition: {x: -158, y: 0}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 1, y: 0.5}
 --- !u!114 &1483294508
@@ -3197,8 +3303,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 988971594}
-        m_TargetAssemblyTypeName: TrollManager, Assembly-CSharp
+      - m_Target: {fileID: 238824530}
+        m_TargetAssemblyTypeName: TestManager, Assembly-CSharp
         m_MethodName: OnSpawnKraken
         m_Mode: 1
         m_Arguments:
@@ -3689,17 +3795,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1614883230}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1140122131}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 50, y: -300}
+  m_AnchoredPosition: {x: 158, y: -300}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &1614883232
@@ -3822,17 +3928,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1622416917}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1875039674}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 50, y: -100}
+  m_AnchoredPosition: {x: 158, y: -100}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &1622416919
@@ -4306,17 +4412,17 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1842364594}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 78943332}
-  m_Father: {fileID: 1019639807}
+  m_Father: {fileID: 71806307}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 50, y: 100}
+  m_AnchoredPosition: {x: 158, y: 100}
   m_SizeDelta: {x: 200, y: 100}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &1842364596
@@ -4363,8 +4469,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 988971594}
-        m_TargetAssemblyTypeName: TrollManager, Assembly-CSharp
+      - m_Target: {fileID: 238824530}
+        m_TargetAssemblyTypeName: TestManager, Assembly-CSharp
         m_MethodName: OnSpawnRat
         m_Mode: 1
         m_Arguments:
@@ -5124,6 +5230,7 @@ SceneRoots:
   - {fileID: 1019639807}
   - {fileID: 1546282198}
   - {fileID: 1071846270}
+  - {fileID: 238824531}
   - {fileID: 988971593}
   - {fileID: 2122399431}
   - {fileID: 466410295}

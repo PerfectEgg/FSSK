@@ -39,7 +39,17 @@ public class Siren : MonsterTroll
         TrollEvents.OnStunEffect?.Invoke(_stunDuration);
     }
 
-    public override void EndTroll() { }
+    public override void EndTroll()
+    {
+        PullCamera(false); 
+
+        Destroy(gameObject);
+    }
+    void OnDestroy()
+    {
+        // 트롤이 제거될 때 매니저에게 종료 알림
+        TrollEvents.TriggerTrollFinished();
+    }
 
     void Update()
     {
@@ -119,8 +129,7 @@ public class Siren : MonsterTroll
     {
         Debug.Log("🧜‍♀️ [세이렌 퇴장] 노래가 끝났습니다. 조작이 정상화됩니다.");
         
-        PullCamera(false); 
-        Destroy(gameObject);
+        EndTroll();
     }
 
     // 카메라 강제 이동 이벤트를 켜고 끄는 헬퍼 함수

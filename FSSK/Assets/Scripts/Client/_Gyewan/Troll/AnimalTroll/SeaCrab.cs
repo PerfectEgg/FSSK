@@ -7,6 +7,8 @@ public class SeaCrab : AnimalTroll
     private Vector3 _targetDirection;
     private Vector3 _targetPosition;
 
+    private bool isArrive = false;  // 도착 여부 체크
+
     void Start()
     {
         // 생성 시 겹치지 않는 위치를 파악 후 이동
@@ -20,6 +22,17 @@ public class SeaCrab : AnimalTroll
         {
             transform.rotation = Quaternion.LookRotation(_targetDirection);
         }
+    }
+
+    void OnDestroy()
+    {
+        if(!isArrive)
+        {
+            // 바다 게는 도착 시점에 매니저에게 종료 알림을 보내므로, 도착 이후 파괴될 때는 추가로 알림을 보내지 않습니다.
+            TrollEvents.TriggerTrollFinished();
+            return;
+        }
+        
     }
 
     protected override void UpdateState()
@@ -38,6 +51,10 @@ public class SeaCrab : AnimalTroll
                 if (Vector3.Distance(transform.position, _targetPosition) <= 0.05f)
                 {
                     ChangeState(AnimalState.Waiting);
+
+                    // 바다 게는 예외로, 도착 완료 시 매니저에게 종료 알림
+                    TrollEvents.TriggerTrollFinished();
+                    isArrive = true;   // 도착 여부 체크
                 }
                 break;
             case AnimalState.Exiting:

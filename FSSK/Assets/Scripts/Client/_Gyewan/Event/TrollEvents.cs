@@ -48,9 +48,14 @@ public static class TrollEvents
         return RequestSafePosition != null ? RequestSafePosition.Invoke() : Vector3.zero;
     }
 
-    // 🟢 웨이브 및 환경 변화 이벤트
+    // 웨이브 및 환경 변화 이벤트
     public static Action<int> OnWaveStageChanged;       // 웨이브 단계 변경 (UI 처리 용)
     public static Action<int> OnRainLevelChanged;       // 비 강도 변경 (0~3)
     public static Action<int> OnWindLevelChanged;       // 바람 강도 변경 (0~3)
     public static Action<int> OnLightningLevelChanged;  // 번개 강도 변경 (0~3)
+
+
+    // 트롤링 이벤트 종료 알림 (이 이벤트가 호출되면 매니저가 대기 타이머를 재시작함)
+    public static Action OnTrollFinished;
+    public static void TriggerTrollFinished() => OnTrollFinished?.Invoke();
 }
