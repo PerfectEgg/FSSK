@@ -1424,7 +1424,7 @@ MonoBehaviour:
   PanAxis:
     Value: 0
     Center: 0
-    Range: {x: -60, y: 60}
+    Range: {x: -80, y: 80}
     Wrap: 0
     Recentering:
       Enabled: 0
@@ -1434,7 +1434,7 @@ MonoBehaviour:
   TiltAxis:
     Value: 0
     Center: 0
-    Range: {x: -5, y: 75}
+    Range: {x: -20, y: 80}
     Wrap: 0
     Recentering:
       Enabled: 0
@@ -1497,7 +1497,7 @@ GameObject:
   - component: {fileID: 744521548}
   - component: {fileID: 744521547}
   m_Layer: 0
-  m_Name: Air Point 2
+  m_Name: Item Point 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1512,7 +1512,7 @@ Transform:
   m_GameObject: {fileID: 744521545}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -15, y: 0, z: 0}
+  m_LocalPosition: {x: -40, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2379,7 +2379,7 @@ MonoBehaviour:
   _reachDistance: 100
   _interactableLayer:
     serializedVersion: 2
-    m_Bits: 64
+    m_Bits: 1088
 --- !u!114 &1071846273
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2408,7 +2408,7 @@ GameObject:
   - component: {fileID: 1107067887}
   - component: {fileID: 1107067886}
   m_Layer: 0
-  m_Name: Air Point 1
+  m_Name: Item Point 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2423,7 +2423,7 @@ Transform:
   m_GameObject: {fileID: 1107067884}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 15, y: 0, z: 0}
+  m_LocalPosition: {x: 40, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4142,7 +4142,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -29, z: 0}
-  m_LocalScale: {x: 100, y: 1, z: 100}
+  m_LocalScale: {x: 500, y: 1, z: 500}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -5200,9 +5200,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 97d3ddff8a15b2446aedcf61706a498b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaveManager
-  _stageDuration: 30
-  _startTime: 5
-  _endTime: 25
+  _stageDuration: 5
+  _stageDelay: 2
+  _rumPrefab: {fileID: 6098799951655430639, guid: 7629b1ecadc64c64bb7292d69ef3a7f6, type: 3}
+  _octopusPrefab: {fileID: 9007209712626027920, guid: aeb52477e81e4a044b2971086193681c, type: 3}
+  _itemSpawnPoints:
+  - {fileID: 1107067885}
+  - {fileID: 744521546}
 --- !u!4 &2122399431
 Transform:
   m_ObjectHideFlags: 0

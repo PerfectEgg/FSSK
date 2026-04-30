@@ -11,6 +11,8 @@ public abstract class ItemTroll : TrollBase, IDraggable
     [SerializeField] protected float _throwForce = 100f; // 던지는 힘
     [SerializeField] private float _holdDistance = 10f;    // 잡고 있을 때의 거리
 
+    protected Vector3 _grabbedScale = Vector3.zero; // 🟢 잡았을 때 원래 크기
+
     private void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
     private void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
 
@@ -40,7 +42,19 @@ public abstract class ItemTroll : TrollBase, IDraggable
     // --- IDraggable(인터페이스)의 메서드 구현 ---
     public void OnDragStart()
     {
+        // 🟢 [중복 집기 방지] 이미 잡혀있다면 무시
+        if (_isGrabbed) return;
+
         _isGrabbed = true;
+
+        // 🟢 [물리 안정화] 들고 있는 동안 중력이나 다른 물리 충돌에 영향받지 않게 고정
+        if (rb != null) rb.isKinematic = true;
+        
+        // 🟢 [스케일 조절] 손에 쥐는 순간 크기를 정상으로 축소
+        transform.localScale = _grabbedScale;
+
+        // 🟢 [레이어 변경] 마우스 레이캐스트에 다시 걸리지 않도록 무시 레이어로 덮어씌움
+        gameObject.layer = LayerMask.NameToLayer("Ignore");
 
         transform.position += Vector3.up * 1f;
         
@@ -55,7 +69,13 @@ public abstract class ItemTroll : TrollBase, IDraggable
 
     public void OnDragEnd()
     {
+        // 이미 놨거나 안 잡은 상태면 무시
+        if (!_isGrabbed) return;
+
         _isGrabbed = false;
+
+        // 🟢 물리 연산 복구 (던지기 위해)
+        if (rb != null) rb.isKinematic = false;
 
         Throw(Camera.main.transform.forward);
     }

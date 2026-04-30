@@ -116,11 +116,12 @@ public class PlayerInteraction : MonoBehaviour
 
         // 던지는 힘 대신, 현재 위치에 정적으로 내려놓는 처리
         // 트롤일 경우 장외 판정 등을 체크하기 위해 이벤트 발송
-        if (_grabbedTag == "Troll")
+        if (_grabbedTag == "Troll" || _grabbedTag == "Item")
         {
             TrollEvents.TriggerTrollInteraction(false, _grabbedTransform.gameObject);
         }
-        else if (_grabbedTag == "Item")
+
+        if (_grabbedTag == "Item")
         {
             TrollEvents.TriggerItemCollected(_grabbedTag, _grabbedTransform.gameObject);
         }
