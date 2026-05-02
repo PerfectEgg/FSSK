@@ -2020,7 +2020,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0f73db3e42ab803468d780822b032765, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BackendManager
-  matchingSceneName: Lobby
+  _matchingSceneName: Lobby
 --- !u!1 &1034315527
 GameObject:
   m_ObjectHideFlags: 0
@@ -2292,6 +2292,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1438238595}
   - component: {fileID: 1438238596}
+  - component: {fileID: 1438238597}
   m_Layer: 0
   m_Name: UI Manager
   m_TagString: Untagged
@@ -2327,6 +2328,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CommonUIManager
   _gameSettingPanel: {fileID: 921314589}
+--- !u!114 &1438238597
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1438238594}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 895516b6b25ab564691e98b3f84b4699, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyUIManager
+  _scoreText: {fileID: 1703508619}
+  _nicknameText: {fileID: 619458613}
 --- !u!1 &1460964188
 GameObject:
   m_ObjectHideFlags: 0

@@ -103,18 +103,15 @@ public class RegisterUIManager : MonoBehaviour
                 // BackendManager 에 로컬 닉네임 동기화 (서버 재호출 없음)
                 BackendManager.Instance.ApplyNickname(id);
                 
-                
-                BackendManager.Instance.LoadMatchingScene(); // 유저 데이터 생성 시 제거 후 밑 주석 제거
-                
-                // 유저 데이터 row 최초 생성 → 성공 시 매칭 씬 이동
-                // BackendManager.Instance.CreateUserData(id,
-                //     onSuccess: () => BackendManager.Instance.LoadMatchingScene(),
-                //     onFail: (e) =>
-                //     {
-                //         SetRegisterStatus("유저 데이터 생성 실패: " + e);
-                //         SetRegisterInteractable(true);
-                //     }
-                // );
+                //유저 데이터 row 최초 생성 → 성공 시 매칭 씬 이동
+                BackendManager.Instance.CreateOrLoadUserData(
+                    onSuccess: () => BackendManager.Instance.LoadMatchingScene(),
+                    onFail: (e) =>
+                    {
+                        SetRegisterStatus("유저 데이터 생성 실패: " + e);
+                        SetRegisterInteractable(true);
+                    }
+                );
             },
             onFail: (err) =>
             {

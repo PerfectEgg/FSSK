@@ -97,22 +97,31 @@ public class LoginUIManager : MonoBehaviour
                         {
                             // LitJSON 에서 null 값은 ToString() 시 "null" 문자열로 반환되므로 명시적으로 체크
                             string nick = row["nickname"]?.ToString() ?? "";
+                            
                             if (!string.IsNullOrEmpty(nick) && nick != "null")
+                            {
                                 nickname = nick;
+                                BackendManager.Instance.ApplyNickname(nickname);
+                            }
                         }
+
+                        Debug.Log($"[LoginUIManager] 로그인 성공 (nickname: '{nickname}')");
+                        SetLoginStatus("로그인 성공!");
+
+                        // 유저 데이터 삽입 여부
+                        BackendManager.Instance.CreateOrLoadUserData(
+                            onSuccess: () => BackendManager.Instance.LoadMatchingScene(),
+                            onFail: (e) =>
+                            {
+                                SetLoginStatus("유저 데이터 생성 실패: " + e);
+                                SetLoginInteractable(true);
+                            }
+                        );
                     }
                     catch (Exception e)
                     { 
-                        Debug.LogError($"[LoginUIManager] Failed to parse user info JSON: {e.Message}"); 
-                    }
-
-                    if (!string.IsNullOrEmpty(nickname))
-                    {
-                        // 닉네임 있음 → BackendManager 에 저장 후 매칭 씬으로
-                        BackendManager.Instance.ApplyNickname(nickname);
-                        Debug.Log($"[LoginUIManager] 로그인 성공 (nickname: '{nickname}')");
-                        SetLoginStatus("로그인 성공!");
-                        BackendManager.Instance.LoadMatchingScene();
+                        Debug.LogError($"[LoginUIManager] Failed to parse user info JSON: {e.Message}");
+                        SetLoginInteractable(true); 
                     }
                 }
                 else

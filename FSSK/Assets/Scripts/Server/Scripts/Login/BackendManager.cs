@@ -12,10 +12,10 @@ public class BackendManager : MonoBehaviour
     // 싱글톤
     public static BackendManager Instance { get; private set; }
 
-    // 유저 데이터 (씬 이동 후 MatchingManager 등에서 참조) - 추가 필요()
+    // 유저 데이터 프로 퍼티 (씬 이동 후 MatchingManager 등에서 참조) - 
     public string Nickname { get; private set; } = "";
     public bool IsLoggedIn { get; private set; } = false;
-
+    public UserData MyUserData {get; private set; } 
 
     // 뒤끝 GameData 테이블 이름 (콘솔에서 만든 테이블명과 동일해야 함)
     private const string USER_DATA_TABLE = "UserData";
@@ -118,14 +118,43 @@ public class BackendManager : MonoBehaviour
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  유저 데이터 최초 생성 (회원가입 직후 호출)
+    //  유저 게임 데이터 생성  
     //  UserData 기본값(score=1000, winCount=0, loseCount=0)으로 row 생성
-    //  닉네임은 뒤끝이 GamerId 로 자동 연동하므로 컬럼에 넣지 않음
+    //  닉네임은 뒤끝이 자동 연동하므로 컬럼에 넣지 않음
+    //  구조 흐름 : 유저 정보 확인 -> 게임 데이터 없으면 추가 후 씬 넘어감/있으면 씬 넘어감  
     // ──────────────────────────────────────────────────────────────
-    public void CreateUserData(Action onSuccess,
+    public void CreateOrLoadUserData(Action onSuccess,
                                Action<string> onFail)
     {
-        UserData MyUserData = new UserData();
+
+        // 기존 유저 게임 데이터 확인
+        var getDataBro = Backend.GameData.GetMyData(USER_DATA_TABLE, new Where(), 1);
+        
+        // API 호출 실패인 경우
+        if (!getDataBro.IsSuccess())
+        {
+            Debug.LogError($"[BackendManager] GetMyData failed: {getDataBro}");
+            onFail?.Invoke(getDataBro.ToString());
+        }
+
+        var rows = getDataBro.FlattenRows();
+        if(rows != null && rows.Count > 0)
+        {
+            // 데이터 있음 -> 로드
+            var row = rows[0];
+            MyUserData = new UserData
+            {
+                score = int.Parse(row["score"].ToString()),
+                winCount  = int.Parse(row["winCount"].ToString()),
+                loseCount = int.Parse(row["loseCount"].ToString())
+            };
+            Debug.Log($"[BackendManager] 유저 데이터 로드 (score: {MyUserData.score}, win: {MyUserData.winCount}, lose: {MyUserData.loseCount})");
+            onSuccess?.Invoke();
+            return;
+        }
+        
+        // 데이터 없는 경우 -> 유저 데이터 생성
+        MyUserData = new UserData();
 
         Param param = new()
         {
@@ -134,17 +163,17 @@ public class BackendManager : MonoBehaviour
             { "loseCount", MyUserData.loseCount }
         };
 
-        var bro = Backend.GameData.Insert(USER_DATA_TABLE, param);
+        var InsertBro = Backend.GameData.Insert(USER_DATA_TABLE, param);
 
-        if (bro.IsSuccess())
+        if (InsertBro.IsSuccess())
         {
-            Debug.Log("[BackendManager] 유저 데이터 생성 성공 : " + bro);
+            Debug.Log("[BackendManager] 유저 데이터 생성 성공 : " + InsertBro);
             onSuccess?.Invoke();
         }
         else
         {
-            Debug.LogError("[BackendManager] 유저 데이터 생성 실패 : " + bro);
-            onFail?.Invoke(bro.ToString());
+            Debug.LogError("[BackendManager] 유저 데이터 생성 실패 : " + InsertBro);
+            onFail?.Invoke(InsertBro.ToString());
         }
     }
 
