@@ -8,7 +8,8 @@ public class Turtle : AnimalTroll
     private Vector3 _targetDirection;
     private Vector3 _targetPosition;
 
-    void Start()
+    // 목표 지점을 바라보는 함수
+    private void LookAtTarget()
     {
         _targetPosition = new Vector3(-transform.position.x, transform.position.y, -transform.position.z);
 
@@ -18,6 +19,15 @@ public class Turtle : AnimalTroll
         {
             transform.rotation = Quaternion.LookRotation(_targetDirection);
         }
+    }
+
+    // 상태에 막 진입했을 때 할 일 (무적 판정, 애니메이션 재생 등)
+    protected override void OnStateEnter(AnimalState state)
+    {
+        base.OnStateEnter(state);
+
+        if (state == AnimalState.Waiting)
+            LookAtTarget();
     }
 
     void OnDestroy()
@@ -31,8 +41,7 @@ public class Turtle : AnimalTroll
         switch(_currentState)
         {
             case AnimalState.Entering:
-                if (_currentTime >= _enteringTime)
-                    ChangeState(AnimalState.Waiting);
+                EnterAction();
                 break;
             case AnimalState.Waiting:
                 if (_currentTime >= _waittingTime)

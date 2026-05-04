@@ -17,8 +17,10 @@ public class Parrot : AnimalTroll
     private int _actionCount = 0;        // 액션 카운팅
     private bool _isReturning = false;   // 초기 대기 이후 �동
 
-    void Start()
+    protected override void Start()
     {
+        base.Start();
+
         _startPos = transform.position;
         _startPos.y = 0;
         _endPos = new Vector3(-_startPos.x, _startPos.y, Random.Range(-4f, 4f));
@@ -28,8 +30,15 @@ public class Parrot : AnimalTroll
 
         _flyDuration = Random.Range(1.5f, 2.0f);
         _flySpeed = Vector3.Distance(_startPos, _targetPos) / _flyDuration;
+    }
 
-        LookAtTarget(_targetPos);
+    // 상태에 막 진입했을 때 할 일 (무적 판정, 애니메이션 재생 등)
+    protected override void OnStateEnter(AnimalState state)
+    {
+        base.OnStateEnter(state);
+
+        if (state == AnimalState.Waiting)
+            LookAtTarget(_targetPos);
     }
 
     void OnDestroy()
@@ -51,8 +60,7 @@ public class Parrot : AnimalTroll
         switch(_currentState)
         {
             case AnimalState.Entering:
-                if (_currentTime >= _enteringTime)
-                    ChangeState(AnimalState.Waiting);
+                EnterAction();
                 break;
             case AnimalState.Waiting:
                 if (_currentTime >= _waittingTime)

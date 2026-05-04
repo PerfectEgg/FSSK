@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
 // 쥐
@@ -12,15 +13,15 @@ public class Rat : AnimalTroll
     [SerializeField] private GameObject _heldSilverStoneVisual; // 입에 물고 있는 바둑돌 오브젝트 (평소엔 비활성화)
 
     // 내부 상태 변수
-    private Vector3 _startPosition;     // 시작 위치 (훔치고 돌아가기 위해 저장)
     private Transform _targetPosition;  // 훔칠 위치 (바둑 돌을 훔칠 위치)
     private int _targetStoneColor;      // 바둑돌의 색깔 (0: 빈칸[활용 X], 1: 금화(흑돌), 2: 은화(백돌))
     private bool _isTargetAssigned = false;
 
-    void Start()
+    protected override void Start()
     {
+        base.Start();
+
         _waittingTime = 3f;
-        _startPosition = transform.position; 
 
         if (_heldGoldStoneVisual != null) _heldGoldStoneVisual.SetActive(false);
         if (_heldSilverStoneVisual != null) _heldSilverStoneVisual.SetActive(false);
@@ -87,7 +88,7 @@ public class Rat : AnimalTroll
         }
         else if (state == AnimalState.Exiting)
         {
-            transform.LookAt(_startPosition);
+            transform.LookAt(_finalSpawnPos);
         }
     }
 
@@ -96,8 +97,7 @@ public class Rat : AnimalTroll
         switch(_currentState)
         {
             case AnimalState.Entering:
-                if (_currentTime >= _enteringTime)
-                    ChangeState(AnimalState.Waiting);
+                EnterAction();
                 break;
             case AnimalState.Waiting:
                 if (_currentTime >= _waittingTime)
@@ -107,10 +107,14 @@ public class Rat : AnimalTroll
                 // 🟢 타겟이 할당되었고, 타겟 Transform이 파괴되지 않고 존재하는지 체크
                 if ( _targetPosition != null && _isTargetAssigned)
                 {
-                    // _targetPosition.position을 참조하여 이동
-                    transform.position = Vector3.MoveTowards(transform.position, _targetPosition.position, _moveSpeed * Time.deltaTime);
+                    // 🟢 수정: 목표 위치를 가져오되, Y축은 현재 쥐의 높이로 고정!
+                    Vector3 moveTarget = _targetPosition.position;
+                    moveTarget.y = transform.position.y;
 
-                    if (Vector3.Distance(transform.position, _targetPosition.position) <= _arrivalThreshold)
+                    // _targetPosition.position을 참조하여 이동
+                    transform.position = Vector3.MoveTowards(transform.position, moveTarget, _moveSpeed * Time.deltaTime);
+
+                    if (Vector3.Distance(transform.position, moveTarget) <= _arrivalThreshold)
                     {
                         StealStone();
                     }
@@ -123,9 +127,9 @@ public class Rat : AnimalTroll
                 }
                 break;
             case AnimalState.Exiting:
-                transform.position = Vector3.MoveTowards(transform.position, _startPosition, _moveSpeed * Time.deltaTime);
+                transform.position = Vector3.MoveTowards(transform.position, _finalSpawnPos, _moveSpeed * Time.deltaTime);
 
-                if (Vector3.Distance(transform.position, _startPosition) <= _arrivalThreshold)
+                if (Vector3.Distance(transform.position, _finalSpawnPos) <= _arrivalThreshold)
                 {
                     EndTroll();
                 }

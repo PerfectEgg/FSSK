@@ -9,7 +9,8 @@ public class SeaCrab : AnimalTroll
 
     private bool isArrive = false;  // 도착 여부 체크
 
-    void Start()
+    // 목표 지점을 바라보는 함수
+    private void LookAtTarget()
     {
         // 생성 시 겹치지 않는 위치를 파악 후 이동
         Vector3 safePos = TrollEvents.GetSafePosition();
@@ -24,6 +25,15 @@ public class SeaCrab : AnimalTroll
         }
     }
 
+    // 상태에 막 진입했을 때 할 일 (무적 판정, 애니메이션 재생 등)
+    protected override void OnStateEnter(AnimalState state)
+    {
+        base.OnStateEnter(state);
+
+        if (state == AnimalState.Action)
+            LookAtTarget();
+    }
+
     void OnDestroy()
     {
         if(!isArrive)
@@ -35,13 +45,33 @@ public class SeaCrab : AnimalTroll
         
     }
 
+    protected override void EnterAction()
+    {
+        // 0.0 ~ 1.0 사이의 진행률 계산
+        float progress = _currentTime / _enteringTime;
+
+        // 🟢 위치: 땅속에서 위로 부드럽게 상승
+        transform.position = Vector3.Lerp(_hiddenSpawnPos, _finalSpawnPos, progress);
+        
+        // 🟢 회전: 90도로 숙인 상태에서 0도(원래 각도)로 부드럽게 세워짐
+        transform.rotation = Quaternion.Slerp(_hiddenSpawnRot, _finalSpawnRot, progress);
+
+        if (_currentTime >= _enteringTime)
+        {
+            // 🟢 오차 보정: 정확한 최종 위치/회전으로 딱 맞춰줌
+            transform.position = _finalSpawnPos; 
+            transform.rotation = _finalSpawnRot;
+            
+            ChangeState(AnimalState.Action);
+        }
+    }
+
     protected override void UpdateState()
     {
         switch(_currentState)
         {
             case AnimalState.Entering:
-                if (_currentTime >= _enteringTime)
-                    ChangeState(AnimalState.Action);
+                EnterAction();
                 break;
             case AnimalState.Waiting:
                 break;

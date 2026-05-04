@@ -5,6 +5,21 @@ public enum AnimalState { Entering, Waiting, Action, Exiting }
 // 동물의 경우 (마우스로 치울 수 있음)
 public abstract class AnimalTroll : TrollBase, IDraggable 
 {
+    [Header("스폰 연출 설정 (오크통 등장)")]
+    [SerializeField] protected float _spawnDepth = 1.5f;    // 오크통 아래로 파고들어 있을 깊이
+    [SerializeField] protected float _spawnTiltAngle = -90f; // 🟢 비스듬히 숨어있을 X축 각도
+
+    [Header("스폰 설정")]
+    [SerializeField] protected float _spawnY = 0f;        // 스폰 시 Y축 높이 (책상 위에 뜨도록)
+
+    // 위치 캐싱용 변수
+    protected Vector3 _finalSpawnPos;       // 최종적으로 등장할 위치 (책상 위)
+    protected Vector3 _hiddenSpawnPos;      // 등장 연출을 위해 잠시 숨겨질 위치 (책상 아래)
+
+    // 회전 캐싱용 변수
+    protected Quaternion _finalSpawnRot;
+    protected Quaternion _hiddenSpawnRot;
+
     protected Rigidbody _rb;
     protected bool _isGrabbed = false;   // 드래그 중인지 여부를 체크하는 변수
     protected bool _isOnTable = true;    // 현재 판(책상) 위에 있는지 여부를 체크하는 변수
@@ -30,6 +45,30 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
         if (isGrabbedEvent) OnDragStart();  // 잡힘 이벤트 -> 잡기 로직 실행
         else OnDragEnd();                   // 놓임 이벤트 -> 놓기 로직 실행
+    }
+
+    protected virtual void Start()
+    {
+        Vector3 spawnPoint = transform.position;
+        spawnPoint.y = _spawnY; // Y축 높이 조정
+        transform.position = spawnPoint;
+
+        // 1. 최종 위치 및 회전값 기억
+        _finalSpawnPos = transform.position;
+
+        // 🟢 추가: 무조건 바둑판 중앙(예: Vector3.zero)을 바라보는 회전값을 '정면'으로 설정
+        Vector3 lookTarget = new Vector3(0, transform.position.y, transform.position.z); // 바둑판 중앙 좌표
+
+        // 내 원래 회전값이 아니라, 중앙을 바라보는 회전값을 최종 목표로 덮어씌움!
+        _finalSpawnRot = Quaternion.LookRotation(lookTarget - transform.position);
+        
+        // 2. 숨어있을 위치(아래)와 회전값(X축 꺾임) 계산
+        _hiddenSpawnPos = _finalSpawnPos + Vector3.down * _spawnDepth;
+        _hiddenSpawnRot = _finalSpawnRot * Quaternion.Euler(_spawnTiltAngle, 0, 0);
+
+        // 3. 땅속 초기 세팅
+        transform.position = _hiddenSpawnPos;
+        transform.rotation = _hiddenSpawnRot;
     }
 
     private void Awake() => _rb = GetComponent<Rigidbody>();
@@ -93,6 +132,27 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     public override void EndTroll() 
     { 
         Destroy(gameObject, 3f); 
+    }
+
+    protected virtual void EnterAction()
+    {
+        // 0.0 ~ 1.0 사이의 진행률 계산
+        float progress = _currentTime / _enteringTime;
+
+        // 🟢 위치: 땅속에서 위로 부드럽게 상승
+        transform.position = Vector3.Lerp(_hiddenSpawnPos, _finalSpawnPos, progress);
+        
+        // 🟢 회전: 90도로 숙인 상태에서 0도(원래 각도)로 부드럽게 세워짐
+        transform.rotation = Quaternion.Slerp(_hiddenSpawnRot, _finalSpawnRot, progress);
+
+        if (_currentTime >= _enteringTime)
+        {
+            // 🟢 오차 보정: 정확한 최종 위치/회전으로 딱 맞춰줌
+            transform.position = _finalSpawnPos; 
+            transform.rotation = _finalSpawnRot;
+            
+            ChangeState(AnimalState.Waiting);
+        }
     }
 
     // --- IDraggable(인터페이스)의 메서드 구현 ---
