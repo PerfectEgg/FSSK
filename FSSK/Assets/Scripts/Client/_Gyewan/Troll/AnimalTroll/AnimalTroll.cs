@@ -1,12 +1,12 @@
 using UnityEngine;
 
-public enum AnimalState { Entering, Waiting, Action, Exiting }
+public enum AnimalState { Entering, Waiting, Action, Action2, Hiding, Exiting }
 
 // 동물의 경우 (마우스로 치울 수 있음)
 public abstract class AnimalTroll : TrollBase, IDraggable 
 {
     [Header("스폰 연출 설정 (오크통 등장)")]
-    [SerializeField] protected float _spawnDepth = 1.5f;    // 오크통 아래로 파고들어 있을 깊이
+    [SerializeField] protected float _spawnDepth = 2f;    // 오크통 아래로 파고들어 있을 깊이
     [SerializeField] protected float _spawnTiltAngle = -90f; // 🟢 비스듬히 숨어있을 X축 각도
 
     [Header("스폰 설정")]
@@ -15,10 +15,13 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     // 위치 캐싱용 변수
     protected Vector3 _finalSpawnPos;       // 최종적으로 등장할 위치 (책상 위)
     protected Vector3 _hiddenSpawnPos;      // 등장 연출을 위해 잠시 숨겨질 위치 (책상 아래)
+    protected Vector3 _finalHidingPos;      // 최종적으로 숨을 위치 (책상 위)
+    protected Vector3 _hiddenHidingPos;     // 숨는 연출을 위해 잠시 숨겨질 위치 (책상 아래)
 
     // 회전 캐싱용 변수
     protected Quaternion _finalSpawnRot;
     protected Quaternion _hiddenSpawnRot;
+    protected Quaternion _finalHidingRot;
 
     protected Rigidbody _rb;
     protected bool _isGrabbed = false;   // 드래그 중인지 여부를 체크하는 변수
@@ -71,6 +74,15 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         transform.rotation = _hiddenSpawnRot;
     }
 
+    protected virtual void SetHide()
+    {
+        // 1. 최종 숨을 위치 및 회전값 기억
+        _finalHidingPos = transform.position;
+
+        // 2. 숨는 연출을 위해 잠시 숨겨질 위치(아래)와 회전값(X축 꺾임) 계산
+        _hiddenHidingPos = _finalHidingPos + Vector3.down * _spawnDepth;
+    }
+
     private void Awake() => _rb = GetComponent<Rigidbody>();
 
     private void Update()
@@ -100,7 +112,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     // 상태에 막 진입했을 때 할 일 (무적 판정, 애니메이션 재생 등)
     protected virtual void OnStateEnter(AnimalState state)
     {
-        if (state == AnimalState.Entering)
+        if (state == AnimalState.Entering || state == AnimalState.Exiting)
             _isInteractable = false;
         else
             _isInteractable = true;
@@ -111,14 +123,16 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         switch(_currentState)
         {
             case AnimalState.Entering:
-                if (_currentTime >= _enteringTime)
-                    ChangeState(AnimalState.Waiting);
+                EnterAction();
                 break;
             case AnimalState.Waiting:
                 if (_currentTime >= _waittingTime)
                     ChangeState(AnimalState.Action);
                 break;
             case AnimalState.Action:
+                break;
+            case AnimalState.Hiding:
+                HideAction();
                 break;
             case AnimalState.Exiting:
                 EndTroll();
@@ -152,6 +166,24 @@ public abstract class AnimalTroll : TrollBase, IDraggable
             transform.rotation = _finalSpawnRot;
             
             ChangeState(AnimalState.Waiting);
+        }
+    }
+
+    protected virtual void HideAction()
+    {
+        // 0.0 ~ 1.0 사이의 진행률 계산 (들어갈 때도 _enteringTime 활용)
+        float progress = _currentTime / _enteringTime;
+
+        // 🟢 위치: 위에서 땅속으로 부드럽게 하강 (Lerp 순서 반대)
+        transform.position = Vector3.Lerp(_finalHidingPos, _hiddenHidingPos, progress);
+
+        if (_currentTime >= _enteringTime)
+        {
+            // 🟢 오차 보정: 정확한 숨김 위치/회전으로 딱 맞춰줌
+            transform.position = _hiddenHidingPos; 
+            
+            // 완전히 숨었으니 파괴! (OnDestroy에서 매니저에게 알림)
+            ChangeState(AnimalState.Exiting);
         }
     }
 

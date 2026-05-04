@@ -55,7 +55,7 @@ public class Rat : AnimalTroll
             _targetStoneColor = 0;
             _targetPosition = null;
             _isTargetAssigned = false;
-            ChangeState(AnimalState.Exiting);
+            ChangeState(AnimalState.Hiding);
             return;
         }
 
@@ -71,7 +71,7 @@ public class Rat : AnimalTroll
     // --- TrollBase(추상 클래스)의 메서드 구현 ---
     public override void EndTroll() 
     { 
-        Destroy(gameObject, 1f); 
+        Destroy(gameObject, 3f); 
     }
 
     protected override void OnStateEnter(AnimalState state)
@@ -86,7 +86,8 @@ public class Rat : AnimalTroll
             _isTargetAssigned = false;
             TrollEvents.TriggerRequestStoneToSteal();
         }
-        else if (state == AnimalState.Exiting)
+        
+        if (state == AnimalState.Action2)
         {
             transform.LookAt(_finalSpawnPos);
         }
@@ -123,16 +124,24 @@ public class Rat : AnimalTroll
                 else if (_targetPosition == null && _isTargetAssigned)
                 {
                     Debug.Log("🐀 [도둑쥐] 목표물이 사라졌습니다! 빈손으로 돌아갑니다.");
-                    ChangeState(AnimalState.Exiting);
+                    ChangeState(AnimalState.Action2);
                 }
                 break;
-            case AnimalState.Exiting:
+            case AnimalState.Action2:
+                // 🟢 목표 위치로 도망가는 중 (Action2 상태)
                 transform.position = Vector3.MoveTowards(transform.position, _finalSpawnPos, _moveSpeed * Time.deltaTime);
 
                 if (Vector3.Distance(transform.position, _finalSpawnPos) <= _arrivalThreshold)
                 {
-                    EndTroll();
+                    ChangeState(AnimalState.Hiding);
                 }
+                break;
+            case AnimalState.Hiding:
+                SetHide();
+                HideAction();
+                break;
+            case AnimalState.Exiting:
+                EndTroll();
                 break;
         }
     }
@@ -151,7 +160,7 @@ public class Rat : AnimalTroll
         else if (_targetStoneColor == 2 && _heldSilverStoneVisual != null)
             _heldSilverStoneVisual.SetActive(true);
 
-        // 3. 훔쳤으니 Exiting(도망가기) 상태로 전환
-        ChangeState(AnimalState.Exiting);
+        // 3. 훔쳤으니 Hiding(숨기) 상태로 전환
+        ChangeState(AnimalState.Action2);
     }
 }

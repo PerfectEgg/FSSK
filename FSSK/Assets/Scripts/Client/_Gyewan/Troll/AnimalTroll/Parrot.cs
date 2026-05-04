@@ -6,6 +6,7 @@ public class Parrot : AnimalTroll
     private Vector3 _currentStartPos;
     private Vector3 _startPos;
     private Vector3 _endPos;
+    private Vector3 _finalPos;
     private Vector3 _targetPos;
     private float _flySpeed;
     private float _progress = 0f;
@@ -23,6 +24,8 @@ public class Parrot : AnimalTroll
 
         _startPos = transform.position;
         _startPos.y = 0;
+        _finalPos = new Vector3(-_startPos.x, _startPos.y, -_startPos.z);
+        _finalPos.y = 0;
         _endPos = new Vector3(-_startPos.x, _startPos.y, Random.Range(-4f, 4f));
         _endPos.y = 0;
         _currentStartPos = _startPos;
@@ -101,10 +104,9 @@ public class Parrot : AnimalTroll
                         _actionCount++;
 
                         _startPos.y = 0;
-                        _endPos.y = 0;
+                        _finalPos.y = 0;
                         _currentStartPos = _startPos;
-                        _endPos.z = Random.Range(-4f, 4f);
-                        _targetPos = _endPos; // 다음 목적지는 목표 위치로 설정
+                        _targetPos = _finalPos; // 다음 목적지는 목표 위치로 설정
                         LookAtTarget(_targetPos); // 고개 돌리기
 
                         Debug.Log("앵무새: 노래(Party Parrot)를 시작합니다! (1.5초 대기)");
@@ -113,9 +115,13 @@ public class Parrot : AnimalTroll
                     else if (_actionCount == 2) // 세 번째 비행 완료 (복귀)
                     {
                         Debug.Log("앵무새: 비행 2회 완료, 퇴장합니다.");
-                        ChangeState(AnimalState.Exiting);
+                        ChangeState(AnimalState.Hiding);
                     }
                 }
+                break;
+            case AnimalState.Hiding:
+                SetHide();
+                HideAction();
                 break;
             case AnimalState.Exiting:
                 EndTroll();

@@ -155,7 +155,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7eaa080fe0aa5147b5097e66191d694, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Parrot
-  _spawnDepth: 3
+  _spawnDepth: 2
   _spawnTiltAngle: -90
   _spawnY: 0.5
   _throwForce: 20

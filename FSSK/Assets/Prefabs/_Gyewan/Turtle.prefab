@@ -154,7 +154,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c63e6f9f7ba63de4baf211e787421130, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Turtle
-  _spawnDepth: 3
+  _spawnDepth: 2
   _spawnTiltAngle: -90
   _spawnY: 0
   _throwForce: 20

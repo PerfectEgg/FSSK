@@ -154,7 +154,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 63c748039d2043f439141706ee844507, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SeaCrab
-  _spawnDepth: 3
+  _spawnDepth: 2
   _spawnTiltAngle: -90
   _spawnY: 0
   _throwForce: 20

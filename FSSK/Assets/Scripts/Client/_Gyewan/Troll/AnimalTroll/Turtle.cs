@@ -52,8 +52,12 @@ public class Turtle : AnimalTroll
 
                 if (Vector3.Distance(transform.position, _targetPosition) <= 0.05f)
                 {
-                    ChangeState(AnimalState.Exiting);
+                    ChangeState(AnimalState.Hiding);
                 }
+                break;
+            case AnimalState.Hiding:
+                SetHide();
+                HideAction();
                 break;
             case AnimalState.Exiting:
                 EndTroll();
