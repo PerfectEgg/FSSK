@@ -452,7 +452,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: be7da91a666c43e47b090e474aef2b76, type: 2}
+  - {fileID: 2100000, guid: a1f36384db66bd744b6c34dd2a6b8a23, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1119,6 +1119,7 @@ MonoBehaviour:
   grid: {fileID: 652747160}
   aimController: {fileID: 652747162}
   matchManager: {fileID: 0}
+  localPlayerContext: {fileID: 0}
   targetCamera: {fileID: 961739752}
   stoneRoot: {fileID: 498662154}
   goldLauncher:
@@ -1754,6 +1755,8 @@ GameObject:
   m_Component:
   - component: {fileID: 814945734}
   - component: {fileID: 814945733}
+  - component: {fileID: 814945735}
+  - component: {fileID: 814945736}
   m_Layer: 0
   m_Name: BoardSystem
   m_TagString: Untagged
@@ -1773,11 +1776,81 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 887decbe1884d204caf5d4d956bc680e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmokTrollInputBridge
-  stoneDropper: {fileID: 0}
-  matchManager: {fileID: 0}
+  turnSystem: {fileID: 814945735}
+  stoneDropper: {fileID: 652747163}
+  matchManager: {fileID: 2073535677}
   aiController: {fileID: 0}
+  localPlayerContext: {fileID: 0}
   allowOmokInputInExpansionMode: 0
   startWithOmokInputEnabled: 1
+--- !u!114 &814945735
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 814945732}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6bc2f345cfe4e18bcaec39d7ffb5412, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OmokTurnSystem
+  matchManager: {fileID: 2073535677}
+  stoneDropper: {fileID: 652747163}
+  localPlayerContext: {fileID: 0}
+  useAi: 1
+  selectedAiType: 0
+  localPlayerColor: 2
+  allowManualInput: 1
+  restrictManualDragToCurrentTurn: 1
+  aiTurnDelay: 0.35
+  goldSeat:
+    stoneColor: 1
+    displayColor: {r: 1, g: 0.72, b: 0.18, a: 1}
+    actorType: 3
+    actorLabel: AI (Easy)
+    isCurrentTurn: 1
+    canAct: 1
+    placedStoneCount: 0
+  silverSeat:
+    stoneColor: 2
+    displayColor: {r: 0.82, g: 0.86, b: 0.9, a: 1}
+    actorType: 1
+    actorLabel: Player
+    isCurrentTurn: 0
+    canAct: 0
+    placedStoneCount: 0
+  openingTurn: 1
+  allowOverline: 1
+  blockedAttemptConsumesTurn: 1
+  allowBlockerVerticalWin: 1
+  blockerVerticalWinLength: 5
+  authorityMode: 0
+  processPlacementRequestsLocally: 1
+  applyStoneResultsLocally: 1
+  currentTurn: 1
+  currentTurnActor: AI (Easy)
+  isMatchEnded: 0
+  winner: 0
+  nextRandomRemovalColor: 1
+  boardSize: 15
+  totalPlacedStones: 0
+  emptyCells: 225
+  goldDisplayColor: {r: 1, g: 0.72, b: 0.18, a: 1}
+  silverDisplayColor: {r: 0.82, g: 0.86, b: 0.9, a: 1}
+--- !u!114 &814945736
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 814945732}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c990650596e04a499f03eb1e72148f04, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OmokTurnAuthorityAdapter
+  turnSystem: {fileID: 814945735}
 --- !u!4 &814945734
 Transform:
   m_ObjectHideFlags: 0
@@ -3845,7 +3918,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 0ef5cddc9c1dc5c4e8a4ad8d03183ddc, type: 2}
+  - {fileID: 2100000, guid: ba4c3777600888e4b82230324d8d0494, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -5291,7 +5364,6 @@ GameObject:
   m_Component:
   - component: {fileID: 2073535676}
   - component: {fileID: 2073535677}
-  - component: {fileID: 2073535675}
   m_Layer: 0
   m_Name: OmokMatchManager
   m_TagString: Untagged
@@ -5299,24 +5371,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &2073535675
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2073535674}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5bdc9a9222aa42d8ab71177d984671cb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::OmokAiController
-  matchManager: {fileID: 2073535677}
-  stoneDropper: {fileID: 652747163}
-  useAi: 1
-  selectedAiType: 0
-  playerStoneColor: 2
-  aiTurnDelay: 0.35
 --- !u!4 &2073535676
 Transform:
   m_ObjectHideFlags: 0

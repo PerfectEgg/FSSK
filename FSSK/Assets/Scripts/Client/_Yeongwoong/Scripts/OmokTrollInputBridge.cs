@@ -3,10 +3,11 @@ using UnityEngine;
 
 public class OmokTrollInputBridge : MonoBehaviour
 {
-    [Header("References")]
-    [SerializeField] private OmokStoneDropper stoneDropper;
-    [SerializeField] private OmokMatchManager matchManager;
-    [SerializeField] private OmokAiController aiController;
+    [SerializeField, HideInInspector] private OmokTurnSystem turnSystem;
+    [SerializeField, HideInInspector] private OmokStoneDropper stoneDropper;
+    [SerializeField, HideInInspector] private OmokMatchManager matchManager;
+    [SerializeField, HideInInspector] private OmokAiController aiController;
+    [SerializeField, HideInInspector] private OmokLocalPlayerContext localPlayerContext;
 
     [Header("Input Gate")]
     [SerializeField] private bool allowOmokInputInExpansionMode;
@@ -20,7 +21,9 @@ public class OmokTrollInputBridge : MonoBehaviour
 
     public OmokStoneDropper StoneDropper => stoneDropper;
     public OmokMatchManager MatchManager => matchManager;
+    public OmokTurnSystem TurnSystem => turnSystem;
     public OmokAiController AiController => aiController;
+    public OmokLocalPlayerContext LocalPlayerContext => localPlayerContext;
     public bool IsOmokInputEnabled { get; private set; }
     public bool HasPendingRemovalTarget => _hasPendingRemovalTarget;
     public Vector2Int PendingRemovalCoordinate => _hasPendingRemovalTarget ? _pendingRemovalTarget.Coordinate : default;
@@ -68,6 +71,26 @@ public class OmokTrollInputBridge : MonoBehaviour
 
     public void ResolveReferences()
     {
+        if (turnSystem == null)
+        {
+            turnSystem = GetComponent<OmokTurnSystem>();
+        }
+
+        if (turnSystem == null)
+        {
+            turnSystem = GetComponentInChildren<OmokTurnSystem>(true);
+        }
+
+        if (turnSystem == null)
+        {
+            turnSystem = GetComponentInParent<OmokTurnSystem>();
+        }
+
+        if (turnSystem == null)
+        {
+            turnSystem = FindFirstObjectByType<OmokTurnSystem>();
+        }
+
         if (stoneDropper == null)
         {
             stoneDropper = GetComponentInChildren<OmokStoneDropper>(true);
@@ -97,6 +120,16 @@ public class OmokTrollInputBridge : MonoBehaviour
         {
             aiController = FindFirstObjectByType<OmokAiController>();
         }
+
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = GetComponentInChildren<OmokLocalPlayerContext>(true);
+        }
+
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = FindFirstObjectByType<OmokLocalPlayerContext>();
+        }
     }
 
     public void SetOmokInputLocked(bool isLocked)
@@ -115,12 +148,22 @@ public class OmokTrollInputBridge : MonoBehaviour
     {
         removalResult = default;
         ResolveReferences();
+        if (turnSystem != null)
+        {
+            return turnSystem.TryRemoveRandomStone(out removalResult);
+        }
+
         return matchManager != null && matchManager.TryRemoveRandomStone(out removalResult);
     }
 
     public bool TryRemoveRandomStone()
     {
         ResolveReferences();
+        if (turnSystem != null)
+        {
+            return turnSystem.TryRemoveRandomStone(out _);
+        }
+
         return matchManager != null && matchManager.TryRemoveRandomStone();
     }
 
@@ -128,6 +171,18 @@ public class OmokTrollInputBridge : MonoBehaviour
     {
         removalTarget = default;
         ResolveReferences();
+        if (turnSystem != null)
+        {
+            if (!turnSystem.TrySelectNextRemovalTarget(out removalTarget))
+            {
+                return false;
+            }
+
+            StorePendingRemovalTarget(removalTarget);
+            OnRemovalTargetSelected?.Invoke(removalTarget);
+            return true;
+        }
+
         if (matchManager == null || !matchManager.TrySelectNextRemovalTarget(out removalTarget))
         {
             return false;
@@ -238,6 +293,21 @@ public class OmokTrollInputBridge : MonoBehaviour
     {
         removalResult = default;
         ResolveReferences();
+        if (turnSystem != null)
+        {
+            if (!turnSystem.TryConfirmRemoveStone(removalTarget, out removalResult))
+            {
+                return false;
+            }
+
+            if (IsPendingRemovalTarget(removalTarget))
+            {
+                ClearPendingRemovalTarget();
+            }
+
+            return true;
+        }
+
         if (matchManager == null || !matchManager.TryConfirmRemoveStone(removalTarget, out removalResult))
         {
             return false;
@@ -300,6 +370,12 @@ public class OmokTrollInputBridge : MonoBehaviour
     {
         ResolveReferences();
 
+        if (turnSystem != null)
+        {
+            turnSystem.SetAiEnabled(isEnabled);
+            return;
+        }
+
         if (aiController != null)
         {
             aiController.SetAiEnabled(isEnabled);
@@ -359,6 +435,17 @@ public class OmokTrollInputBridge : MonoBehaviour
     public void SetLocalOmokStoneColor(OmokStoneColor stoneColor)
     {
         ResolveReferences();
+
+        if (turnSystem != null)
+        {
+            turnSystem.SetLocalPlayerColor(stoneColor);
+            return;
+        }
+
+        if (localPlayerContext != null)
+        {
+            localPlayerContext.SetLocalStoneColor(stoneColor);
+        }
 
         if (stoneDropper != null)
         {

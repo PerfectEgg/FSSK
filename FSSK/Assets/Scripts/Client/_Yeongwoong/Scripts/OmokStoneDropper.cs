@@ -115,6 +115,7 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField] private OmokGrid grid;
     [SerializeField] private OmokAimController aimController;
     [SerializeField] private OmokMatchManager matchManager;
+    [SerializeField] private OmokLocalPlayerContext localPlayerContext;
     [SerializeField] private Camera targetCamera;
     [SerializeField] private Transform stoneRoot;
 
@@ -169,6 +170,8 @@ public class OmokStoneDropper : MonoBehaviour
 
     [Header("Preview")]
     [SerializeField] private bool showPreview = true;
+    [FormerlySerializedAs("releaseDragWhenParrotTouchesPreview")]
+    [SerializeField] private bool cancelDragWhenParrotOverlapsPreview = true;
     [SerializeField] private Color validPreviewColor = new(0.25f, 1f, 0.45f, 0.95f);
     [SerializeField] private Color blockedPreviewColor = new(1f, 0.3f, 0.3f, 0.95f);
     [SerializeField, Min(0.005f)] private float previewLineWidth = 1f;
@@ -198,6 +201,7 @@ public class OmokStoneDropper : MonoBehaviour
     private int _blockerLayer = -1;
     private int _launcherLayerMask;
     private OmokMatchManager _subscribedMatchManager;
+    private OmokLocalPlayerContext _subscribedLocalPlayerContext;
     private bool _hasPendingCursorWarp;
     private Vector3 _pendingCursorWarpWorldPosition;
     private int _pendingCursorWarpFrame;
@@ -213,8 +217,11 @@ public class OmokStoneDropper : MonoBehaviour
     public bool KeepAimPositionAfterDrop => aimController != null && aimController.KeepAimPositionAfterDrop;
     public bool UseBuiltInMouseInput => useBuiltInMouseInput;
     public bool RestrictManualDragToCurrentTurn => restrictManualDragToCurrentTurn;
-    public OmokStoneColor LocalManualStoneColor => localManualStoneColor;
+    public OmokStoneColor LocalManualStoneColor => GetLocalManualStoneColor();
+    public OmokLocalPlayerContext LocalPlayerContext => localPlayerContext;
     public bool IsDragging => _isDraggingLauncher;
+    public bool CancelDragWhenParrotOverlapsPreview => cancelDragWhenParrotOverlapsPreview;
+    public bool ReleaseDragWhenParrotTouchesPreview => cancelDragWhenParrotOverlapsPreview;
     public event Action<OmokStonePlacementRequest> OnPlacementRequested;
     public event Action<Vector2Int, OmokStoneColor> OnStonePlaced;
     public event Action<OmokBlockedStoneResult> OnStoneBlocked;
@@ -224,6 +231,7 @@ public class OmokStoneDropper : MonoBehaviour
         grid = GetComponent<OmokGrid>();
         aimController = GetComponent<OmokAimController>();
         matchManager = GetComponent<OmokMatchManager>();
+        localPlayerContext = GetComponent<OmokLocalPlayerContext>();
     }
 
     private void Awake()
@@ -241,6 +249,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         EnsureMatchManager();
+        EnsureLocalPlayerContext();
         EnsureAimController(true);
         CacheExistingStoneCoordinates();
     }
@@ -248,7 +257,9 @@ public class OmokStoneDropper : MonoBehaviour
     private void OnEnable()
     {
         EnsureMatchManager();
+        EnsureLocalPlayerContext();
         SubscribeToMatchManager();
+        SubscribeToLocalPlayerContext();
         CancelDragIfActiveLauncherNoLongerAllowed();
     }
 
@@ -256,6 +267,11 @@ public class OmokStoneDropper : MonoBehaviour
     {
         ResolveNamedLayers();
         EnsureAimController(false);
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = GetComponent<OmokLocalPlayerContext>();
+        }
+
         blockerCenterStackGap = Mathf.Max(0f, blockerCenterStackGap);
         blockerProbeRadiusMultiplier = Mathf.Clamp(blockerProbeRadiusMultiplier, 0.1f, 1.5f);
         blockerProbeExtraRadius = Mathf.Max(0f, blockerProbeExtraRadius);
@@ -307,6 +323,31 @@ public class OmokStoneDropper : MonoBehaviour
         return matchManager != null;
     }
 
+    private bool EnsureLocalPlayerContext()
+    {
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = GetComponent<OmokLocalPlayerContext>();
+        }
+
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = GetComponentInParent<OmokLocalPlayerContext>();
+        }
+
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = FindFirstObjectByType<OmokLocalPlayerContext>();
+        }
+
+        if (isActiveAndEnabled)
+        {
+            SubscribeToLocalPlayerContext();
+        }
+
+        return localPlayerContext != null;
+    }
+
     private void SubscribeToMatchManager()
     {
         if (_subscribedMatchManager == matchManager)
@@ -338,6 +379,35 @@ public class OmokStoneDropper : MonoBehaviour
         _subscribedMatchManager = null;
     }
 
+    private void SubscribeToLocalPlayerContext()
+    {
+        if (_subscribedLocalPlayerContext == localPlayerContext)
+        {
+            return;
+        }
+
+        UnsubscribeFromLocalPlayerContext();
+
+        if (localPlayerContext == null)
+        {
+            return;
+        }
+
+        localPlayerContext.OnLocalPlayerStateChanged += HandleLocalPlayerContextChanged;
+        _subscribedLocalPlayerContext = localPlayerContext;
+    }
+
+    private void UnsubscribeFromLocalPlayerContext()
+    {
+        if (_subscribedLocalPlayerContext == null)
+        {
+            return;
+        }
+
+        _subscribedLocalPlayerContext.OnLocalPlayerStateChanged -= HandleLocalPlayerContextChanged;
+        _subscribedLocalPlayerContext = null;
+    }
+
     private void HandleTurnChanged(OmokStoneColor nextTurn)
     {
         CancelDragIfActiveLauncherNoLongerAllowed();
@@ -346,6 +416,11 @@ public class OmokStoneDropper : MonoBehaviour
     private void HandleMatchEnded(OmokStoneColor resultWinner)
     {
         CancelDrag();
+    }
+
+    private void HandleLocalPlayerContextChanged(OmokLocalPlayerContext context)
+    {
+        CancelDragIfActiveLauncherNoLongerAllowed();
     }
 
     private void Update()
@@ -459,6 +534,11 @@ public class OmokStoneDropper : MonoBehaviour
     public void SetLocalManualStoneColor(OmokStoneColor stoneColor)
     {
         localManualStoneColor = stoneColor;
+        if (EnsureLocalPlayerContext() && localPlayerContext.LocalStoneColor != stoneColor)
+        {
+            localPlayerContext.SetLocalStoneColor(stoneColor);
+        }
+
         CancelDragIfActiveLauncherNoLongerAllowed();
     }
 
@@ -482,7 +562,13 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
-        if (localManualStoneColor != OmokStoneColor.None && localManualStoneColor != stoneColor)
+        if (localPlayerContext != null)
+        {
+            return localPlayerContext.CanControlStone(stoneColor);
+        }
+
+        if (localManualStoneColor != OmokStoneColor.None &&
+            localManualStoneColor != stoneColor)
         {
             return false;
         }
@@ -809,6 +895,11 @@ public class OmokStoneDropper : MonoBehaviour
             !aimController.TryGetBoardAim(GetEffectiveDragHoverHeight(), raycastDistance, out OmokAimState aimState))
         {
             UpdateDraggedStoneOffBoard();
+            if (CancelDragIfParrotOverlapsPreviewScreen())
+            {
+                return;
+            }
+
             HidePreview();
             return;
         }
@@ -818,6 +909,11 @@ public class OmokStoneDropper : MonoBehaviour
         if (aimController != null)
         {
             aimController.SetCurrentAimPosition(dragAimPosition);
+        }
+
+        if (CancelDragIfParrotOverlapsPreviewScreen())
+        {
+            return;
         }
 
         if (!aimState.HasCoordinate)
@@ -1171,6 +1267,11 @@ public class OmokStoneDropper : MonoBehaviour
     private bool CanBeginManualDragFromLauncher(OmokStoneLauncher launcher)
     {
         return CanBeginManualDrag(GetLauncherStoneColor(launcher));
+    }
+
+    private OmokStoneColor GetLocalManualStoneColor()
+    {
+        return localPlayerContext != null ? localPlayerContext.LocalStoneColor : localManualStoneColor;
     }
 
     private bool IsManualStoneColorEnabled(OmokStoneColor stoneColor)
@@ -2311,6 +2412,18 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        return TryGetViewportRectFromBounds(cameraToUse, bounds, out viewportRect);
+    }
+
+    private static bool TryGetViewportRectFromBounds(Camera cameraToUse, Bounds bounds, out Rect viewportRect)
+    {
+        viewportRect = default;
+
+        if (cameraToUse == null)
+        {
+            return false;
+        }
+
         bool hasPoint = false;
         Vector2 min = default;
         Vector2 max = default;
@@ -2604,6 +2717,7 @@ public class OmokStoneDropper : MonoBehaviour
     private void OnDisable()
     {
         UnsubscribeFromMatchManager();
+        UnsubscribeFromLocalPlayerContext();
         DestroyDraggedStonePreview(_draggedStoneObject);
 
         ClearDragState();
@@ -2872,6 +2986,112 @@ public class OmokStoneDropper : MonoBehaviour
         }
     }
 
+    private bool CancelDragIfParrotOverlapsPreviewScreen()
+    {
+        if (!cancelDragWhenParrotOverlapsPreview ||
+            !_isDraggingLauncher ||
+            _draggedStoneObject == null)
+        {
+            return false;
+        }
+
+        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
+        if (cameraToUse == null ||
+            !TryGetDraggedStoneViewportRect(cameraToUse, out Rect draggedStoneRect))
+        {
+            return false;
+        }
+
+        Parrot[] parrots = FindObjectsByType<Parrot>(FindObjectsSortMode.None);
+        foreach (Parrot parrot in parrots)
+        {
+            if (parrot == null ||
+                !parrot.isActiveAndEnabled ||
+                !TryGetObjectViewportRect(parrot.gameObject, cameraToUse, out Rect parrotRect))
+            {
+                continue;
+            }
+
+            if (!draggedStoneRect.Overlaps(parrotRect, true))
+            {
+                continue;
+            }
+
+            CancelDrag();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetObjectViewportRect(GameObject targetObject, Camera cameraToUse, out Rect viewportRect)
+    {
+        viewportRect = default;
+
+        if (targetObject == null ||
+            cameraToUse == null ||
+            !TryGetObjectBounds(targetObject, out Bounds bounds))
+        {
+            return false;
+        }
+
+        return TryGetViewportRectFromBounds(cameraToUse, bounds, out viewportRect);
+    }
+
+    private static bool TryGetObjectBounds(GameObject targetObject, out Bounds combinedBounds)
+    {
+        combinedBounds = default;
+
+        if (targetObject == null)
+        {
+            return false;
+        }
+
+        bool hasBounds = false;
+        Renderer[] renderers = targetObject.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null || !renderer.enabled)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                combinedBounds = renderer.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            combinedBounds.Encapsulate(renderer.bounds);
+        }
+
+        if (hasBounds)
+        {
+            return true;
+        }
+
+        Collider[] colliders = targetObject.GetComponentsInChildren<Collider>(true);
+        foreach (Collider collider in colliders)
+        {
+            if (collider == null || !collider.enabled)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                combinedBounds = collider.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            combinedBounds.Encapsulate(collider.bounds);
+        }
+
+        return hasBounds;
+    }
+
     private void ApplyDraggedStonePreviewAppearance(OmokStoneLauncher launcher, GameObject previewObject)
     {
         if (previewObject == null)
@@ -3099,5 +3319,4 @@ public class OmokStoneDropper : MonoBehaviour
         public Vector3 RayStartPosition { get; }
         public Vector3 RayTargetPosition { get; }
     }
-
 }

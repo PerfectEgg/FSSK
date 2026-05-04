@@ -7,6 +7,7 @@ public class OmokAiController : MonoBehaviour
     [Header("References")]
     [SerializeField] private OmokMatchManager matchManager;
     [SerializeField] private OmokStoneDropper stoneDropper;
+    [SerializeField] private OmokLocalPlayerContext localPlayerContext;
 
     [Header("Single Player")]
     [FormerlySerializedAs("useEasyAi")]
@@ -20,7 +21,7 @@ public class OmokAiController : MonoBehaviour
 
     public bool UseAi => useAi;
     public OmokAiType SelectedAiType => selectedAiType;
-    public OmokStoneColor PlayerStoneColor => playerStoneColor;
+    public OmokStoneColor PlayerStoneColor => GetPlayerStoneColor();
 
     private void Reset()
     {
@@ -42,6 +43,11 @@ public class OmokAiController : MonoBehaviour
             matchManager.OnMatchEnded += HandleMatchEnded;
         }
 
+        if (localPlayerContext != null)
+        {
+            localPlayerContext.OnLocalPlayerStateChanged += HandleLocalPlayerContextChanged;
+        }
+
         SyncState();
     }
 
@@ -51,6 +57,11 @@ public class OmokAiController : MonoBehaviour
         {
             matchManager.OnTurnChanged -= HandleTurnChanged;
             matchManager.OnMatchEnded -= HandleMatchEnded;
+        }
+
+        if (localPlayerContext != null)
+        {
+            localPlayerContext.OnLocalPlayerStateChanged -= HandleLocalPlayerContextChanged;
         }
 
         CancelPendingAiTurn();
@@ -92,6 +103,16 @@ public class OmokAiController : MonoBehaviour
         {
             stoneDropper = FindFirstObjectByType<OmokStoneDropper>();
         }
+
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = GetComponent<OmokLocalPlayerContext>();
+        }
+
+        if (localPlayerContext == null)
+        {
+            localPlayerContext = FindFirstObjectByType<OmokLocalPlayerContext>();
+        }
     }
 
     public void SetAiEnabled(bool isEnabled)
@@ -127,6 +148,10 @@ public class OmokAiController : MonoBehaviour
         }
 
         playerStoneColor = stoneColor;
+        if (localPlayerContext != null)
+        {
+            localPlayerContext.SetLocalStoneColor(stoneColor);
+        }
 
         if (!isActiveAndEnabled)
         {
@@ -157,6 +182,11 @@ public class OmokAiController : MonoBehaviour
         }
     }
 
+    private void HandleLocalPlayerContextChanged(OmokLocalPlayerContext context)
+    {
+        SyncState();
+    }
+
     private void RefreshManualPlacementState()
     {
         if (stoneDropper == null)
@@ -166,11 +196,20 @@ public class OmokAiController : MonoBehaviour
 
         if (!useAi || matchManager == null)
         {
-            stoneDropper.SetManualPlacementState(true, true);
+            if (localPlayerContext != null)
+            {
+                OmokManualPlacementState contextPlacementState = localPlayerContext.GetManualPlacementState();
+                stoneDropper.SetManualPlacementState(contextPlacementState.AllowGold, contextPlacementState.AllowSilver);
+            }
+            else
+            {
+                stoneDropper.SetManualPlacementState(true, true);
+            }
+
             return;
         }
 
-        OmokManualPlacementState placementState = matchManager.GetManualPlacementState(playerStoneColor);
+        OmokManualPlacementState placementState = matchManager.GetManualPlacementState(GetPlayerStoneColor());
         stoneDropper.SetManualPlacementState(placementState.AllowGold, placementState.AllowSilver);
     }
 
@@ -236,7 +275,17 @@ public class OmokAiController : MonoBehaviour
 
     private OmokStoneColor GetAiStoneColor()
     {
-        return playerStoneColor == OmokStoneColor.Gold ? OmokStoneColor.Silver : OmokStoneColor.Gold;
+        return GetPlayerStoneColor() == OmokStoneColor.Gold ? OmokStoneColor.Silver : OmokStoneColor.Gold;
+    }
+
+    private OmokStoneColor GetPlayerStoneColor()
+    {
+        if (localPlayerContext != null && localPlayerContext.HasLocalSeat)
+        {
+            return localPlayerContext.LocalStoneColor;
+        }
+
+        return playerStoneColor == OmokStoneColor.None ? OmokStoneColor.Gold : playerStoneColor;
     }
 
     private static IOmokAi CreateAi(OmokAiType aiType)

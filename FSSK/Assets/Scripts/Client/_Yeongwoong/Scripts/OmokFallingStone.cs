@@ -283,10 +283,7 @@ public class OmokFallingStone : MonoBehaviour
             return;
         }
 
-        _cachedRigidbody.linearVelocity = Vector3.zero;
-        _cachedRigidbody.angularVelocity = Vector3.zero;
-        _cachedRigidbody.useGravity = false;
-        _cachedRigidbody.isKinematic = true;
+        StopRigidbodySimulation(_cachedRigidbody);
         _cachedRigidbody.position = worldPosition;
         _cachedRigidbody.rotation = _targetWorldRotation;
     }
@@ -300,10 +297,7 @@ public class OmokFallingStone : MonoBehaviour
 
         if (_cachedRigidbody != null)
         {
-            _cachedRigidbody.linearVelocity = Vector3.zero;
-            _cachedRigidbody.angularVelocity = Vector3.zero;
-            _cachedRigidbody.useGravity = false;
-            _cachedRigidbody.isKinematic = true;
+            StopRigidbodySimulation(_cachedRigidbody);
         }
 
         gameObject.SetActive(false);
@@ -347,10 +341,7 @@ public class OmokFallingStone : MonoBehaviour
 
         if (_cachedRigidbody != null)
         {
-            _cachedRigidbody.linearVelocity = Vector3.zero;
-            _cachedRigidbody.angularVelocity = Vector3.zero;
-            _cachedRigidbody.useGravity = false;
-            _cachedRigidbody.isKinematic = true;
+            StopRigidbodySimulation(_cachedRigidbody);
         }
 
         if (applyPosition)
@@ -370,6 +361,23 @@ public class OmokFallingStone : MonoBehaviour
         {
             SetLayerRecursively(transform, blockerLayer);
         }
+    }
+
+    private static void StopRigidbodySimulation(Rigidbody targetRigidbody)
+    {
+        if (targetRigidbody == null)
+        {
+            return;
+        }
+
+        if (!targetRigidbody.isKinematic)
+        {
+            targetRigidbody.linearVelocity = Vector3.zero;
+            targetRigidbody.angularVelocity = Vector3.zero;
+        }
+
+        targetRigidbody.useGravity = false;
+        targetRigidbody.isKinematic = true;
     }
 
     private void TryResolveLanding()

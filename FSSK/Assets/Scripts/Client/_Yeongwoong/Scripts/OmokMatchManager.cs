@@ -27,6 +27,20 @@ public class OmokMatchRules
     {
         return allowBlockerVerticalWin && stackLength >= BlockerVerticalWinLength;
     }
+
+    public void Configure(
+        OmokStoneColor nextOpeningTurn,
+        bool nextAllowOverline,
+        bool nextBlockedAttemptConsumesTurn,
+        bool nextAllowBlockerVerticalWin,
+        int nextBlockerVerticalWinLength)
+    {
+        openingTurn = nextOpeningTurn == OmokStoneColor.None ? OmokStoneColor.Gold : nextOpeningTurn;
+        allowOverline = nextAllowOverline;
+        blockedAttemptConsumesTurn = nextBlockedAttemptConsumesTurn;
+        allowBlockerVerticalWin = nextAllowBlockerVerticalWin;
+        blockerVerticalWinLength = Mathf.Max(1, nextBlockerVerticalWinLength);
+    }
 }
 
 public readonly struct OmokManualPlacementState
@@ -199,6 +213,8 @@ public class OmokMatchManager : MonoBehaviour
     public OmokStoneColor CurrentTurn => _currentTurn;
     public int BoardSize => grid != null ? grid.BoardSize : _boardState != null ? _boardState.GetLength(0) : 0;
     public OmokMatchRules Rules => rules;
+    public bool ProcessPlacementRequestsLocally => processPlacementRequestsLocally;
+    public bool ApplyStoneResultsLocally => applyStoneResultsLocally;
     public OmokStoneColor NextRandomRemovalColor => _nextRandomRemovalColor;
     public OmokStoneColor NextRemovalColor => _nextRandomRemovalColor;
 
@@ -277,6 +293,37 @@ public class OmokMatchManager : MonoBehaviour
         }
 
         OnTurnChanged?.Invoke(_currentTurn);
+    }
+
+    public void SetAuthorityMode(bool shouldProcessPlacementRequestsLocally, bool shouldApplyStoneResultsLocally)
+    {
+        processPlacementRequestsLocally = shouldProcessPlacementRequestsLocally;
+        applyStoneResultsLocally = shouldApplyStoneResultsLocally;
+    }
+
+    public void ConfigureRules(
+        OmokStoneColor openingTurn,
+        bool allowOverline,
+        bool blockedAttemptConsumesTurn,
+        bool allowBlockerVerticalWin,
+        int blockerVerticalWinLength)
+    {
+        rules ??= new OmokMatchRules();
+        rules.Configure(
+            openingTurn,
+            allowOverline,
+            blockedAttemptConsumesTurn,
+            allowBlockerVerticalWin,
+            blockerVerticalWinLength);
+
+        if (!Application.isPlaying || (!_isMatchEnded && _placedStoneCount == 0))
+        {
+            _currentTurn = rules.OpeningTurn;
+            if (Application.isPlaying)
+            {
+                OnTurnChanged?.Invoke(_currentTurn);
+            }
+        }
     }
 
     public OmokStoneColor[,] GetBoardSnapshot()
@@ -397,17 +444,12 @@ public class OmokMatchManager : MonoBehaviour
 
     private void HandlePlacementRequested(OmokStonePlacementRequest request)
     {
-        if (!processPlacementRequestsLocally || stoneDropper == null)
+        if (!processPlacementRequestsLocally)
         {
             return;
         }
 
-        if (!CanAcceptPlacementRequest(request))
-        {
-            return;
-        }
-
-        stoneDropper.TryExecutePlacement(request);
+        TryProcessPlacementRequest(request);
     }
 
     private void HandleStonePlaced(Vector2Int coordinate, OmokStoneColor stoneColor)
@@ -417,7 +459,7 @@ public class OmokMatchManager : MonoBehaviour
             return;
         }
 
-        TryRegisterPlacedStone(coordinate, stoneColor);
+        TryApplyPlacementResult(coordinate, stoneColor);
     }
 
     private void HandleStoneBlocked(OmokBlockedStoneResult blockedResult)
@@ -427,7 +469,24 @@ public class OmokMatchManager : MonoBehaviour
             return;
         }
 
-        TryRegisterBlockedAttempt(blockedResult);
+        TryApplyBlockedResult(blockedResult);
+    }
+
+    public bool TryProcessPlacementRequest(OmokStonePlacementRequest request)
+    {
+        return stoneDropper != null &&
+               CanAcceptPlacementRequest(request) &&
+               stoneDropper.TryExecutePlacement(request);
+    }
+
+    public bool TryApplyPlacementResult(Vector2Int coordinate, OmokStoneColor stoneColor)
+    {
+        return TryRegisterPlacedStone(coordinate, stoneColor);
+    }
+
+    public bool TryApplyBlockedResult(OmokBlockedStoneResult blockedResult)
+    {
+        return TryRegisterBlockedAttempt(blockedResult);
     }
 
     public bool CanTakeTurn(OmokStoneColor stoneColor)
