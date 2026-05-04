@@ -110,7 +110,7 @@ public class LoginUIManager : MonoBehaviour
 
                         // 유저 데이터 삽입 여부
                         BackendManager.Instance.CreateOrLoadUserData(
-                            onSuccess: () => BackendManager.Instance.LoadMatchingScene(),
+                            onSuccess: () => BackendManager.Instance.LoadLobbyScene(),
                             onFail: (e) =>
                             {
                                 SetLoginStatus("유저 데이터 생성 실패: " + e);

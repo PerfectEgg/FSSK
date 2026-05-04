@@ -105,7 +105,7 @@ public class RegisterUIManager : MonoBehaviour
                 
                 //유저 데이터 row 최초 생성 → 성공 시 매칭 씬 이동
                 BackendManager.Instance.CreateOrLoadUserData(
-                    onSuccess: () => BackendManager.Instance.LoadMatchingScene(),
+                    onSuccess: () => BackendManager.Instance.LoadLobbyScene(),
                     onFail: (e) =>
                     {
                         SetRegisterStatus("유저 데이터 생성 실패: " + e);

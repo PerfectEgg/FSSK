@@ -14,7 +14,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     [SerializeField] private string _gameSceneName = "Game";
 
     [Header("UI")]
-    [SerializeField] private Button _matchButton;
+    [SerializeField] private Button _mutiMatchButton;
     [SerializeField] private TextMeshProUGUI _statusText;
     [SerializeField] private TextMeshProUGUI _timerText;
 
@@ -23,9 +23,27 @@ public class MatchingManager : MonoBehaviourPunCallbacks
 
     void Start()
     {
-        PhotonNetwork.AutomaticallySyncScene = true;
+        PhotonNetwork.AutomaticallySyncScene = true; // 마스터 씬 이동시 다른 인원도 같이 이동하는 기능
 
-        _matchButton.interactable = false;
+        // 이미 로비에 있으면 (랭킹 갔다 돌아온 경우) 즉시 활성화
+        if (PhotonNetwork.InLobby)
+        {
+            _mutiMatchButton.interactable = true;
+            SetStatus("매칭 버튼을 눌러 시작하세요");
+            return;
+        }
+
+        // 마스터 연결이 되어잇는데 로비 미입장인 경우 로비 입장만
+        if (PhotonNetwork.IsConnectedAndReady)
+        {
+            _mutiMatchButton.interactable = false;
+            SetStatus("로비 입장 중...");
+            PhotonNetwork.JoinLobby();
+            return;
+        }
+
+        // 로그인 직후 -> 마스터 연결
+        _mutiMatchButton.interactable = false;
         SetStatus("서버 연결 중...");
 
         Debug.Log("[MatchingManager] Photon 마스터 서버 연결 시도");
@@ -47,7 +65,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     {
         Debug.Log("[MatchingManager] 랜덤 매칭 시작...");
 
-        _matchButton.interactable = false;
+        _mutiMatchButton.interactable = false;
         _isMatching = true;
         _matchingTime = 0f;
         _timerText.text = "00:00";
@@ -81,7 +99,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     public override void OnJoinedLobby()
     {
         Debug.Log("[MatchingManager] 로비 입장 완료");
-        _matchButton.interactable = true;
+        _mutiMatchButton.interactable = true;
         SetStatus("매칭 버튼을 눌러 시작하세요");
     }
 
@@ -113,7 +131,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     {
         Debug.LogWarning($"[MatchingManager] CreateRoom failed (code: {returnCode}): {message}");
         _isMatching = false;
-        _matchButton.interactable = true;
+        _mutiMatchButton.interactable = true;
         SetStatus("방 생성 실패. 다시 시도해주세요.");
     }
 
@@ -122,7 +140,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     {
         Debug.LogWarning($"[MatchingManager] Disconnected (cause: {cause}) — reconnecting.");
         _isMatching = false;
-        _matchButton.interactable = false;
+        _mutiMatchButton.interactable = false;
         SetStatus("연결 끊김. 재연결 중...");
         PhotonNetwork.ConnectUsingSettings();
     }

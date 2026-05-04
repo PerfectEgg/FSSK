@@ -172,15 +172,15 @@ public class BackendManager : MonoBehaviour
         }
         else
         {
-            Debug.LogError("[BackendManager] 유저 데이터 생성 실패 : " + InsertBro);
+            Debug.LogError($"[BackendManager] Insert failed: {InsertBro}");
             onFail?.Invoke(InsertBro.ToString());
         }
     }
 
-    // 씬 이동 헬퍼
-    public void LoadMatchingScene()
+    // 로비 씬 이동 헬퍼
+    public void LoadLobbyScene()
     {
-        Debug.Log($"[BackendManager] 매칭 씬 이동: '{_matchingSceneName}'");
+        Debug.Log($"[BackendManager] 로비 씬 이동: '{_matchingSceneName}'");
         SceneManager.LoadScene(_matchingSceneName);
     }
 }

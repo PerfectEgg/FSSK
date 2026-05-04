@@ -2279,7 +2279,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MachingManager
   _maxPlayers: 2
   _gameSceneName: Game
-  _matchButton: {fileID: 117748374}
+  _mutiMatchButton: {fileID: 117748374}
   _statusText: {fileID: 1682791250}
   _timerText: {fileID: 963937183}
 --- !u!1 &1438238594
@@ -2342,6 +2342,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LobbyUIManager
   _scoreText: {fileID: 1703508619}
   _nicknameText: {fileID: 619458613}
+  _rankingCheckBtn: {fileID: 1563860350}
+  _rankingSceneName: Ranking
 --- !u!1 &1460964188
 GameObject:
   m_ObjectHideFlags: 0
@@ -2567,7 +2569,7 @@ GameObject:
   - component: {fileID: 1563860351}
   - component: {fileID: 1563860350}
   m_Layer: 5
-  m_Name: RankConfiirmBtn
+  m_Name: RankingCheckBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2637,9 +2639,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: LoginUIManager, Assembly-CSharp
-        m_MethodName: OnRegisterClick
+      - m_Target: {fileID: 1438238597}
+        m_TargetAssemblyTypeName: LobbyUIManager, Assembly-CSharp
+        m_MethodName: OnCheckRankingClick
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
