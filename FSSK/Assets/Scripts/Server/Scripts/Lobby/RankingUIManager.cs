@@ -1,7 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-
+using System.Collections.Generic;
 public class RankingUIManager : MonoBehaviour
 {
     [SerializeField] private Button _backBtn;
@@ -12,7 +12,12 @@ public class RankingUIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _nicknameText;
     [SerializeField] private TextMeshProUGUI _scoreText;
 
-    [Header("Rank List")]
+    [Header("Top 3 Player Posters")]
+    [SerializeField] private TopPlayerUI _firstPoster;   // 1위
+    [SerializeField] private TopPlayerUI _secondPoster;  // 2위
+    [SerializeField] private TopPlayerUI _thirdPoster;   // 3위
+
+    [Header("Rank List (4위부터)")]
     [SerializeField] private RankItemUI _rankItemPrefab; // RankItem 프리팹
     [SerializeField] private Transform _rankListContent; // ScrollView/Viewport/Content
     
@@ -21,6 +26,12 @@ public class RankingUIManager : MonoBehaviour
 
     void Start()
     {
+
+        if (_firstPoster == null || _secondPoster == null || _thirdPoster == null)
+        {
+            Debug.LogError("[RankingUIManager] posters not assigned.");
+            return;
+        }
         if (_rankText == null || _nicknameText == null || _scoreText == null)
         {
             Debug.LogError("[RankingUIManager] MyRank text fields not assigned.");
@@ -78,7 +89,7 @@ public class RankingUIManager : MonoBehaviour
             });
     }
 
-    // 1~50위 조회 후 ScrollView/Content 아래에 행을 복제해서 채움
+    // 1~50위 조회 후 Top3 이후는 ScrollView/Content 아래에 행을 복제해서 채움
     private void FetchRankList()
     {
         BackendRank.Instance.GetRankList(RANK_LIST_LIMIT, RANK_LIST_OFFSET,
@@ -86,10 +97,13 @@ public class RankingUIManager : MonoBehaviour
             {
                 ClearRankList();
 
-                foreach (var item in list)
+                BindTop3(list);
+                Debug.Log($"[RankingUIManager] Top 3 데이터 삽입 완료");
+                // Top3 이후부터는 스크롤 리스트에 삽입
+                for (int i = 3; i < list.Count; i++)
                 {
                     var row = Instantiate(_rankItemPrefab, _rankListContent);
-                    row.Bind(item);
+                    row.Bind(list[i]);
                 }
 
                 Debug.Log($"[RankingUIManager] 랭킹 리스트 표시 완료 ({list.Count}건)");
@@ -98,6 +112,17 @@ public class RankingUIManager : MonoBehaviour
             {
                 Debug.LogError($"[RankingUIManager] GetRankList failed: {err}");
             });
+    }
+
+    // Top3 할당
+    private void BindTop3(List<BackEnd.Leaderboard.UserLeaderboardItem> list)
+    {
+        TopPlayerUI[] posters = { _firstPoster, _secondPoster, _thirdPoster };
+        for (int i = 0; i < posters.Length; i++)
+        {
+            if (i < list.Count) posters[i].Bind(list[i]);
+            else posters[i].SetEmpty();
+        }
     }
 
     private void ClearRankList()

@@ -3,7 +3,7 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// 랭킹 리스트의 한 행 UI. RankingUIManager가 프리팹을 복제해 사용.
+/// 랭킹 리스트의 한 행 UI. RankingPanel(RankingUIManager)가 프리팹을 복제해 사용.
 /// </summary>
 public class RankItemUI : MonoBehaviour
 {
