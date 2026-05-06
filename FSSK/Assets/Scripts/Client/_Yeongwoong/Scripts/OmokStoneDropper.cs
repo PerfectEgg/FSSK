@@ -88,13 +88,12 @@ public class OmokStoneDropper : MonoBehaviour
     private const float INITIAL_FALL_SPEED_CELL_MULTIPLIER = 0.08f;
     private const float FALL_GRAVITY_SCALE_MAX = 0.35f;
     private const int CURSOR_WARP_MAX_ATTEMPTS = 4;
+    private const string PREVIEW_LINE_SHADER_NAME = "FSSK/OmokPreviewLine";
+    private const string PREVIEW_LINE_FALLBACK_SHADER_NAME = "Sprites/Default";
     private static readonly int _baseColorPropertyId = Shader.PropertyToID("_BaseColor");
     private static readonly int _colorPropertyId = Shader.PropertyToID("_Color");
-    private static readonly int _surfacePropertyId = Shader.PropertyToID("_Surface");
-    private static readonly int _blendPropertyId = Shader.PropertyToID("_Blend");
-    private static readonly int _srcBlendPropertyId = Shader.PropertyToID("_SrcBlend");
-    private static readonly int _dstBlendPropertyId = Shader.PropertyToID("_DstBlend");
-    private static readonly int _zWritePropertyId = Shader.PropertyToID("_ZWrite");
+    private static readonly int _previewLineZTestPropertyId = Shader.PropertyToID("_ZTest");
+    private static readonly int _previewLineZWritePropertyId = Shader.PropertyToID("_ZWrite");
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
     [StructLayout(LayoutKind.Sequential)]
@@ -178,6 +177,9 @@ public class OmokStoneDropper : MonoBehaviour
     [SerializeField, Min(0f)] private float previewTargetHeightOffset = 0.1f;
     [SerializeField, Range(0.15f, 0.85f)] private float previewStoneAlpha = 0.45f;
     [SerializeField, Range(0.85f, 1f)] private float previewStoneScaleMultiplier = 0.97f;
+
+    [Header("Debug")]
+    [SerializeField] private bool logPlacementFailures = true;
 
     private readonly HashSet<Vector2Int> _occupiedCoordinates = new();
     private readonly HashSet<Vector2Int> _reservedCoordinates = new();
@@ -580,7 +582,13 @@ public class OmokStoneDropper : MonoBehaviour
 
     public void SetBuiltInMouseInputEnabled(bool isEnabled)
     {
+        bool wasEnabled = useBuiltInMouseInput;
         useBuiltInMouseInput = isEnabled;
+
+        if (wasEnabled != isEnabled)
+        {
+            LogPlacementInfo($"Built-in mouse input {(isEnabled ? "enabled" : "disabled")}.");
+        }
 
         if (!useBuiltInMouseInput)
         {
@@ -829,16 +837,19 @@ public class OmokStoneDropper : MonoBehaviour
 
         if (!TryGetLauncherAtMouse(out OmokStoneLauncher launcher))
         {
+            LogPlacementFailure("Begin drag failed: no launcher under cursor.");
             return false;
         }
 
         if (!CanBeginManualDragFromLauncher(launcher))
         {
+            LogPlacementFailure($"Begin drag failed: {GetManualDragBlockReason(launcher)}");
             return false;
         }
 
         if (!TryCreateDraggedStone(launcher))
         {
+            LogPlacementFailure("Begin drag failed: could not create dragged stone preview.");
             return false;
         }
 
@@ -930,7 +941,7 @@ public class OmokStoneDropper : MonoBehaviour
         _currentDragReleasePosition = dragAimPosition;
         if (!IsInsideBoard(targetCoordinate))
         {
-            UpdateDraggedStonePreviewVisual();
+            UpdateDraggedStonePreviewVisual(true);
             HidePreview();
             return;
         }
@@ -941,7 +952,7 @@ public class OmokStoneDropper : MonoBehaviour
         PlacementPreviewState previewState = BuildPlacementPreviewState(targetCoordinate, _currentDragReleasePosition, draggedStoneCenter);
         UpdateCurrentDragDropSpawnPosition(previewState, draggedStoneCenter);
 
-        UpdateDraggedStonePreviewVisual();
+        UpdateDraggedStonePreviewVisual(previewState.IsBlocked);
         DrawPreview(targetCoordinate, previewState);
     }
 
@@ -1005,6 +1016,11 @@ public class OmokStoneDropper : MonoBehaviour
                                                            targetCoordinate,
                                                            isBlockerStackTarget,
                                                            out request);
+        }
+
+        if (!hasPlacementRequest)
+        {
+            LogPlacementFailure(GetReleaseBlockReason(canPlace, releasedPreviewObject, targetCoordinate, isCoordinateBlocked, isBlockerStackTarget));
         }
 
         if (hasPlacementRequest && aimController != null)
@@ -1267,6 +1283,85 @@ public class OmokStoneDropper : MonoBehaviour
     private bool CanBeginManualDragFromLauncher(OmokStoneLauncher launcher)
     {
         return CanBeginManualDrag(GetLauncherStoneColor(launcher));
+    }
+
+    private string GetManualDragBlockReason(OmokStoneLauncher launcher)
+    {
+        OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
+        if (!useBuiltInMouseInput)
+        {
+            return "built-in mouse input is disabled";
+        }
+
+        if (stoneColor == OmokStoneColor.None)
+        {
+            return "launcher stone color is None";
+        }
+
+        if (!IsManualStoneColorEnabled(stoneColor))
+        {
+            return $"manual placement is disabled for {stoneColor} (allowGold={allowGoldManualPlacement}, allowSilver={allowSilverManualPlacement})";
+        }
+
+        if (localPlayerContext != null && !localPlayerContext.CanControlStone(stoneColor))
+        {
+            return $"local player cannot control {stoneColor} (localColor={localPlayerContext.LocalStoneColor}, allowManual={localPlayerContext.AllowManualInput})";
+        }
+
+        if (localPlayerContext == null &&
+            localManualStoneColor != OmokStoneColor.None &&
+            localManualStoneColor != stoneColor)
+        {
+            return $"local manual color is {localManualStoneColor}, but launcher is {stoneColor}";
+        }
+
+        if (restrictManualDragToCurrentTurn && EnsureMatchManager() && !matchManager.CanTakeTurn(stoneColor))
+        {
+            return $"not {stoneColor}'s turn (currentTurn={matchManager.CurrentTurn}, isEnded={matchManager.IsMatchEnded}, winner={matchManager.Winner})";
+        }
+
+        return "unknown manual drag gate";
+    }
+
+    private string GetReleaseBlockReason(
+        bool canPlace,
+        GameObject releasedPreviewObject,
+        Vector2Int targetCoordinate,
+        bool isCoordinateBlocked,
+        bool isBlockerStackTarget)
+    {
+        if (!canPlace)
+        {
+            return "Release failed: drag has no board target.";
+        }
+
+        if (releasedPreviewObject == null)
+        {
+            return "Release failed: dragged preview object is missing.";
+        }
+
+        if (!IsInsideBoard(targetCoordinate))
+        {
+            return $"Release failed: target {targetCoordinate} is outside board.";
+        }
+
+        if (isCoordinateBlocked)
+        {
+            return $"Release failed: target {targetCoordinate} is blocked ({GetCoordinateBlockDebug(targetCoordinate)}, blockerStackTarget={isBlockerStackTarget}).";
+        }
+
+        return $"Release failed: could not build placement request for {targetCoordinate}.";
+    }
+
+    private string GetCoordinateBlockDebug(Vector2Int coordinate)
+    {
+        bool occupied = _occupiedCoordinates.Contains(coordinate);
+        bool reserved = _reservedCoordinates.Contains(coordinate);
+        OmokFallingStone stone = GetStoneAtCoordinate(coordinate);
+        string stoneState = stone == null
+            ? "none"
+            : $"{stone.StoneColor}, snapped={stone.IsSnapped}, removed={stone.IsRemoved}, blockedByBlocker={stone.IsBlockedByBlocker}";
+        return $"occupied={occupied}, reserved={reserved}, liveStone={stoneState}";
     }
 
     private OmokStoneColor GetLocalManualStoneColor()
@@ -1654,7 +1749,7 @@ public class OmokStoneDropper : MonoBehaviour
         float offset = GetCellClampedDistance(previewTargetHeightOffset, PREVIEW_TARGET_HEIGHT_CELL_MULTIPLIER);
         float cellSize = GetGridCellSize();
         return cellSize > 0f
-            ? Mathf.Max(offset, cellSize * PREVIEW_LINE_HEIGHT_MIN_CELL_MULTIPLIER)
+            ? Mathf.Max(offset, cellSize * PREVIEW_LINE_HEIGHT_MIN_CELL_MULTIPLIER, GetEffectivePreviewLineWidth() * 1.25f)
             : offset;
     }
 
@@ -2605,13 +2700,22 @@ public class OmokStoneDropper : MonoBehaviour
             return;
         }
 
-        Shader shader = Shader.Find("Sprites/Default");
-        if (_previewMaterial == null && shader != null)
+        if (_previewMaterial == null)
         {
-            _previewMaterial = new Material(shader)
+            Shader shader = Shader.Find(PREVIEW_LINE_SHADER_NAME);
+            if (shader == null)
             {
-                hideFlags = HideFlags.HideAndDontSave
-            };
+                shader = Shader.Find(PREVIEW_LINE_FALLBACK_SHADER_NAME);
+            }
+
+            if (shader != null)
+            {
+                _previewMaterial = new Material(shader)
+                {
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+                ConfigurePreviewLineMaterial(_previewMaterial);
+            }
         }
 
         if (_previewRenderer == null)
@@ -2642,6 +2746,7 @@ public class OmokStoneDropper : MonoBehaviour
         renderer.widthMultiplier = GetEffectivePreviewLineWidth();
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
+        renderer.sortingOrder = 0;
         renderer.enabled = false;
 
         if (_previewMaterial != null)
@@ -2650,6 +2755,18 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         return renderer;
+    }
+
+    private static void ConfigurePreviewLineMaterial(Material material)
+    {
+        if (material == null)
+        {
+            return;
+        }
+
+        material.SetInt(_previewLineZTestPropertyId, (int)CompareFunction.Always);
+        material.SetInt(_previewLineZWritePropertyId, 0);
+        material.renderQueue = (int)RenderQueue.Overlay;
     }
 
     private void HidePreview()
@@ -3136,12 +3253,17 @@ public class OmokStoneDropper : MonoBehaviour
 
     private void UpdateDraggedStonePreviewVisual()
     {
+        UpdateDraggedStonePreviewVisual(false);
+    }
+
+    private void UpdateDraggedStonePreviewVisual(bool isBlocked)
+    {
         if (_draggedStoneObject == null || _activeLauncher == null)
         {
             return;
         }
 
-        Color previewColor = GetDraggedStonePreviewColor(_activeLauncher);
+        Color previewColor = GetDraggedStonePreviewColor(_activeLauncher, isBlocked);
         foreach (Material material in _draggedStonePreviewMaterials)
         {
             if (material == null)
@@ -3153,8 +3275,13 @@ public class OmokStoneDropper : MonoBehaviour
         }
     }
 
-    private Color GetDraggedStonePreviewColor(OmokStoneLauncher launcher)
+    private Color GetDraggedStonePreviewColor(OmokStoneLauncher launcher, bool isBlocked = false)
     {
+        if (isBlocked)
+        {
+            return new Color(blockedPreviewColor.r, blockedPreviewColor.g, blockedPreviewColor.b, previewStoneAlpha);
+        }
+
         OmokStoneColor stoneColor = GetLauncherStoneColor(launcher);
         return stoneColor == OmokStoneColor.Gold
             ? new Color(1f, 0.72f, 0.18f, previewStoneAlpha)
@@ -3167,36 +3294,6 @@ public class OmokStoneDropper : MonoBehaviour
         {
             return;
         }
-
-        if (material.HasProperty(_surfacePropertyId))
-        {
-            material.SetFloat(_surfacePropertyId, 1f);
-        }
-
-        if (material.HasProperty(_blendPropertyId))
-        {
-            material.SetFloat(_blendPropertyId, 0f);
-        }
-
-        if (material.HasProperty(_srcBlendPropertyId))
-        {
-            material.SetFloat(_srcBlendPropertyId, (float)BlendMode.SrcAlpha);
-        }
-
-        if (material.HasProperty(_dstBlendPropertyId))
-        {
-            material.SetFloat(_dstBlendPropertyId, (float)BlendMode.OneMinusSrcAlpha);
-        }
-
-        if (material.HasProperty(_zWritePropertyId))
-        {
-            material.SetFloat(_zWritePropertyId, 0f);
-        }
-
-        material.DisableKeyword("_ALPHATEST_ON");
-        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        material.renderQueue = (int)RenderQueue.Transparent;
 
         ApplyPreviewMaterialColor(material, color);
     }
@@ -3211,6 +3308,22 @@ public class OmokStoneDropper : MonoBehaviour
         if (material.HasProperty(_colorPropertyId))
         {
             material.SetColor(_colorPropertyId, color);
+        }
+    }
+
+    private void LogPlacementInfo(string message)
+    {
+        if (logPlacementFailures)
+        {
+            Debug.Log($"[OmokStoneDropper] {message}", this);
+        }
+    }
+
+    private void LogPlacementFailure(string message)
+    {
+        if (logPlacementFailures)
+        {
+            Debug.LogWarning($"[OmokStoneDropper] {message}", this);
         }
     }
 

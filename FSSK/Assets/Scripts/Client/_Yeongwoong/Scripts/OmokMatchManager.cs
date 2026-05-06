@@ -199,6 +199,9 @@ public class OmokMatchManager : MonoBehaviour
     [Header("Random Removal")]
     [SerializeField] private OmokStoneColor randomRemovalOpeningColor = OmokStoneColor.Gold;
 
+    [Header("Debug")]
+    [SerializeField] private bool logPlacementFailures = true;
+
     private OmokStoneColor[,] _boardState;
     private readonly List<Vector2Int> _winningCoordinates = new();
     private bool _isMatchEnded;
@@ -474,9 +477,25 @@ public class OmokMatchManager : MonoBehaviour
 
     public bool TryProcessPlacementRequest(OmokStonePlacementRequest request)
     {
-        return stoneDropper != null &&
-               CanAcceptPlacementRequest(request) &&
-               stoneDropper.TryExecutePlacement(request);
+        if (stoneDropper == null)
+        {
+            LogPlacementFailure($"Rejected {request.StoneColor} at {request.TargetCoordinate}: stoneDropper is missing.");
+            return false;
+        }
+
+        if (!CanAcceptPlacementRequest(request))
+        {
+            LogPlacementFailure($"Rejected {request.StoneColor} at {request.TargetCoordinate}: {GetPlacementRejectReason(request)}");
+            return false;
+        }
+
+        if (!stoneDropper.TryExecutePlacement(request))
+        {
+            LogPlacementFailure($"Rejected {request.StoneColor} at {request.TargetCoordinate}: stoneDropper.TryExecutePlacement failed.");
+            return false;
+        }
+
+        return true;
     }
 
     public bool TryApplyPlacementResult(Vector2Int coordinate, OmokStoneColor stoneColor)
@@ -642,6 +661,45 @@ public class OmokMatchManager : MonoBehaviour
     private static OmokStoneColor NormalizeRemovalColor(OmokStoneColor stoneColor)
     {
         return stoneColor == OmokStoneColor.Silver ? OmokStoneColor.Silver : OmokStoneColor.Gold;
+    }
+
+    private string GetPlacementRejectReason(OmokStonePlacementRequest request)
+    {
+        if (_boardState == null)
+        {
+            return "board state is not initialized";
+        }
+
+        if (request.StoneColor == OmokStoneColor.None)
+        {
+            return "stone color is None";
+        }
+
+        if (!CanTakeTurn(request.StoneColor))
+        {
+            return $"not {request.StoneColor}'s turn (currentTurn={_currentTurn}, isEnded={_isMatchEnded}, winner={_winner})";
+        }
+
+        if (!OmokMatchFlow.IsInsideBoard(BoardSize, request.TargetCoordinate))
+        {
+            return $"target is outside board (boardSize={BoardSize})";
+        }
+
+        OmokStoneColor cellState = _boardState[request.TargetCoordinate.x, request.TargetCoordinate.y];
+        if (!request.AllowBlockedCoordinateForBlocker && cellState != OmokStoneColor.None)
+        {
+            return $"target cell is occupied by {cellState}";
+        }
+
+        return "unknown match gate";
+    }
+
+    private void LogPlacementFailure(string message)
+    {
+        if (logPlacementFailures)
+        {
+            Debug.LogWarning($"[OmokMatchManager] {message}", this);
+        }
     }
 
     private void AdvanceRandomRemovalColor(OmokStoneColor removedColor)

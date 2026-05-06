@@ -134,7 +134,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &71806307
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1129,10 +1129,10 @@ MonoBehaviour:
     source: {fileID: 187038046}
     stonePrefab: {fileID: 6460034516728088667, guid: 3bd79bf7fa14a134285c700f9a3b0c2e, type: 3}
   useBuiltInMouseInput: 1
-  allowGoldManualPlacement: 1
-  allowSilverManualPlacement: 1
+  allowGoldManualPlacement: 0
+  allowSilverManualPlacement: 0
   restrictManualDragToCurrentTurn: 1
-  localManualStoneColor: 0
+  localManualStoneColor: 2
   dragHoverHeight: 3
   keepDraggedStoneOnScreen: 1
   draggedStoneScreenPadding: 0.015
@@ -1152,12 +1152,14 @@ MonoBehaviour:
   initialFallSpeed: 0.5
   fallGravityScale: 1.5
   showPreview: 1
+  cancelDragWhenParrotOverlapsPreview: 1
   validPreviewColor: {r: 0.25, g: 1, b: 0.45, a: 0.95}
   blockedPreviewColor: {r: 1, g: 0.3, b: 0.3, a: 0.95}
   previewLineWidth: 1.5
   previewTargetHeightOffset: 0.01
   previewStoneAlpha: 0.65
   previewStoneScaleMultiplier: 0.97
+  logPlacementFailures: 1
 --- !u!1 &654905469
 GameObject:
   m_ObjectHideFlags: 0
@@ -1783,6 +1785,24 @@ MonoBehaviour:
   localPlayerContext: {fileID: 0}
   allowOmokInputInExpansionMode: 0
   startWithOmokInputEnabled: 1
+--- !u!4 &814945734
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 814945732}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 2073535676}
+  - {fileID: 1698964081}
+  - {fileID: 498662154}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &814945735
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1798,12 +1818,17 @@ MonoBehaviour:
   matchManager: {fileID: 2073535677}
   stoneDropper: {fileID: 652747163}
   localPlayerContext: {fileID: 0}
+  gameMode: 0
   useAi: 1
   selectedAiType: 0
   localPlayerColor: 2
   allowManualInput: 1
   restrictManualDragToCurrentTurn: 1
   aiTurnDelay: 0.35
+  useTurnTimer: 1
+  turnDurationSeconds: 10
+  minimumTurnDurationSeconds: 3
+  timeoutAction: 0
   goldSeat:
     stoneColor: 1
     displayColor: {r: 1, g: 0.72, b: 0.18, a: 1}
@@ -1833,6 +1858,12 @@ MonoBehaviour:
   isMatchEnded: 0
   winner: 0
   nextRandomRemovalColor: 1
+  timerTurn: 1
+  turnElapsedSeconds: 0
+  turnRemainingSeconds: 10
+  turnRemainingWholeSeconds: 10
+  turnTimerProgress01: 0
+  turnTimerExpired: 0
   boardSize: 15
   totalPlacedStones: 0
   emptyCells: 225
@@ -1851,24 +1882,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmokTurnAuthorityAdapter
   turnSystem: {fileID: 814945735}
---- !u!4 &814945734
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 814945732}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 2073535676}
-  - {fileID: 1698964081}
-  - {fileID: 498662154}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &854579451
 GameObject:
   m_ObjectHideFlags: 0
@@ -2476,7 +2489,6 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 71806307}
-  - {fileID: 2028207580}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -3806,7 +3818,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: adf5f4f602fd8a94084bf3fcde44052f, type: 2}
+  - {fileID: 2100000, guid: cb08d8ea0d2b7914cb1fe00ddd1c736f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -5279,81 +5291,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1988158859}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1 &2028207579
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2028207580}
-  - component: {fileID: 2028207582}
-  - component: {fileID: 2028207581}
-  m_Layer: 5
-  m_Name: Blackout Panel
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!224 &2028207580
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2028207579}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1019639807}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 1920, y: 1080}
-  m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &2028207581
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2028207579}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
---- !u!222 &2028207582
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2028207579}
-  m_CullTransparentMesh: 1
 --- !u!1 &2073535674
 GameObject:
   m_ObjectHideFlags: 0
@@ -5414,6 +5351,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   randomRemovalOpeningColor: 1
+  logPlacementFailures: 1
 --- !u!1 &2094198199
 GameObject:
   m_ObjectHideFlags: 0
@@ -5517,32 +5455,81 @@ MonoBehaviour:
   m_GameObject: {fileID: 2108065976}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 29aa31295eb69b541b72805b75306173, type: 3}
+  m_Script: {fileID: 11500000, guid: 27e47d675c3942b1b5b69876d2859df9, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LightningController
-  _blackoutPanel: {fileID: 2028207581}
+  m_EditorClassIdentifier: Assembly-CSharp::LightningScreenEffectController
+  previewOnStart: 0
+  previewLightningLevel: 2
+  triggerLightningOnStart: 0
+  allowKeyboardTesting: 1
+  triggerLightningKey: 108
+  allowLevelHotkeys: 1
   _audioSource: {fileID: 0}
+  useWaveStageEvent: 1
+  showLightningLog: 1
+  _levelProgression: 00000000000000000000000001000000010000000100000002000000020000000200000003000000
   _pattern1:
-    minInterval: 8
-    maxInterval: 10
-    fadeOutTime: 0.5
-    blockTime: 1
-    fadeInTime: 0.5
+    minInterval: 14
+    maxInterval: 22
+    fadeOutTime: 0.075
+    blockTime: 0.14
+    fadeInTime: 1.35
     thunderSound: {fileID: 0}
   _pattern2:
-    minInterval: 6
-    maxInterval: 8
-    fadeOutTime: 0.5
-    blockTime: 2
-    fadeInTime: 0.5
+    minInterval: 10
+    maxInterval: 16
+    fadeOutTime: 0.075
+    blockTime: 0.18
+    fadeInTime: 1.65
     thunderSound: {fileID: 0}
   _pattern3:
-    minInterval: 4
-    maxInterval: 6
-    fadeOutTime: 0.5
-    blockTime: 3
-    fadeInTime: 0.5
+    minInterval: 7
+    maxInterval: 12
+    fadeOutTime: 0.09
+    blockTime: 0.24
+    fadeInTime: 2
     thunderSound: {fileID: 0}
+  flashColor: {r: 0.82, g: 0.9, b: 1, a: 1}
+  flashPeakAlpha: 0.28
+  flashAfterAlpha: 0.045
+  flashRiseSeconds: 0.035
+  flashDropSeconds: 0.075
+  blindedHoldSeconds: 0.14
+  hazeColor: {r: 0.92, g: 0.94, b: 0.96, a: 1}
+  hazePeakAlpha: 0.14
+  hazeEdgeBoost: 0.2
+  hazeNoiseStrength: 0.04
+  recoverySeconds: 1.65
+  blinkColor: {r: 0.13, g: 0.17, b: 0.21, a: 1}
+  blinkPeakAlpha: 0.44
+  upperBlinkHeight: 0.34
+  lowerBlinkHeight: 0.14
+  openCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  enableCameraBlur: 1
+  blurPeakWeight: 1
 --- !u!1001 &2115984218
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5653,8 +5640,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 97d3ddff8a15b2446aedcf61706a498b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaveManager
-  _stageDuration: 3
-  _stageDelay: 1
+  _stageDuration: 30
+  _stageDelay: 5
   _rumPrefab: {fileID: 6098799951655430639, guid: 7629b1ecadc64c64bb7292d69ef3a7f6, type: 3}
   _octopusPrefab: {fileID: 9007209712626027920, guid: aeb52477e81e4a044b2971086193681c, type: 3}
   _itemSpawnPoints:
