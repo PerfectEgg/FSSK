@@ -40,7 +40,7 @@ public abstract class ItemTroll : TrollBase, IDraggable
     }
 
     // --- IDraggable(인터페이스)의 메서드 구현 ---
-    public void OnDragStart()
+    public virtual void OnDragStart()
     {
         // 🟢 [중복 집기 방지] 이미 잡혀있다면 무시
         if (_isGrabbed) return;
