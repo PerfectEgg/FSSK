@@ -11,7 +11,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
 {
     [Header("Room Settings")]
     [SerializeField] private byte _maxPlayers = 2;
-    [SerializeField] private string _gameSceneName = "Game";
+    [SerializeField] private string _gameSceneName = "GameTest";
 
     [Header("UI")]
     [SerializeField] private Button _mutiMatchButton;

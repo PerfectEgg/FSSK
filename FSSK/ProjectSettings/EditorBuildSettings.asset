@@ -18,11 +18,11 @@ EditorBuildSettings:
     path: Assets/Scenes/Lobby.unity
     guid: 3c6cf14fb64353b4891818d19d545d64
   - enabled: 1
-    path: Assets/Scenes/Game.unity
-    guid: 544d35f8d0859264d86f409330b2d000
-  - enabled: 1
     path: Assets/Scenes/Ranking.unity
     guid: 321657e53d8e0174fafc7261011839d2
+  - enabled: 1
+    path: Assets/Scenes/GameTest.unity
+    guid: 544d35f8d0859264d86f409330b2d000
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
