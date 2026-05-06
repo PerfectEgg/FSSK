@@ -8,6 +8,14 @@ public class Turtle : AnimalTroll
     private Vector3 _targetDirection;
     private Vector3 _targetPosition;
 
+    protected override void Start()
+    {
+        base.Start();
+
+        // 애니메이터 컴포넌트 캐싱
+        _animator = GetComponent<Animator>();
+    }
+
     // 목표 지점을 바라보는 함수
     private void LookAtTarget()
     {
@@ -28,6 +36,24 @@ public class Turtle : AnimalTroll
 
         if (state == AnimalState.Waiting)
             LookAtTarget();
+
+        // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
+        if (_animator != null)
+        {
+            // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
+
+            switch(state)
+            {
+                case AnimalState.Action:
+                    _animator.SetTrigger(_enterTrigger);
+                    break;
+                case AnimalState.Hiding:
+                    _animator.SetTrigger(_exitTrigger);
+                    break;
+            }
+        }
     }
 
     void OnDestroy()

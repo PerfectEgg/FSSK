@@ -22,6 +22,9 @@ public class Parrot : AnimalTroll
     {
         base.Start();
 
+        // 애니메이터 컴포넌트 캐싱
+        _animator = GetComponent<Animator>();
+
         _startPos = transform.position;
         _startPos.y = 0;
         _finalPos = new Vector3(-_startPos.x, _startPos.y, -_startPos.z);
@@ -42,6 +45,25 @@ public class Parrot : AnimalTroll
 
         if (state == AnimalState.Waiting)
             LookAtTarget(_targetPos);
+
+        // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
+        if (_animator != null)
+        {
+            // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
+
+            switch(state)
+            {
+                case AnimalState.Action:
+                    _animator.SetFloat("Action", 1); // Action 트리거 대신 파라미터로 제어 (연속된 애니메이션 재생 가능)
+                    _animator.SetTrigger(_enterTrigger);
+                    break;
+                case AnimalState.Waiting:
+                    _animator.SetTrigger(_exitTrigger);
+                    break;
+            }
+        }
     }
 
     void OnDestroy()

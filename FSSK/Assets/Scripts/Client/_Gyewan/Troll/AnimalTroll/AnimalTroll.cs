@@ -12,6 +12,11 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [Header("스폰 설정")]
     [SerializeField] protected float _spawnY = 0f;        // 스폰 시 Y축 높이 (책상 위에 뜨도록)
 
+    // 애니메이션 캐싱용 변수
+    protected Animator _animator;
+    protected static readonly int _enterTrigger = Animator.StringToHash("Enter");
+    protected static readonly int _exitTrigger = Animator.StringToHash("Exit");
+
     // 위치 캐싱용 변수
     protected Vector3 _finalSpawnPos;       // 최종적으로 등장할 위치 (책상 위)
     protected Vector3 _hiddenSpawnPos;      // 등장 연출을 위해 잠시 숨겨질 위치 (책상 아래)
@@ -39,8 +44,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [SerializeField] private float _holdDistance = 12.5f;    // 잡고 있을 때의 거리
     private Vector3 _originalPosition;   // 움직이는 위치를 저장하고 되돌릴 때 사용할 변수
 
-    private void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
-    private void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
+    protected virtual void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
+    protected virtual void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
 
     private void HandleTrollInteraction(bool isGrabbedEvent, GameObject target)
     {

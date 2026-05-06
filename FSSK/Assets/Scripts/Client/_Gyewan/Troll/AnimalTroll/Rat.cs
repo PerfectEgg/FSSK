@@ -1,4 +1,3 @@
-using Unity.VisualScripting;
 using UnityEngine;
 
 // 쥐
@@ -6,7 +5,7 @@ public class Rat : AnimalTroll
 {
     [Header("쥐 설정")]
     [SerializeField] private float _moveSpeed = 5f;
-    [SerializeField] private float _arrivalThreshold = 0.05f;
+    [SerializeField] private float _arrivalThreshold = 1f;
 
     [Header("비주얼 (입/손에 쥐는 돌)")]
     [SerializeField] private GameObject _heldGoldStoneVisual; // 입에 물고 있는 바둑돌 오브젝트 (평소엔 비활성화)
@@ -21,6 +20,9 @@ public class Rat : AnimalTroll
     {
         base.Start();
 
+        // 애니메이터 컴포넌트 캐싱
+        _animator = GetComponent<Animator>();
+
         _waittingTime = 3f;
 
         if (_heldGoldStoneVisual != null) _heldGoldStoneVisual.SetActive(false);
@@ -33,14 +35,16 @@ public class Rat : AnimalTroll
         TrollEvents.TriggerTrollFinished();
     }
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
+        base.OnEnable();
         // 매니저가 보내주는 타겟 정보를 수신 대기
         TrollEvents.OnStoneTargetCallback += HandleTargetAssigned;
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         TrollEvents.OnStoneTargetCallback -= HandleTargetAssigned;
     }
 
@@ -65,6 +69,8 @@ public class Rat : AnimalTroll
         
         // Transform.position으로 방향 설정
         transform.LookAt(_targetPosition.position);
+
+        _animator.SetTrigger(_enterTrigger);
         Debug.Log($"🐀 [도둑쥐] 목표 설정 완료: {pos} (색상: {color})");
     }
 
@@ -76,7 +82,7 @@ public class Rat : AnimalTroll
 
     protected override void OnStateEnter(AnimalState state)
     {
-        if(state == AnimalState.Entering || state == AnimalState.Action || state == AnimalState.Exiting)
+        if(state == AnimalState.Entering || state == AnimalState.Action || state == AnimalState.Action2 || state == AnimalState.Exiting)
             _isInteractable = false;
         else
             _isInteractable = true;
@@ -90,6 +96,21 @@ public class Rat : AnimalTroll
         if (state == AnimalState.Action2)
         {
             transform.LookAt(_finalSpawnPos);
+        }
+
+        // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
+        if (_animator != null)
+        {
+            // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
+            
+            switch(state)
+            {
+                case AnimalState.Hiding:
+                    _animator.SetTrigger(_exitTrigger);
+                    break;
+            }
         }
     }
 

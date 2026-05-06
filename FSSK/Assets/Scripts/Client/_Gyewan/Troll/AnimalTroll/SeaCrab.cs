@@ -9,6 +9,14 @@ public class SeaCrab : AnimalTroll
 
     private bool isArrive = false;  // 도착 여부 체크
 
+    protected override void Start()
+    {
+        base.Start();
+
+        // 애니메이터 컴포넌트 캐싱
+        _animator = GetComponent<Animator>();
+    }
+
     // 목표 지점을 바라보는 함수
     private void LookAtTarget()
     {
@@ -21,7 +29,7 @@ public class SeaCrab : AnimalTroll
 
         if (_targetDirection != Vector3.zero)
         {
-            transform.rotation = Quaternion.LookRotation(_targetDirection);
+            transform.LookAt(_targetDirection);
         }
     }
 
@@ -32,6 +40,24 @@ public class SeaCrab : AnimalTroll
 
         if (state == AnimalState.Action)
             LookAtTarget();
+
+        // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
+        if (_animator != null)
+        {
+            // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
+
+            switch(state)
+            {
+                case AnimalState.Action:
+                    _animator.SetTrigger(_enterTrigger);
+                    break;
+                case AnimalState.Waiting:
+                    _animator.SetTrigger(_exitTrigger);
+                    break;
+            }
+        }
     }
 
     void OnDestroy()
@@ -42,7 +68,6 @@ public class SeaCrab : AnimalTroll
             TrollEvents.TriggerTrollFinished();
             return;
         }
-        
     }
 
     protected override void EnterAction()
