@@ -1,5 +1,21 @@
 using UnityEngine;
 
+public static class OmokWindAimEvents
+{
+    public static bool CurrentWindAimActive { get; private set; }
+    public static Vector2 CurrentWindAimDirection { get; private set; }
+    public static float CurrentWindAimDriftCellsPerSecond { get; private set; }
+    public static System.Action<bool, Vector2, float> OnWindAimChanged;
+
+    public static void Publish(bool isActive, Vector2 direction, float driftCellsPerSecond)
+    {
+        CurrentWindAimActive = isActive;
+        CurrentWindAimDirection = direction;
+        CurrentWindAimDriftCellsPerSecond = driftCellsPerSecond;
+        OnWindAimChanged?.Invoke(isActive, direction, driftCellsPerSecond);
+    }
+}
+
 public readonly struct OmokAimState
 {
     public OmokAimState(Vector3 pointerWorldPosition, Vector3 aimWorldPosition, bool hasCoordinate, Vector2Int coordinate)
@@ -14,6 +30,61 @@ public readonly struct OmokAimState
     public Vector3 AimWorldPosition { get; }
     public bool HasCoordinate { get; }
     public Vector2Int Coordinate { get; }
+}
+
+[System.Serializable]
+public struct OmokWindAimSettings
+{
+    public Vector2 direction;
+    [Min(0f)] public float driftCellsPerSecond;
+    [Min(0f)] public float baseSensitivity;
+    [Min(0f)] public float sameDirectionSensitivity;
+    [Min(0f)] public float oppositeDirectionSensitivity;
+    [Min(0f)] public float inputDeadZoneCells;
+    public bool useRelativeMouseForWindAim;
+    [Min(0.01f)] public float relativeMousePixelScale;
+    public bool clampWindAimToScreen;
+    [Range(0f, 0.49f)] public float screenPadding;
+    [Range(0.01f, 0.5f)] public float screenSoftZone;
+    [Range(0f, 1f)] public float screenEdgeMinSpeed;
+    public bool keepAimPositionAfterDrop;
+    public bool hideSystemCursorWhileAiming;
+    public bool unlockSystemCursorWhileAiming;
+
+    public static OmokWindAimSettings CreateDefault(Vector2 direction, float driftCellsPerSecond)
+    {
+        return new OmokWindAimSettings
+        {
+            direction = direction,
+            driftCellsPerSecond = driftCellsPerSecond,
+            baseSensitivity = 1f,
+            sameDirectionSensitivity = 1.35f,
+            oppositeDirectionSensitivity = 0.6f,
+            inputDeadZoneCells = 0.02f,
+            useRelativeMouseForWindAim = true,
+            relativeMousePixelScale = 20f,
+            clampWindAimToScreen = true,
+            screenPadding = 0.03f,
+            screenSoftZone = 0.12f,
+            screenEdgeMinSpeed = 0.08f,
+            keepAimPositionAfterDrop = true,
+            hideSystemCursorWhileAiming = false,
+            unlockSystemCursorWhileAiming = true
+        };
+    }
+
+    public void Sanitize()
+    {
+        driftCellsPerSecond = Mathf.Max(0f, driftCellsPerSecond);
+        baseSensitivity = Mathf.Max(0f, baseSensitivity);
+        sameDirectionSensitivity = Mathf.Max(0f, sameDirectionSensitivity);
+        oppositeDirectionSensitivity = Mathf.Max(0f, oppositeDirectionSensitivity);
+        inputDeadZoneCells = Mathf.Max(0f, inputDeadZoneCells);
+        relativeMousePixelScale = Mathf.Max(0.01f, relativeMousePixelScale);
+        screenPadding = Mathf.Clamp(screenPadding, 0f, 0.49f);
+        screenSoftZone = Mathf.Clamp(screenSoftZone, 0.01f, 0.5f);
+        screenEdgeMinSpeed = Mathf.Clamp01(screenEdgeMinSpeed);
+    }
 }
 
 public class OmokAimController : MonoBehaviour
@@ -82,6 +153,22 @@ public class OmokAimController : MonoBehaviour
         }
 
         ResolveNamedLayers();
+    }
+
+    private void OnEnable()
+    {
+        if (useWindAim)
+        {
+            PublishWindAimState();
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (useWindAim)
+        {
+            OmokWindAimEvents.Publish(false, Vector2.zero, 0f);
+        }
     }
 
     private void OnValidate()
@@ -261,14 +348,24 @@ public class OmokAimController : MonoBehaviour
 
     public void SetWindAimEnabled(bool isEnabled)
     {
+        bool shouldRestoreAimPosition = _hasWindAimPosition;
+        Vector3 restoredAimPosition = _windAimPosition;
+
         useWindAim = isEnabled;
         ResetAimState();
+        RestoreWindAimPositionAfterReconfigure(shouldRestoreAimPosition, restoredAimPosition);
+        PublishWindAimState();
     }
 
     public void SetWindAimDirection(Vector2 direction)
     {
+        bool shouldRestoreAimPosition = _hasWindAimPosition;
+        Vector3 restoredAimPosition = _windAimPosition;
+
         windAimDirection = direction;
         ResetAimState();
+        RestoreWindAimPositionAfterReconfigure(shouldRestoreAimPosition, restoredAimPosition);
+        PublishWindAimState();
     }
 
     public void SetWindAimDirection(float directionX, float directionY)
@@ -278,10 +375,50 @@ public class OmokAimController : MonoBehaviour
 
     public void ConfigureWindAim(Vector2 direction, float driftCellsPerSecond)
     {
+        bool shouldRestoreAimPosition = _hasWindAimPosition;
+        Vector3 restoredAimPosition = _windAimPosition;
+
         windAimDirection = direction;
         windAimDriftCellsPerSecond = Mathf.Max(0f, driftCellsPerSecond);
         useWindAim = direction.sqrMagnitude > 0.0001f;
         ResetAimState();
+        RestoreWindAimPositionAfterReconfigure(shouldRestoreAimPosition, restoredAimPosition);
+        PublishWindAimState();
+    }
+
+    public void ConfigureWindAim(OmokWindAimSettings settings)
+    {
+        bool shouldRestoreAimPosition = _hasWindAimPosition;
+        Vector3 restoredAimPosition = _windAimPosition;
+
+        settings.Sanitize();
+
+        windAimDirection = settings.direction;
+        windAimDriftCellsPerSecond = settings.driftCellsPerSecond;
+        windAimBaseSensitivity = settings.baseSensitivity;
+        windAimSameDirectionSensitivity = settings.sameDirectionSensitivity;
+        windAimOppositeDirectionSensitivity = settings.oppositeDirectionSensitivity;
+        windAimInputDeadZoneCells = settings.inputDeadZoneCells;
+        useRelativeMouseForWindAim = settings.useRelativeMouseForWindAim;
+        windAimRelativeMousePixelScale = settings.relativeMousePixelScale;
+        clampWindAimToScreen = settings.clampWindAimToScreen;
+        windAimScreenPadding = settings.screenPadding;
+        windAimScreenSoftZone = settings.screenSoftZone;
+        windAimScreenEdgeMinSpeed = settings.screenEdgeMinSpeed;
+        keepAimPositionAfterDrop = settings.keepAimPositionAfterDrop;
+        hideSystemCursorWhileAiming = settings.hideSystemCursorWhileAiming;
+        unlockSystemCursorWhileAiming = settings.unlockSystemCursorWhileAiming;
+        useWindAim = windAimDirection.sqrMagnitude > 0.0001f;
+
+        ResetAimState();
+        RestoreWindAimPositionAfterReconfigure(shouldRestoreAimPosition, restoredAimPosition);
+
+        if (!useWindAim && _hasCursorOverride)
+        {
+            EndAimSession();
+        }
+
+        PublishWindAimState();
     }
 
     public void ConfigureWindAim(float directionX, float directionY, float driftCellsPerSecond)
@@ -289,10 +426,42 @@ public class OmokAimController : MonoBehaviour
         ConfigureWindAim(new Vector2(directionX, directionY), driftCellsPerSecond);
     }
 
+    private void RestoreWindAimPositionAfterReconfigure(bool shouldRestoreAimPosition, Vector3 restoredAimPosition)
+    {
+        if (!shouldRestoreAimPosition || !useWindAim)
+        {
+            return;
+        }
+
+        _windAimPosition = restoredAimPosition;
+        _hasWindAimPosition = true;
+        _previousPointerDragPosition = default;
+        _previousPointerScreenPosition = default;
+        _shouldReanchorPointerOnNextAim = true;
+    }
+
     public void ClearWindAim()
     {
         useWindAim = false;
         ResetAimState();
+
+        if (_hasCursorOverride)
+        {
+            EndAimSession();
+        }
+
+        PublishWindAimState();
+    }
+
+    private void PublishWindAimState()
+    {
+        if (!useWindAim || windAimDirection.sqrMagnitude <= 0.0001f || windAimDriftCellsPerSecond <= 0f)
+        {
+            OmokWindAimEvents.Publish(false, Vector2.zero, 0f);
+            return;
+        }
+
+        OmokWindAimEvents.Publish(true, windAimDirection, windAimDriftCellsPerSecond);
     }
 
     public void EnableWindAimUp()

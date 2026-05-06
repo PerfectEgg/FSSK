@@ -298,6 +298,83 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 78943331}
   m_CullTransparentMesh: 1
+--- !u!1001 &159331021
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1424949895}
+    m_Modifications:
+    - target: {fileID: 1624732227010082, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_Name
+      value: Rain Particles
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 60.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: -90
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 198913305880061536, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: VelocityModule.x.scalar
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 198913305880061536, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+      propertyPath: EmissionModule.rateOverTime.scalar
+      value: 250
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
 --- !u!1001 &167214750
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1139,8 +1216,6 @@ MonoBehaviour:
   keepDraggedStoneOnScreen: 1
   draggedStoneScreenPadding: 0.015
   warpCursorToDropPositionOnRelease: 1
-  usePlacementTargetOffset: 0
-  placementTargetOffset: {x: 0, y: 0}
   snapTiming: 1
   raycastDistance: 50
   settleOffset: 0.001
@@ -1971,6 +2046,7 @@ GameObject:
   m_Component:
   - component: {fileID: 854579452}
   - component: {fileID: 854579453}
+  - component: {fileID: 854579454}
   m_Layer: 0
   m_Name: Wind Controller
   m_TagString: Untagged
@@ -2000,11 +2076,101 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 854579451}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: da125c54fe3849248b32a5667289af45, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WindController
+--- !u!114 &854579454
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 854579451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3be32c26208b49f5b3d0f9d077e5358d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WindAimEffectController
+  previewOnStart: 0
+  previewWindLevel: 1
+  allowKeyboardTesting: 0
+  allowLevelHotkeys: 0
+  clearWindKey: 48
+  windLevel1Key: 52
+  windLevel2Key: 53
+  windLevel3Key: 54
+  applyInspectorChangesImmediately: 1
+  inputBridge: {fileID: 814945733}
+  stoneDropper: {fileID: 652747163}
+  useWaveStageEvent: 1
+  useWindLevelEvent: 1
+  clearWindAimOnDisable: 1
+  showWindLog: 1
+  _levelProgression: 00000000000000000100000001000000020000000200000002000000030000000300000003000000
+  scaleDriftFromLevelTwoPointFive: 1
+  levelTwoPointFiveDriftCellsPerSecond: 0.35
+  cycleHorizontalDirection: 1
+  directionChangeSeconds: 15
+  randomizeInitialDirection: 1
+  rainVelocityLevel1X: 5
+  rainVelocityLevel2X: 10
+  rainVelocityLevel3X: 15
+  _level1:
+    enabled: 1
+    aimSettings:
+      direction: {x: 1, y: 0}
+      driftCellsPerSecond: 0.14
+      baseSensitivity: 1
+      sameDirectionSensitivity: 1.35
+      oppositeDirectionSensitivity: 0.6
+      inputDeadZoneCells: 0.02
+      useRelativeMouseForWindAim: 1
+      relativeMousePixelScale: 20
+      clampWindAimToScreen: 1
+      screenPadding: 0.03
+      screenSoftZone: 0.12
+      screenEdgeMinSpeed: 0.08
+      keepAimPositionAfterDrop: 1
+      hideSystemCursorWhileAiming: 0
+      unlockSystemCursorWhileAiming: 1
+  _level2:
+    enabled: 1
+    aimSettings:
+      direction: {x: 1, y: 0}
+      driftCellsPerSecond: 0.28
+      baseSensitivity: 1
+      sameDirectionSensitivity: 1.35
+      oppositeDirectionSensitivity: 0.6
+      inputDeadZoneCells: 0.02
+      useRelativeMouseForWindAim: 1
+      relativeMousePixelScale: 20
+      clampWindAimToScreen: 1
+      screenPadding: 0.03
+      screenSoftZone: 0.12
+      screenEdgeMinSpeed: 0.08
+      keepAimPositionAfterDrop: 1
+      hideSystemCursorWhileAiming: 0
+      unlockSystemCursorWhileAiming: 1
+  _level3:
+    enabled: 1
+    aimSettings:
+      direction: {x: 1, y: 0}
+      driftCellsPerSecond: 0.42
+      baseSensitivity: 1
+      sameDirectionSensitivity: 1.35
+      oppositeDirectionSensitivity: 0.6
+      inputDeadZoneCells: 0.02
+      useRelativeMouseForWindAim: 1
+      relativeMousePixelScale: 20
+      clampWindAimToScreen: 1
+      screenPadding: 0.03
+      screenSoftZone: 0.12
+      screenEdgeMinSpeed: 0.08
+      keepAimPositionAfterDrop: 1
+      hideSystemCursorWhileAiming: 0
+      unlockSystemCursorWhileAiming: 1
 --- !u!1 &911297109
 GameObject:
   m_ObjectHideFlags: 0
@@ -2823,6 +2989,11 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1107067884}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &1138684892 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4896653716000216, guid: 18d653ec6ac008e43a69363f42d8c371, type: 3}
+  m_PrefabInstance: {fileID: 159331021}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1140122130
 GameObject:
   m_ObjectHideFlags: 0
@@ -3726,6 +3897,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1424949895}
   - component: {fileID: 1424949896}
+  - component: {fileID: 1424949897}
   m_Layer: 0
   m_Name: Rain Controller
   m_TagString: Untagged
@@ -3745,7 +3917,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1138684892}
   m_Father: {fileID: 2122399431}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1424949896
@@ -3755,11 +3928,49 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1424949894}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5441adf3a0559b14fa9b5d6cb0c834e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RainController
+--- !u!114 &1424949897
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1424949894}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41eea6806def481aaecffeed2e0c3b5b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RainParticleEffectController
+  previewOnStart: 0
+  previewRainLevel: 1
+  allowKeyboardTesting: 0
+  clearRainKey: 260
+  rainLevel1Key: 261
+  rainLevel2Key: 262
+  rainLevel3Key: 263
+  existingRainInstance: {fileID: 0}
+  boardGrid: {fileID: 0}
+  useWaveStageEvent: 1
+  useRainLevelEvent: 1
+  useWindVisualVelocityEvent: 1
+  showRainLog: 1
+  rainLevelProgression: 00000000000000000100000002000000020000000200000003000000030000000300000003000000
+  rainLevel1RateOverTime: 250
+  rainLevel2RateOverTime: 500
+  rainLevel3RateOverTime: 750
+  windVelocityTransitionSeconds: 1.5
+  compensateSplashTransformForRainScale: 1
+  splashTransformScaleMultiplier: 0.3
+  useBoardSplashFeedback: 1
+  mutePrefabSplashEmission: 1
+  boardSplashBurstsPerSecond: 18
+  boardSplashInsetCells: 0.75
+  boardSplashHeightOffset: 0.04
+  boardSplashParticlesPerBurst: 1
 --- !u!1001 &1451964796
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3770,7 +3981,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 3520280827853628638, guid: a1dcd447bfbb3bc45821f8b436c031d2, type: 3}
       propertyPath: m_IsTrigger
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8515472688152868816, guid: a1dcd447bfbb3bc45821f8b436c031d2, type: 3}
       propertyPath: m_Name
@@ -4064,7 +4275,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: adf5f4f602fd8a94084bf3fcde44052f, type: 2}
+  - {fileID: 2100000, guid: cb08d8ea0d2b7914cb1fe00ddd1c736f, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -5633,6 +5844,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2108065977}
   - component: {fileID: 2108065978}
+  - component: {fileID: 2108065979}
   m_Layer: 0
   m_Name: Lightning Controller
   m_TagString: Untagged
@@ -5662,7 +5874,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2108065976}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 29aa31295eb69b541b72805b75306173, type: 3}
   m_Name: 
@@ -5690,6 +5902,90 @@ MonoBehaviour:
     blockTime: 3
     fadeInTime: 0.5
     thunderSound: {fileID: 0}
+--- !u!114 &2108065979
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2108065976}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27e47d675c3942b1b5b69876d2859df9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LightningScreenEffectController
+  previewOnStart: 0
+  previewLightningLevel: 2
+  triggerLightningOnStart: 0
+  allowKeyboardTesting: 0
+  triggerLightningKey: 108
+  allowLevelHotkeys: 0
+  _audioSource: {fileID: 0}
+  useWaveStageEvent: 1
+  showLightningLog: 1
+  _levelProgression: 00000000000000000000000000000000010000000100000001000000020000000200000003000000
+  _pattern1:
+    minInterval: 14
+    maxInterval: 22
+    fadeOutTime: 0.075
+    blockTime: 0.14
+    fadeInTime: 1.35
+    thunderSound: {fileID: 0}
+  _pattern2:
+    minInterval: 10
+    maxInterval: 16
+    fadeOutTime: 0.075
+    blockTime: 0.18
+    fadeInTime: 1.65
+    thunderSound: {fileID: 0}
+  _pattern3:
+    minInterval: 7
+    maxInterval: 12
+    fadeOutTime: 0.09
+    blockTime: 0.24
+    fadeInTime: 2
+    thunderSound: {fileID: 0}
+  flashColor: {r: 0.82, g: 0.9, b: 1, a: 1}
+  flashPeakAlpha: 0.28
+  flashAfterAlpha: 0.045
+  flashRiseSeconds: 0.035
+  flashDropSeconds: 0.075
+  blindedHoldSeconds: 0.14
+  hazeColor: {r: 0.92, g: 0.94, b: 0.96, a: 1}
+  hazePeakAlpha: 0.14
+  hazeEdgeBoost: 0.2
+  hazeNoiseStrength: 0.04
+  recoverySeconds: 1.65
+  blinkColor: {r: 0.13, g: 0.17, b: 0.21, a: 1}
+  blinkPeakAlpha: 0.44
+  upperBlinkHeight: 0.34
+  lowerBlinkHeight: 0.14
+  openCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  enableCameraBlur: 1
+  blurPeakWeight: 1
 --- !u!1001 &2115984218
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5787,7 +6083,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &2122399430
 MonoBehaviour:
   m_ObjectHideFlags: 0

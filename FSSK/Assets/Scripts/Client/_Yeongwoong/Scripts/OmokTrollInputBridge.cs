@@ -402,6 +402,16 @@ public class OmokTrollInputBridge : MonoBehaviour
         }
     }
 
+    public void ConfigureWindAim(OmokWindAimSettings settings)
+    {
+        ResolveReferences();
+
+        if (stoneDropper != null)
+        {
+            stoneDropper.ConfigureWindAim(settings);
+        }
+    }
+
     public void ClearWindAim()
     {
         ResolveReferences();
@@ -409,26 +419,6 @@ public class OmokTrollInputBridge : MonoBehaviour
         if (stoneDropper != null)
         {
             stoneDropper.ClearWindAim();
-        }
-    }
-
-    public void SetPlacementTargetOffset(Vector2Int offset)
-    {
-        ResolveReferences();
-
-        if (stoneDropper != null)
-        {
-            stoneDropper.SetPlacementTargetOffset(offset);
-        }
-    }
-
-    public void ClearPlacementTargetOffset()
-    {
-        ResolveReferences();
-
-        if (stoneDropper != null)
-        {
-            stoneDropper.ClearPlacementTargetOffset();
         }
     }
 
