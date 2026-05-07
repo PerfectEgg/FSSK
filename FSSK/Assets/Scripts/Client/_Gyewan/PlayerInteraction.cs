@@ -1,7 +1,8 @@
 using UnityEngine;
 using DG.Tweening;
+using Photon.Pun;
 
-public class PlayerInteraction : MonoBehaviour
+public class PlayerInteraction : MonoBehaviourPun, IPunObservable
 {
     [Header("상호작용 세팅")]
     [SerializeField] private float _reachDistance = 100f; // 사물을 집을 수 있는 최대 사거리
@@ -21,6 +22,9 @@ public class PlayerInteraction : MonoBehaviour
     // 🟢 오직 오른손 타겟과 가중치만 관리
     private Vector3 _rightHandTarget;
     private float _rightHandWeight = 0f;
+
+    // 🟢 네트워크 동기화를 위한 '목표 가중치' 변수 추가
+    private float _targetWeight = 0f;
     
     private Sequence _throwSequence;
     private bool _isThrowing = false; // 오른손이 던지기 연출 중인지 체크
@@ -56,7 +60,7 @@ public class PlayerInteraction : MonoBehaviour
         _canInteract = isExpansion;
 
         // 예외 처리: 확장 모드가 꺼질 때 무언가를 들고 있다면 강제로 놓기
-        if (!isExpansion && _grabbedTransform != null)
+        if (photonView.IsMine && !isExpansion && _grabbedTransform != null)
         {
             ReleaseItem();
         }
@@ -79,28 +83,35 @@ public class PlayerInteraction : MonoBehaviour
         UpdateHoldIK();
 
         // 기절 상태라면 모든 마우스 입력 처리를 무시 (return)
-        if (_stunTimer > 0f)
+        if (_stunTimer > 0f)  _stunTimer -= Time.deltaTime;
+
+        // 🟢 [내 캐릭터 전용 로직] 마우스 클릭, 광선 쏘기 등은 나만 할 수 있습니다.
+        if (photonView.IsMine)
         {
-            _stunTimer -= Time.deltaTime;
-            
-            if (_stunTimer <= 0f)
+            if (!_canInteract || _stunTimer > 0f) return;
+
+            // 테스트 용 레이저 쏘기
+            DrawDebugRay();
+
+            // 클릭 시도 (잡기)
+            if (Input.GetMouseButtonDown(0)&& _currentGrabbedObject == null) TryGrab();
+            // 마우스 놓기 (드롭)
+            if (Input.GetMouseButtonUp(0) && _currentGrabbedObject != null) ReleaseItem();
+
+            // 물건을 쥐고 있는지 체크해서 목표 가중치와 위치를 업데이트
+            if (!_isThrowing)
             {
-                Debug.Log("✋ [상호작용] 기절 종료, 조작 가능");
+                bool isGrabbing = _currentGrabbedObject != null;
+                _targetWeight = isGrabbing ? _holdWeight : 0f;
+                if (isGrabbing) _rightHandTarget = _grabbedTransform.position;
             }
-            return; 
         }
 
-        // 상호작용 상태 체크
-        if (!_canInteract) return; 
-
-        // 테스트 용 레이저 쏘기
-        DrawDebugRay();
-
-        // 클릭 시도 (잡기)
-        if (Input.GetMouseButtonDown(0)&& _currentGrabbedObject == null) TryGrab();
-
-        // 마우스 놓기 (드롭)
-        if (Input.GetMouseButtonUp(0) && _currentGrabbedObject != null) ReleaseItem();
+        // 🟢 [모두의 공통 로직] 내 캐릭터든 남의 캐릭터든, 목표 가중치를 향해 손을 부드럽게 뻗습니다.
+        if (!_isThrowing)
+        {
+            _rightHandWeight = Mathf.MoveTowards(_rightHandWeight, _targetWeight, Time.deltaTime * _ikTransitionSpeed);
+        }
     }
 
     // 🟢 드래그 중일 때 "오른손"을 살짝 뻗어서 따라가게 만드는 로직
@@ -158,46 +169,40 @@ public class PlayerInteraction : MonoBehaviour
         // 던지는 힘 대신, 현재 위치에 정적으로 내려놓는 처리
         // 트롤일 경우 장외 판정 등을 체크하기 위해 이벤트 발송
         if (_grabbedTag == "Troll" || _grabbedTag == "Item")
-        {
             TrollEvents.TriggerTrollInteraction(false, _grabbedTransform.gameObject);
-        }
 
         if (_grabbedTag == "Item")
-        {
             TrollEvents.TriggerItemCollected(_grabbedTag, _grabbedTransform.gameObject);
-        }
-
-        // 🟢 물건을 놓았으므로 오른손 던지기 연출 발동!
-        ExecuteThrowMotion();
 
         _currentGrabbedObject = null;
         _grabbedTransform = null;
+
+        // 🟢 내 화면 중앙을 계산해서 던질 목표 지점을 정한 뒤, 모두에게 RPC 전송!
+        Vector3 throwTarget = Camera.main.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, 2f));
+        photonView.RPC("PlayThrowMotionRPC", RpcTarget.All, throwTarget);
     }
 
-    // 🟢 DOTween을 이용한 오른손 던지기 연출
-    private void ExecuteThrowMotion()
+    // 🟢 [RPC] 나를 포함한 모든 클라이언트에서 실행되어, 60프레임으로 찰진 타격감을 보여줍니다.
+    [PunRPC]
+    private void PlayThrowMotionRPC(Vector3 targetPos)
     {
         _isThrowing = true; 
-        
-        // 던질 때 손이 향할 목표 지점 (화면 정중앙 앞쪽 2미터)
-        _rightHandTarget = Camera.main.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, 2f));
+        _rightHandTarget = targetPos; // 전달받은 목표 좌표로 조준
 
         _throwSequence?.Kill();
         _throwSequence = DOTween.Sequence();
 
-        // 1. 끝까지 확 뻗음 (스냅 타격감)
         _throwSequence.Append(DOTween.To(() => _rightHandWeight, x => _rightHandWeight = x, 1f, _throwDuration).SetEase(Ease.OutBack));
-        
-        // 2. 찰나의 대기
         _throwSequence.AppendInterval(_holdDuration);
-        
-        // 3. 부드럽게 거두기 (다 거두면 0f가 됨)
         _throwSequence.Append(DOTween.To(() => _rightHandWeight, x => _rightHandWeight = x, 0f, _retractDuration).SetEase(Ease.InOutQuad));
         
-        // 4. 연출 종료 시 다시 일반 시스템으로 복귀
-        _throwSequence.OnComplete(() => _isThrowing = false);
+        _throwSequence.OnComplete(() => 
+        {
+            _isThrowing = false;
+            _targetWeight = 0f; // 던지기가 끝나면 완전히 손을 거두도록 설정
+        });
     }
-
+    
     private void OnAnimatorIK(int layerIndex)
     {
         if (_animator == null) return;
@@ -208,6 +213,21 @@ public class PlayerInteraction : MonoBehaviour
             Debug.Log($"IK 작동 중! 가중치: {_rightHandWeight}, 목표: {_rightHandTarget}");
             _animator.SetIKPositionWeight(AvatarIKGoal.RightHand, _rightHandWeight);
             _animator.SetIKPosition(AvatarIKGoal.RightHand, _rightHandTarget);
+        }
+    }
+
+    // 🟢 포톤 스트림: 마우스를 꾹 누르고 아이템을 이리저리 옮길 때 손이 자연스럽게 따라가도록 동기화합니다.
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            stream.SendNext(_targetWeight);
+            stream.SendNext(_rightHandTarget);
+        }
+        else
+        {
+            _targetWeight = (float)stream.ReceiveNext();
+            _rightHandTarget = (Vector3)stream.ReceiveNext();
         }
     }
 }
