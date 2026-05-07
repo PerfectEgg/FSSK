@@ -41,6 +41,22 @@ MonoBehaviour:
   - RespawnSpaceship
   - ApplyOpponentResultRpc
   - PlayThrowMotionRPC
+  - LightningLevelRpc
+  - OnGameEndRpc
+  - OnItemPickedRpc
+  - OnStonePlacedRpc
+  - PlayAnimationTriggerRpc
+  - RainLevelRpc
+  - RequestDestroyRpc
+  - RequestEndTurnRpc
+  - RequestPickupItemRpc
+  - RequestPlaceStoneRpc
+  - SirenEffectRpc
+  - StartTurnRpc
+  - StunRpc
+  - SyncTimeRpc
+  - WaveStageRpc
+  - WindLevelRpc
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1
