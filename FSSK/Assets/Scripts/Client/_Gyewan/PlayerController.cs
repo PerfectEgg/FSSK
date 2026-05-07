@@ -1,19 +1,20 @@
 using UnityEngine;
+using Unity.Cinemachine; // 시네머신 네임스페이스
 
 public class PlayerController : MonoBehaviour
 {
-   [Header("기울임(Lean) 설정")]
+    [Header("기울임(Lean) 설정")]
+    [SerializeField] private CinemachineCamera _expansionCamera;
     [SerializeField] private float _leanDistance = 1.5f; // 좌우로 이동할 최대 거리
     [SerializeField] private float _leanAngle = 10f;     // 좌우로 갸우뚱거릴 최대 각도(Z축)
     [SerializeField] private float _leanSpeed = 8f;      // 기울어지는 속도 (부드러움 조절)
 
     [Header("캐릭터 상체 기울임 설정")]
-    private Animator _characterAnimator; // 🟢 카메라가 캐릭터 뼈대를 찾을 수 있게 연결해주세요!
+    private Animator _animator; // 🟢 카메라가 캐릭터 뼈대를 찾을 수 있게 연결해주세요!
     [SerializeField] private float _bodyLeanAngle = 20f;  // 상체가 기울어질 최대 각도
-    [SerializeField] private Vector3 _leanAxis = new Vector3(0, 0, 1); // 뼈대의 회전 축
+    [SerializeField] private Vector3 _leanAxis = new Vector3(0, 1, 0); // 뼈대의 회전 축
 
     private Vector3 _initialLocalPos;
-    private Quaternion _initialLocalRot;
 
     private Transform _spineBone;
     private float _currentBodyLean = 0f; // 현재 상체 기울기 값을 저장
@@ -50,17 +51,22 @@ public class PlayerController : MonoBehaviour
 
     private void Start()
     {
-        // 카메라의 초기 위치와 회전값을 '기준점'으로 저장합니다.
-        // World 좌표가 아닌 Local 좌표를 사용해야 부모 오브젝트가 회전해도 꼬이지 않습니다.
-        _initialLocalPos = transform.localPosition;
-        _initialLocalRot = transform.localRotation;
+        // 🟢 만약 인스펙터에서 카메라를 안 넣었다면, 자식 오브젝트 중에서 자동으로 메인 카메라를 찾아옵니다.
+        if (_expansionCamera == null)
+        {
+            Debug.LogError("🚨 카메라를 찾을 수 없습니다! 자식으로 카메라가 있는지 확인하세요.");
+        }
+        else
+        {
+            _initialLocalPos = _expansionCamera.transform.localPosition; // 카메라의 초기 로컬 위치 저장
+        }
 
-        _characterAnimator = GetComponentInParent<Animator>(); // 부모 오브젝트에서 Animator 컴포넌트를 찾아 연결합니다.
+        _animator = GetComponent<Animator>(); // 부모 오브젝트에서 Animator 컴포넌트를 찾아 연결합니다.
 
         // 시작할 때 연결된 애니메이터에서 척추 뼈를 찾아옵니다.
-        if (_characterAnimator != null)
+        if (_animator != null)
         {
-            _spineBone = _characterAnimator.GetBoneTransform(HumanBodyBones.Spine);
+            _spineBone = _animator.GetBoneTransform(HumanBodyBones.Spine);
         }
     }
 
@@ -85,20 +91,20 @@ public class PlayerController : MonoBehaviour
             h = Input.GetAxis("Horizontal");
         }
 
-        // 2. 목표 위치 계산 (기준점 + 좌우 오프셋)
-        Vector3 targetPos = _initialLocalPos + new Vector3(h * _leanDistance, 0, 0);
-        
-        // 부드러운 위치 이동 (Lerp)
-        transform.localPosition = Vector3.Lerp(transform.localPosition, targetPos, _leanSpeed * Time.deltaTime);
+        if(_expansionCamera != null)
+        {
+            // 2. 목표 위치 계산 (기준점 + 좌우 오프셋)
+            Vector3 targetPos = _initialLocalPos + new Vector3(h * _leanDistance, 0, 0);
+            // 부드러운 위치 이동 (Lerp)
+            _expansionCamera.transform.localPosition = Vector3.Lerp(_expansionCamera.transform.localPosition, targetPos, _leanSpeed * Time.deltaTime);
 
-        // 3. 목표 회전 계산 (Z축 회전)
-        // 오른쪽(D)을 누르면 h가 양수이므로, Z축을 음수 방향으로 꺾어야 고개가 오른쪽으로 기울어집니다.
-        float targetZRotation = -h * _leanAngle;
-        Quaternion targetRot = _initialLocalRot * Quaternion.Euler(0, 0, targetZRotation);
-        // 부드러운 회전 적용 (Slerp)
-        transform.localRotation = Quaternion.Slerp(transform.localRotation, targetRot, _leanSpeed * Time.deltaTime);
+            // 3. 목표 회전 계산 (Z축 회전)
+            // 오른쪽(D)을 누르면 h가 양수이므로, Z축을 음수 방향으로 꺾어야 고개가 오른쪽으로 기울어집니다.
+            float targetZRotation = -h * _leanAngle;
+            // 부드러운 회전 적용 (Slerp)
+            _expansionCamera.Lens.Dutch = Mathf.Lerp(_expansionCamera.Lens.Dutch, targetZRotation, _leanSpeed * Time.deltaTime);
+        }
 
-        // 3. 상체 뼈대 목표 회전값 계산 (적용은 LateUpdate에서)
         float targetBodyLean = h * -_bodyLeanAngle;
         _currentBodyLean = Mathf.Lerp(_currentBodyLean, targetBodyLean, _leanSpeed * Time.deltaTime);
     }
