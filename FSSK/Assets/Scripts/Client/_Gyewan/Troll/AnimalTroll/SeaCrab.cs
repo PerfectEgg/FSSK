@@ -1,4 +1,5 @@
 using UnityEngine;
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
 // 바다 게
 public class SeaCrab : AnimalTroll
@@ -25,11 +26,9 @@ public class SeaCrab : AnimalTroll
 
         _targetPosition = new Vector3(safePos.x, transform.position.y, safePos.z);
 
-        _targetDirection = _targetPosition.normalized;
-
-        if (_targetDirection != Vector3.zero)
+        if (_targetPosition != transform.position)
         {
-            transform.LookAt(_targetDirection);
+            transform.LookAt(_targetPosition);
         }
     }
 
@@ -37,6 +36,9 @@ public class SeaCrab : AnimalTroll
     protected override void OnStateEnter(AnimalState state)
     {
         base.OnStateEnter(state);
+
+        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
+        if (!photonView.IsMine) return;
 
         if (state == AnimalState.Action)
             LookAtTarget();
@@ -60,13 +62,18 @@ public class SeaCrab : AnimalTroll
         }
     }
 
-    void OnDestroy()
+    protected override void OnDestroy()
     {
-        if(!isArrive)
+        // 🟢 [멀티플레이] 트롤 파괴 시 이벤트는 '주인(마지막으로 들고 있던 사람)'만 쏩니다.
+        // 안 그러면 모든 유저의 컴퓨터에서 중복으로 이벤트가 발생해 웨이브 타이머가 꼬일 수 있습니다.
+        if (photonView.IsMine)
         {
-            // 바다 게는 도착 시점에 매니저에게 종료 알림을 보내므로, 도착 이후 파괴될 때는 추가로 알림을 보내지 않습니다.
-            TrollEvents.TriggerTrollFinished();
-            return;
+                if(!isArrive)
+            {
+                // 바다 게는 도착 시점에 매니저에게 종료 알림을 보내므로, 도착 이후 파괴될 때는 추가로 알림을 보내지 않습니다.
+                TrollEvents.TriggerTrollFinished();
+                return;
+            }
         }
     }
 

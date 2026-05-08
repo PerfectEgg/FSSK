@@ -1,4 +1,5 @@
 using UnityEngine;
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
 // 쥐
 public class Rat : AnimalTroll
@@ -22,17 +23,15 @@ public class Rat : AnimalTroll
 
         // 애니메이터 컴포넌트 캐싱
         _animator = GetComponent<Animator>();
-
-        _waittingTime = 3f;
+        
 
         if (_heldGoldStoneVisual != null) _heldGoldStoneVisual.SetActive(false);
         if (_heldSilverStoneVisual != null) _heldSilverStoneVisual.SetActive(false);
-    }
 
-    void OnDestroy()
-    {
-        // 트롤이 제거될 때 매니저에게 종료 알림
-        TrollEvents.TriggerTrollFinished();
+        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
+        if (!photonView.IsMine) return;
+
+        _waittingTime = 3f;
     }
 
     protected override void OnEnable()
@@ -51,6 +50,9 @@ public class Rat : AnimalTroll
     // 매니저로부터 목표 정보를 받았을 때 호출됨
     private void HandleTargetAssigned(int color, Transform pos)
     {
+        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
+        if (!photonView.IsMine) return;
+
         // 이미 목표가 있거나 움직이는 중이면 무시
         if (_currentState != AnimalState.Action) return;
 
@@ -74,14 +76,11 @@ public class Rat : AnimalTroll
         Debug.Log($"🐀 [도둑쥐] 목표 설정 완료: {pos} (색상: {color})");
     }
 
-    // --- TrollBase(추상 클래스)의 메서드 구현 ---
-    public override void EndTroll() 
-    { 
-        Destroy(gameObject, 3f); 
-    }
-
     protected override void OnStateEnter(AnimalState state)
     {
+        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
+        if (!photonView.IsMine) return;
+
         if(state == AnimalState.Entering || state == AnimalState.Action || state == AnimalState.Action2 || state == AnimalState.Exiting)
             _isInteractable = false;
         else
@@ -175,13 +174,20 @@ public class Rat : AnimalTroll
         // 1. 매니저에게 이 좌표의 돌을 완전히 지워달라고 요청
         TrollEvents.TriggerExecuteSteal();
 
-        // 2. 비주얼 업데이트 (1: 금화/흑돌, 2: 은화/백돌)
-        if (_targetStoneColor == 1 && _heldGoldStoneVisual != null)
-            _heldGoldStoneVisual.SetActive(true);
-        else if (_targetStoneColor == 2 && _heldSilverStoneVisual != null)
-            _heldSilverStoneVisual.SetActive(true);
+        // 2. 🟢 [멀티플레이] 나뿐만 아니라 모두의 화면에서 쥐의 입에 돌이 물리도록 RPC 발송!
+        photonView.RPC("SyncStoneVisualRPC", RpcTarget.All, _targetStoneColor);
 
         // 3. 훔쳤으니 Hiding(숨기) 상태로 전환
         ChangeState(AnimalState.Action2);
+    }
+
+    // 🟢 [멀티플레이 추가] 모든 클라이언트에서 실행되어 쥐의 비주얼을 맞춰주는 함수
+    [PunRPC]
+    private void SyncStoneVisualRPC(int color)
+    {
+        if (color == 1 && _heldGoldStoneVisual != null)
+            _heldGoldStoneVisual.SetActive(true);
+        else if (color == 2 && _heldSilverStoneVisual != null)
+            _heldSilverStoneVisual.SetActive(true);
     }
 }

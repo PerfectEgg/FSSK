@@ -25,6 +25,10 @@ public class Parrot : AnimalTroll
         // 애니메이터 컴포넌트 캐싱
         _animator = GetComponent<Animator>();
 
+        // 🟢 [멀티플레이 핵심] 목적지와 비행 시간 등 '랜덤'이 들어가는 계산은 오직 방장(주인)만 합니다!
+        // 남의 컴퓨터에서 각자 랜덤을 돌리면 앵무새가 서로 다른 곳으로 날아가게 됩니다.
+        if (!photonView.IsMine) return;
+
         _startPos = transform.position;
         _startPos.y = 0;
         _finalPos = new Vector3(-_startPos.x, _startPos.y, -_startPos.z);
@@ -42,6 +46,10 @@ public class Parrot : AnimalTroll
     protected override void OnStateEnter(AnimalState state)
     {
         base.OnStateEnter(state);
+
+        // 🟢 [멀티플레이] 상태 변화 및 애니메이션 트리거는 주인만 실행합니다.
+        // (주인이 실행하면 Photon Animator View가 남들의 화면에도 똑같이 애니메이션을 틀어줍니다)
+        if (!photonView.IsMine) return;
 
         if (state == AnimalState.Waiting)
             LookAtTarget(_targetPos);
@@ -64,12 +72,6 @@ public class Parrot : AnimalTroll
                     break;
             }
         }
-    }
-
-    void OnDestroy()
-    {
-        // 트롤이 제거될 때 매니저에게 종료 알림
-        TrollEvents.TriggerTrollFinished();
     }
 
     // 목표 지점을 바라보는 함수

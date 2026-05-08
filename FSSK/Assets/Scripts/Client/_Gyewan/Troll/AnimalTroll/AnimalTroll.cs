@@ -1,4 +1,7 @@
 using UnityEngine;
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
+using IEnumerator = System.Collections.IEnumerator;
+using Mono.Cecil.Cil;
 
 public enum AnimalState { Entering, Waiting, Action, Action2, Hiding, Exiting }
 
@@ -57,6 +60,9 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     protected virtual void Start()
     {
+        // 🟢 [멀티플레이] 초기 스폰 연출 위치 계산은 주인(방장)만 수행합니다.
+        if (!photonView.IsMine) return;
+
         Vector3 spawnPoint = transform.position;
         spawnPoint.y = _spawnY; // Y축 높이 조정
         transform.position = spawnPoint;
@@ -92,12 +98,11 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     private void Update()
     {
+        // 🟢 [멀티플레이] 초기 스폰 연출 위치 계산은 주인(방장)만 수행합니다.
+        if (!photonView.IsMine) return;
+
         // 잡힌 순간 타이머 작동 X
-        if (_isGrabbed)
-        {
-            OnDragging();
-            return;
-        }
+        if (_isGrabbed) return;
 
         // 타이머 작동 (잡혀있지 않을 때만 시간이 흐름)
         _currentTime += Time.deltaTime;
@@ -145,12 +150,32 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         }
     }
 
+    protected virtual void OnDestroy()
+    {
+        // 🟢 [멀티플레이] 트롤 파괴 시 이벤트는 '주인(마지막으로 들고 있던 사람)'만 쏩니다.
+        // 안 그러면 모든 유저의 컴퓨터에서 중복으로 이벤트가 발생해 웨이브 타이머가 꼬일 수 있습니다.
+        if (photonView.IsMine)
+        {
+            TrollEvents.TriggerTrollFinished();
+        }
+    }
+
 
     // --- TrollBase(추상 클래스)의 메서드 구현 ---
     public override void ApplyEffect() {  }
     public override void EndTroll() 
     { 
-        Destroy(gameObject, 3f); 
+        // 🟢 [멀티플레이 핵심 3] 일반 Destroy 대신 포톤 네트워크 파괴를 사용하되, 코루틴으로 3초 지연시킵니다.
+        if (photonView.IsMine)
+        {
+            StartCoroutine(DelayedNetworkDestroy(3f));
+        }
+    }
+    
+    private IEnumerator DelayedNetworkDestroy(float delayTime)
+    {
+        yield return new WaitForSeconds(delayTime);
+        PhotonNetwork.Destroy(gameObject);
     }
 
     protected virtual void EnterAction()
@@ -202,13 +227,6 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
         transform.position += Vector3.up * 1f;
         
-    }
-
-    public void OnDragging()
-    {
-        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
-        Vector3 targetPosition = ray.GetPoint(_holdDistance);
-        transform.position = Vector3.Lerp(transform.position, targetPosition, Time.deltaTime * 15f);
     }
 
     public void OnDragEnd()

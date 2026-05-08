@@ -1,4 +1,6 @@
 using UnityEngine;
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
+using IEnumerator = System.Collections.IEnumerator;
 
 // 아이템의 경우 (마우스로 던질 수 있음)
 public abstract class ItemTroll : TrollBase, IDraggable 
@@ -26,17 +28,22 @@ public abstract class ItemTroll : TrollBase, IDraggable
 
     private void Awake() => rb = GetComponent<Rigidbody>();
 
-    private void Update()
-    {
-        if (_isGrabbed) OnDragging();
-    }
-
-
     // --- TrollBase(추상 클래스)의 메서드 구현 ---
     public override void ApplyEffect() {  }
     public override void EndTroll() 
     { 
-        Destroy(gameObject, 3f); 
+        // 🟢 [멀티플레이 핵심] 주인(방금 던진 사람)의 컴퓨터에서만 네트워크 파괴를 실행합니다.
+        if (photonView.IsMine)
+        {
+            StartCoroutine(DelayedNetworkDestroy(3f));
+        }
+    }
+
+    // 🟢 [멀티플레이 추가] 지연된 네트워크 파괴를 위한 코루틴
+    private IEnumerator DelayedNetworkDestroy(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        PhotonNetwork.Destroy(gameObject);
     }
 
     // --- IDraggable(인터페이스)의 메서드 구현 ---
@@ -58,13 +65,6 @@ public abstract class ItemTroll : TrollBase, IDraggable
 
         transform.position += Vector3.up * 1f;
         
-    }
-
-    public void OnDragging()
-    {
-        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
-        Vector3 targetPosition = ray.GetPoint(_holdDistance);
-        transform.position = Vector3.Lerp(transform.position, targetPosition, Time.deltaTime * 15f);
     }
 
     public void OnDragEnd()
@@ -91,10 +91,16 @@ public abstract class ItemTroll : TrollBase, IDraggable
     // 🟢 상대방(트리거 콜라이더 등)에게 맞았을 때 실행
     protected virtual void OnTriggerEnter(Collider other)
     {
+        // 🟢 [멀티플레이 핵심] "내가 던진 아이템"이 "플레이어"에게 맞았을 때만 판정합니다.
+        // 이렇게 해야 중복 데미지나 중복 파괴 에러가 발생하지 않습니다.
+        if (!photonView.IsMine) return;
+
         if (_isThrown && other.CompareTag("Player"))
         {
             ApplyDebuff(other.gameObject);
-            Destroy(gameObject); // 맞히면 즉시 파괴
+
+            // 🟢 즉시 파괴 시에도 네트워크 파괴 사용
+            PhotonNetwork.Destroy(gameObject);
         }
     }
 

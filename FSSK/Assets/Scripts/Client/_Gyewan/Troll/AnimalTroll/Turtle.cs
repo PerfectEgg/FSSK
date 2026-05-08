@@ -1,5 +1,5 @@
 using UnityEngine;
-using UnityEngine.UIElements;
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
 // 거북이
 public class Turtle : AnimalTroll
@@ -34,6 +34,9 @@ public class Turtle : AnimalTroll
     {
         base.OnStateEnter(state);
 
+        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
+        if (!photonView.IsMine) return;
+
         if (state == AnimalState.Waiting)
             LookAtTarget();
 
@@ -54,12 +57,6 @@ public class Turtle : AnimalTroll
                     break;
             }
         }
-    }
-
-    void OnDestroy()
-    {
-        // 트롤이 제거될 때 매니저에게 종료 알림
-        TrollEvents.TriggerTrollFinished();
     }
 
     protected override void UpdateState()
