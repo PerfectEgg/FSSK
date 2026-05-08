@@ -1,8 +1,9 @@
 using UnityEngine;
 using Unity.Cinemachine;
+using Photon.Pun; // 🟢 포톤 네임스페이스 추가!
 using System; // 시네머신 3 네임스페이스
 
-public class CameraModeController : MonoBehaviour
+public class CameraModeController : MonoBehaviourPun
 {
     [Header("카메라 세팅")]
     [SerializeField] private CinemachineCamera _focusCam;       // 70도 고정 착수 카메라
@@ -38,6 +39,9 @@ public class CameraModeController : MonoBehaviour
 
     private void HandleSirenEffect(bool isSinging, Transform target)
     {
+        // 🟢 남의 캐릭터는 이 이벤트에 반응해서 내 화면 카메라를 돌리면 안 됩니다!
+        if (!photonView.IsMine) return;
+
         _isSirenSinging = isSinging;
         _sirenTarget = target;
 
@@ -52,6 +56,9 @@ public class CameraModeController : MonoBehaviour
 
     private void HandleStunEffect(float stunDuration)
     {
+        // 🟢 남의 캐릭터는 이 이벤트에 반응해서 내 화면 카메라를 돌리면 안 됩니다!
+        if (!photonView.IsMine) return;
+
         // 🟢 방금 막 기절에 걸린 순간이라면, 현재 시네머신의 각도를 자물쇠 변수에 박제합니다!
         if (_stunTimer <= 0f && _panTilt != null)
         {
@@ -73,12 +80,18 @@ public class CameraModeController : MonoBehaviour
 
     void Start()
     {
-        // 초기 상태: 착수 모드
-        SetCameraMode(false);
+        // 🟢 내 캐릭터일 때만 초기 착수 모드 세팅을 진행합니다.
+        if (photonView.IsMine)
+        {
+            SetCameraMode(false);
+        }
     }
 
     void Update()
     {
+        // 🟢 가장 중요한 핵심! 내 캐릭터가 아니면 키보드 입력도 받지 말고, 각도 계산도 하지 마!
+        if (!photonView.IsMine) return;
+
         if(_stunTimer > 0)
         {
             _stunTimer -= Time.deltaTime;

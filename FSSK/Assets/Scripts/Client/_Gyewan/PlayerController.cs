@@ -5,7 +5,8 @@ using Photon.Pun;
 public class PlayerController : MonoBehaviourPun, IPunObservable
 {
     [Header("기울임(Lean) 설정")]
-    [SerializeField] private CinemachineCamera _expansionCamera;
+    [SerializeField] private CinemachineCamera _focusCam;           // 착수 카메라
+    [SerializeField] private CinemachineCamera _expansionCamera;    // 확장 카메라 (좌우 기울임과 상체 기울임 모두 담당)
     [SerializeField] private float _leanDistance = 1.5f; // 좌우로 이동할 최대 거리
     [SerializeField] private float _leanAngle = 10f;     // 좌우로 갸우뚱거릴 최대 각도(Z축)
     [SerializeField] private float _leanSpeed = 8f;      // 기울어지는 속도 (부드러움 조절)
@@ -57,6 +58,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         // 🟢 만약 인스펙터에서 카메라를 안 넣었다면, 자식 오브젝트 중에서 자동으로 메인 카메라를 찾아옵니다.
         if (!photonView.IsMine)
         {
+            if (_focusCam != null) _focusCam.gameObject.SetActive(false);
             if (_expansionCamera != null) _expansionCamera.gameObject.SetActive(false);
         }
         else
