@@ -454,6 +454,26 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         TrollEvents.OnLightningLevelChanged?.Invoke(level);
     }
 
+    public void BroadcastLightningStrike(int level, int patternIndex)
+    {
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            Debug.LogWarning("[NetworkGameManager] Lightning strike broadcast requested by non-master - ignored.");
+            return;
+        }
+
+        int clampedLevel = Mathf.Clamp(level, 0, 3);
+        int clampedPatternIndex = Mathf.Clamp(patternIndex, 1, 3);
+        photonView.RPC(nameof(LightningStrikeRpc), RpcTarget.All, clampedLevel, clampedPatternIndex);
+    }
+
+    [PunRPC]
+    private void LightningStrikeRpc(int level, int patternIndex)
+    {
+        Debug.Log($"[NetworkGameManager] Lightning strike received (level: {level}, pattern: {patternIndex})");
+        TrollEvents.OnLightningStrikeRequested?.Invoke(level, patternIndex);
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  8. 게임 결과 기록 (점수 처리는 BackendRank 통해)
     // ──────────────────────────────────────────────────────────────

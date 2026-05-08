@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Photon.Pun;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -172,12 +173,14 @@ public sealed class LightningScreenEffectController : MonoBehaviour
     {
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;
         TrollEvents.OnLightningLevelChanged += HandleLightningLevelChanged;
+        TrollEvents.OnLightningStrikeRequested += HandleLightningStrikeRequested;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnWaveStageChanged -= HandleWaveStageChanged;
         TrollEvents.OnLightningLevelChanged -= HandleLightningLevelChanged;
+        TrollEvents.OnLightningStrikeRequested -= HandleLightningStrikeRequested;
 
         StopWaveLightningRoutine();
     }
@@ -304,6 +307,17 @@ public sealed class LightningScreenEffectController : MonoBehaviour
         SetLightningLevel(level);
     }
 
+    private void HandleLightningStrikeRequested(int level, int patternIndex)
+    {
+        int clampedLevel = Mathf.Clamp(level, 0, 3);
+        if (clampedLevel <= 0)
+        {
+            return;
+        }
+
+        TriggerLightning(clampedLevel, GetPatternByIndex(patternIndex));
+    }
+
     private void SetLightningLevel(int level)
     {
         _lightningLevel = Mathf.Clamp(level, 0, 3);
@@ -335,6 +349,11 @@ public sealed class LightningScreenEffectController : MonoBehaviour
             return;
         }
 
+        if (!CanScheduleLightningStrikes())
+        {
+            return;
+        }
+
         if (showLightningLog)
         {
             Debug.Log($"[번개] {clampedLevel}단계 번개 코루틴을 시작합니다!", this);
@@ -347,7 +366,8 @@ public sealed class LightningScreenEffectController : MonoBehaviour
     {
         while (_waveLightningLevel == level && level > 0)
         {
-            LightningPattern timing = GetRandomPattern(level);
+            int patternIndex = GetRandomPatternIndex(level);
+            LightningPattern timing = GetPatternByIndex(patternIndex);
             yield return new WaitForSeconds(timing.GetDelay());
 
             if (_waveLightningLevel != level || level <= 0)
@@ -355,8 +375,9 @@ public sealed class LightningScreenEffectController : MonoBehaviour
                 continue;
             }
 
-            TriggerLightning(level, timing);
+            RequestLightningStrike(level, patternIndex);
 
+            yield return null;
             while (_lightningRoutine != null)
             {
                 yield return null;
@@ -377,15 +398,51 @@ public sealed class LightningScreenEffectController : MonoBehaviour
 
     private LightningPattern GetRandomPattern(int level)
     {
-        int maxPatternIndex = Mathf.Clamp(level, 1, 3);
-        int randomIndex = Random.Range(1, maxPatternIndex + 1);
+        return GetPatternByIndex(GetRandomPatternIndex(level));
+    }
 
-        return randomIndex switch
+    private static int GetRandomPatternIndex(int level)
+    {
+        int maxPatternIndex = Mathf.Clamp(level, 1, 3);
+        return Random.Range(1, maxPatternIndex + 1);
+    }
+
+    private LightningPattern GetPatternByIndex(int patternIndex)
+    {
+        int clampedPatternIndex = Mathf.Clamp(patternIndex, 1, 3);
+
+        return clampedPatternIndex switch
         {
             1 => _pattern1,
             2 => _pattern2,
             _ => _pattern3
         };
+    }
+
+    private void RequestLightningStrike(int level, int patternIndex)
+    {
+        if (PhotonNetwork.InRoom)
+        {
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                return;
+            }
+
+            if (NetworkGameManager.Instance != null)
+            {
+                NetworkGameManager.Instance.BroadcastLightningStrike(level, patternIndex);
+                return;
+            }
+
+            Debug.LogWarning("[LightningScreenEffectController] NetworkGameManager missing; lightning strike will only play locally.", this);
+        }
+
+        HandleLightningStrikeRequested(level, patternIndex);
+    }
+
+    private static bool CanScheduleLightningStrikes()
+    {
+        return !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient;
     }
 
     private IEnumerator PlayLightningEffect(LightningPattern pattern)
