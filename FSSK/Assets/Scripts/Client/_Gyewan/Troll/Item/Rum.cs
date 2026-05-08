@@ -5,7 +5,7 @@ public class Rum : ItemTroll
 {
     void Start()
     {
-        _grabbedScale = new Vector3(2f, 2f, 1f); // 🟢 잡았을 때 원래 크기
+        _grabbedScale = new Vector3(2f, 2f, 2f); // 🟢 잡았을 때 원래 크기
     }
 
     public override void ApplyDebuff(GameObject target)

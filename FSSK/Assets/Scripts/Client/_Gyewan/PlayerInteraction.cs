@@ -8,6 +8,9 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
     [SerializeField] private float _reachDistance = 100f; 
     [SerializeField] private LayerMask _interactableLayer; 
 
+    [Header("그랩 세팅")]
+    [SerializeField] private float _holdDistance = 7.5f;
+
     [Header("IK 세팅 (살짝 쥐기)")]
     [SerializeField] [Range(0f, 1f)] private float _holdWeight = 0.4f; 
     [SerializeField] private float _ikTransitionSpeed = 5f;            
@@ -85,7 +88,14 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
                 {
                     bool isGrabbing = _currentGrabbedObject != null;
                     _targetWeight = isGrabbing ? _holdWeight : 0f;
-                    if (isGrabbing) _rightHandTarget = _grabbedTransform.position;
+
+                    if (isGrabbing) 
+                    {
+                        // 🟢 [수정 2] 아이템의 현재 위치가 아니라, 화면 중앙(마우스) 좌표를 목표로 삼습니다!
+                        // 이렇게 해야 아이템이 화면을 돌리는 대로 예쁘게 따라옵니다.
+                        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
+                        _rightHandTarget = ray.GetPoint(_holdDistance); 
+                    }
                 }
             }
         }
@@ -124,10 +134,8 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
                 _grabbedItemViewId = itemPV.ViewID; 
                 _grabbedTag = hit.collider.tag;
 
-                // 🟢 RPC 호출: 모든 클라이언트에게 "나 이거 잡았다"고 알림
+                // 🟢 [수정 3] 로컬 이벤트 발송 삭제! (모든 클라이언트가 알 수 있도록 RPC로 옮겼습니다)
                 photonView.RPC("SyncGrabItemRPC", RpcTarget.All, _grabbedItemViewId, true);
-                
-                TrollEvents.TriggerTrollInteraction(true, hit.collider.gameObject);
             }
         }
     }
@@ -136,15 +144,8 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
     {
         if (_grabbedItemViewId != -1)
         {
-            // 🟢 RPC 호출: 모든 클라이언트에게 "나 이거 놓았다"고 알림
+            // 🟢 로컬 이벤트 발송 삭제! (아래 RPC 함수에서 처리합니다)
             photonView.RPC("SyncGrabItemRPC", RpcTarget.All, _grabbedItemViewId, false);
-
-            if (_grabbedTag == "Troll" || _grabbedTag == "Item")
-                TrollEvents.TriggerTrollInteraction(false, _currentGrabbedObject);
-
-            if (_grabbedTag == "Item")
-                TrollEvents.TriggerItemCollected(_grabbedTag, _currentGrabbedObject);
-
             _grabbedItemViewId = -1;
         }
 
@@ -163,20 +164,23 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         PhotonView itemPV = PhotonView.Find(itemViewId);
         if (itemPV == null) return;
 
+         TrollEvents.TriggerTrollInteraction(isGrabbed, itemPV.gameObject);
+
+        if (!isGrabbed && itemPV.CompareTag("Item"))
+        {
+            TrollEvents.TriggerItemCollected(itemPV.tag, itemPV.gameObject);
+        }
+
         if (isGrabbed)
         {
             _currentGrabbedObject = itemPV.gameObject;
             _grabbedTransform = itemPV.transform;
-            
-            // 물리 엔진 일시정지
             if (itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
         }
         else
         {
-            // 물리 엔진 다시 활성화
             if (itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
 
-            // 남의 화면에서도 참조 해제
             if (!photonView.IsMine)
             {
                 _currentGrabbedObject = null;
