@@ -47,16 +47,16 @@ public class SeaCrab : AnimalTroll
         if (_animator != null)
         {
             // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            _animator.ResetTrigger(_enterTrigger);
-            _animator.ResetTrigger(_exitTrigger);
+            SendAnimationReset(_enterTrigger);
+            SendAnimationReset(_exitTrigger);
 
             switch(state)
             {
                 case AnimalState.Action:
-                    _animator.SetTrigger(_enterTrigger);
+                    SendAnimationTrigger(_enterTrigger);
                     break;
                 case AnimalState.Waiting:
-                    _animator.SetTrigger(_exitTrigger);
+                    SendAnimationTrigger(_exitTrigger);
                     break;
             }
         }
@@ -68,10 +68,11 @@ public class SeaCrab : AnimalTroll
         // 안 그러면 모든 유저의 컴퓨터에서 중복으로 이벤트가 발생해 웨이브 타이머가 꼬일 수 있습니다.
         if (photonView.IsMine)
         {
-                if(!isArrive)
+            if(!isArrive)
             {
-                // 바다 게는 도착 시점에 매니저에게 종료 알림을 보내므로, 도착 이후 파괴될 때는 추가로 알림을 보내지 않습니다.
-                TrollEvents.TriggerTrollFinished();
+                // 🟢 파괴하기 전, 마스터에게 완료 보고를 먼저 합니다.
+                photonView.RPC("ReportTrollFinishedRPC", RpcTarget.MasterClient);
+                StartCoroutine(DelayedNetworkDestroy(3f));
                 return;
             }
         }

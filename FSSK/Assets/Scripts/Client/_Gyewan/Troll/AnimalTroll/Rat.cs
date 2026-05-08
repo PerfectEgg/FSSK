@@ -72,7 +72,7 @@ public class Rat : AnimalTroll
         // Transform.position으로 방향 설정
         transform.LookAt(_targetPosition.position);
 
-        _animator.SetTrigger(_enterTrigger);
+        SendAnimationTrigger(_enterTrigger);
         Debug.Log($"🐀 [도둑쥐] 목표 설정 완료: {pos} (색상: {color})");
     }
 
@@ -101,13 +101,13 @@ public class Rat : AnimalTroll
         if (_animator != null)
         {
             // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            _animator.ResetTrigger(_enterTrigger);
-            _animator.ResetTrigger(_exitTrigger);
+            SendAnimationReset(_enterTrigger);
+            SendAnimationReset(_exitTrigger);
             
             switch(state)
             {
                 case AnimalState.Hiding:
-                    _animator.SetTrigger(_exitTrigger);
+                    SendAnimationTrigger(_exitTrigger);
                     break;
             }
         }

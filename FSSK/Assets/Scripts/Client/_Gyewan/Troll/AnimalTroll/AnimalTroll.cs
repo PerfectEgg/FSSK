@@ -17,8 +17,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     // 애니메이션 캐싱용 변수
     protected Animator _animator;
-    protected static readonly int _enterTrigger = Animator.StringToHash("Enter");
-    protected static readonly int _exitTrigger = Animator.StringToHash("Exit");
+    protected static readonly string _enterTrigger = "Enter";
+    protected static readonly string _exitTrigger = "Exit";
 
     // 위치 캐싱용 변수
     protected Vector3 _finalSpawnPos;       // 최종적으로 등장할 위치 (책상 위)
@@ -167,14 +167,56 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         // 🟢 [멀티플레이 핵심 3] 일반 Destroy 대신 포톤 네트워크 파괴를 사용하되, 코루틴으로 3초 지연시킵니다.
         if (photonView.IsMine)
         {
+            // 🟢 파괴하기 전, 마스터에게 완료 보고를 먼저 합니다.
+            photonView.RPC("ReportTrollFinishedRPC", RpcTarget.MasterClient);
             StartCoroutine(DelayedNetworkDestroy(3f));
         }
     }
-    
-    private IEnumerator DelayedNetworkDestroy(float delayTime)
+
+    public IEnumerator DelayedNetworkDestroy(float delayTime)
     {
         yield return new WaitForSeconds(delayTime);
         PhotonNetwork.Destroy(gameObject);
+    }
+
+
+    [PunRPC]
+    public void ReportTrollFinishedRPC()
+    {
+        // 이 로직은 MasterClient(방장)의 컴퓨터에서만 실행됩니다.
+        TrollEvents.TriggerTrollFinished();
+        Debug.Log($"[Master] 클라이언트로부터 트롤 종료 보고 수신: {gameObject.name}");
+    }
+    
+    
+    // 🟢 애니메이션 동기화를 위한 RPC 래퍼 (자식 클래스에서 사용)
+    protected void SendAnimationTrigger(string triggerName)
+    {
+        if (photonView.IsMine)
+        {
+            photonView.RPC("SyncAnimationRPC", RpcTarget.All, triggerName);
+        }
+    }
+
+    [PunRPC]
+    public void SyncAnimationRPC(string triggerName)
+    {
+        if (_animator != null) _animator.SetTrigger(triggerName);
+    }
+
+    // 🟢 애니메이션 동기화를 위한 RPC 래퍼 (자식 클래스에서 사용)
+    protected void SendAnimationReset(string triggerName)
+    {
+        if (photonView.IsMine)
+        {
+            photonView.RPC("SyncAnimationResetRPC", RpcTarget.All, triggerName);
+        }
+    }
+
+    [PunRPC]
+    public void SyncAnimationResetRPC(string triggerName)
+    {
+        if (_animator != null) _animator.ResetTrigger(triggerName);
     }
 
     protected virtual void EnterAction()
@@ -221,10 +263,13 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     {
         // 상호작용 불가능 상태면 리턴
         if(!_isInteractable) return;
-
         _isGrabbed = true;
 
-        transform.position += Vector3.up * 1f;
+        if (_rb != null) 
+        {
+            _rb.linearVelocity = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
+        }
         
     }
 

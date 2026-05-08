@@ -44,16 +44,16 @@ public class Turtle : AnimalTroll
         if (_animator != null)
         {
             // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            _animator.ResetTrigger(_enterTrigger);
-            _animator.ResetTrigger(_exitTrigger);
+            SendAnimationReset(_enterTrigger);
+            SendAnimationReset(_exitTrigger);
 
             switch(state)
             {
                 case AnimalState.Action:
-                    _animator.SetTrigger(_enterTrigger);
+                    SendAnimationTrigger(_enterTrigger);
                     break;
                 case AnimalState.Hiding:
-                    _animator.SetTrigger(_exitTrigger);
+                    SendAnimationTrigger(_exitTrigger);
                     break;
             }
         }

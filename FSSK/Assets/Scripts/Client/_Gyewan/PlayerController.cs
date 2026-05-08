@@ -48,8 +48,11 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
     private void HandleStunEffect(float stunDuration)
     {
-        // 1. 기절 시간 갱신
-        _stunTimer = Mathf.Max(_stunTimer, stunDuration);
+        if (photonView.IsMine)
+        {
+            // 1. 기절 시간 갱신
+            _stunTimer = Mathf.Max(_stunTimer, stunDuration);
+        }
     }
 
 
@@ -93,7 +96,6 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
         if(photonView.IsMine)
         {
-
             // 1. 입력 받기 (A키: -1, D키: 1, 안 누르면 0)
             // 조작 불가능 상태일 때는 h를 0으로 만들어 스무스하게 중앙점(0)으로 복귀시킵니다.
             float h = 0f;

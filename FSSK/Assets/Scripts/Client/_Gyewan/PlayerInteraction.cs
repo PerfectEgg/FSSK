@@ -84,17 +84,17 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
                 if (Input.GetMouseButtonDown(0) && _currentGrabbedObject == null) TryGrab();
                 if (Input.GetMouseButtonUp(0) && _currentGrabbedObject != null) ReleaseItem();
 
-                if (!_isThrowing)
+                if (!_isThrowing && _currentGrabbedObject != null)
                 {
-                    bool isGrabbing = _currentGrabbedObject != null;
-                    _targetWeight = isGrabbing ? _holdWeight : 0f;
-
-                    if (isGrabbing) 
+                    Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
+                    _rightHandTarget = ray.GetPoint(_holdDistance); 
+                    
+                    // 🟢 [핵심 수정] 위치 업데이트는 오직 내 캐릭터일 때만 수행!
+                    // 상대방 화면에서는 이 캐릭터의 _rightHandTarget이 OnPhotonSerializeView를 통해 
+                    // 동기화되고 있으므로, 아이템의 PhotonTransformView가 자연스럽게 따라가게 됩니다.
+                    if (_grabbedTransform != null)
                     {
-                        // 🟢 [수정 2] 아이템의 현재 위치가 아니라, 화면 중앙(마우스) 좌표를 목표로 삼습니다!
-                        // 이렇게 해야 아이템이 화면을 돌리는 대로 예쁘게 따라옵니다.
-                        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
-                        _rightHandTarget = ray.GetPoint(_holdDistance); 
+                        _grabbedTransform.position = _rightHandTarget;
                     }
                 }
             }
@@ -104,12 +104,6 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         if (!_isThrowing)
         {
             _rightHandWeight = Mathf.MoveTowards(_rightHandWeight, _targetWeight, Time.deltaTime * _ikTransitionSpeed);
-        }
-
-        // 3. 🟢 [핵심] 누군가 물건을 쥐고 있다면, 아이템 위치를 손 위치로 강제 고정 (모든 화면 동기화)
-        if (_grabbedTransform != null)
-        {
-            _grabbedTransform.position = _rightHandTarget;
         }
     }
 

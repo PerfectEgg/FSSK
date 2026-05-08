@@ -1,4 +1,5 @@
 using UnityEngine;
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
 // 앵무새
 public class Parrot : AnimalTroll
@@ -56,18 +57,17 @@ public class Parrot : AnimalTroll
         // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
         if (_animator != null)
         {
-            // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            _animator.ResetTrigger(_enterTrigger);
-            _animator.ResetTrigger(_exitTrigger);
+            SendAnimationReset(_enterTrigger);
+            SendAnimationReset(_exitTrigger);
 
             switch(state)
             {
                 case AnimalState.Action:
-                    _animator.SetFloat("Action", 1); // Action 트리거 대신 파라미터로 제어 (연속된 애니메이션 재생 가능)
-                    _animator.SetTrigger(_enterTrigger);
+                    SendAnimationSetFloat("Action", 1); // Action 트리거 대신 파라미터로 제어 (연속된 애니메이션 재생 가능)
+                    SendAnimationTrigger(_enterTrigger);
                     break;
                 case AnimalState.Waiting:
-                    _animator.SetTrigger(_exitTrigger);
+                    SendAnimationTrigger(_exitTrigger);
                     break;
             }
         }
@@ -167,5 +167,20 @@ public class Parrot : AnimalTroll
 
         // 위치 적용
         transform.position = currentPos;
+    }
+
+    // 🟢 애니메이션 동기화를 위한 RPC 래퍼 (자식 클래스에서 사용)
+    private void SendAnimationSetFloat(string triggerName, float value)
+    {
+        if (photonView.IsMine)
+        {
+            photonView.RPC("SyncAnimationSetFloatRPC", RpcTarget.All, triggerName, value);
+        }
+    }
+
+    [PunRPC]
+    public void SyncAnimationSetFloatRPC(string triggerName, float value)
+    {
+        if (_animator != null) _animator.SetFloat(triggerName, value);
     }
 }
