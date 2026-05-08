@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Photon.Pun;
 
 public class TrollManager : MonoBehaviour
 {
@@ -11,7 +12,7 @@ public class TrollManager : MonoBehaviour
     public struct TrollData
     {
         public TrollType trollType;
-        public GameObject trollPrefab;
+        public GameObject trollPrefab;      // Resources 폴더 내의 프리팹
         [Tooltip("등장 확률 가중치 (예: 10, 20)")]
         public int spawnWeight;
     }
@@ -77,6 +78,8 @@ public class TrollManager : MonoBehaviour
     // 트롤 종료 이벤트 수신 -> 다음 타이머 시작
     private void HandleTrollFinished()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         StartWaitTimer();
     }
 
@@ -86,6 +89,13 @@ public class TrollManager : MonoBehaviour
         _occupiedPositions.RemoveAll(p => Vector2.Distance(new Vector2(p.x, p.z), new Vector2(pos.x, pos.z)) < 0.5f);
     }
 
+    // 싱클톤 설정
+    private void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+    }
+
     void Start()
     {
         StartTrollingSystem();
@@ -93,6 +103,9 @@ public class TrollManager : MonoBehaviour
 
     void Update()
     {
+        // 방장이 아니면 타이머 로직을 아예 실행하지 않음
+        if (!PhotonNetwork.IsMasterClient) return;
+
         if (!_isWaiting) return;
 
         _currentWaitTimer -= Time.deltaTime;
@@ -104,9 +117,12 @@ public class TrollManager : MonoBehaviour
         }
     }
 
-    // 🟢 트롤 실행
+    // 트롤 실행
     private void ExecuteRandomTroll()
     {
+        // 다시 한 번 방장 권한 체크 (안전장치)
+        if (!PhotonNetwork.IsMasterClient) return;
+
         TrollData selectedTroll = GetRandomTroll();
         _lastTroll = selectedTroll.trollType;
         _executionCount++;
@@ -116,18 +132,25 @@ public class TrollManager : MonoBehaviour
         // 트롤 생성
         if (selectedTroll.trollPrefab != null)
         {
+            string prefabName = selectedTroll.trollPrefab.name;
+            Vector3 spawnPos;
+
             if (selectedTroll.trollType == TrollType.Kraken || selectedTroll.trollType == TrollType.Siren)
             {
                 // 몬스터 트롤은 몬스터 스폰 포인트에서 랜덤으로 생성
                 int spawnIndex = Random.Range(0, _monsterSpawnPoints.Length);
-                Instantiate(selectedTroll.trollPrefab, _monsterSpawnPoints[spawnIndex].position, Quaternion.identity);
+                spawnPos = _monsterSpawnPoints[spawnIndex].position;
             }
             else
             {
                 // 일반 트롤은 지상 스폰 포인트에서 랜덤으로 생성
                 int spawnIndex = Random.Range(0, _groundSpawnPoints.Length);
-                Instantiate(selectedTroll.trollPrefab, _groundSpawnPoints[spawnIndex].position, Quaternion.identity);
+                spawnPos = _groundSpawnPoints[spawnIndex].position;
             }
+
+            // 🟢 NetworkGameManager를 통한 동기화 소환
+            NetworkGameManager.Instance.SpawnNetworkObject(prefabName, spawnPos, Quaternion.identity);
+            Debug.Log($"🚨 [Master] {selectedTroll.trollType} 네트워크 소환 요청");
         }
     }
 
@@ -166,6 +189,9 @@ public class TrollManager : MonoBehaviour
     // 🟢 게임 시작 시(선공 플레이어 턴 시작 시) 호출
     public void StartTrollingSystem()
     {
+        // 🟢 시스템 시작 자체를 방장만 통제
+        if (!PhotonNetwork.IsMasterClient) return;
+
         _executionCount = 0;
         _lastTroll = TrollType.None;
         

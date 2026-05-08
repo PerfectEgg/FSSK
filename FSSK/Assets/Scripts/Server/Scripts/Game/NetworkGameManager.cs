@@ -30,7 +30,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     // 플레이어 스폰을 위한 변수
     [Header("Player Spawn")]
     [SerializeField] private Transform[] _spawnPoints; // 인스펙터에서 의자 2개 할당
-    [SerializeField] private string _playerPrefabName = "Player"; // Resources 폴더 안의 해적 프리팹 이름
+    [SerializeField] private string _playerPrefabName = "Player/Player"; // Resources 폴더 안의 해적 프리팹 이름
 
     // ──────────────────────────────────────────────────────────────
     //  상태

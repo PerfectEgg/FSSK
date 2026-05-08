@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Photon.Pun;
 
 public class WaveManager : MonoBehaviour
 {
@@ -40,11 +41,18 @@ public class WaveManager : MonoBehaviour
 
     void Start()
     {
-        StartGameWaves();
+        // 🟢 방장(마스터 클라이언트)일 때만 웨이브 시스템을 가동합니다.
+        if (PhotonNetwork.IsMasterClient)
+        {
+            StartGameWaves();
+        }
     }
 
     public void StartGameWaves()
     {
+        // 🟢 안전장치: 방장이 아니면 실행 불가
+        if (!PhotonNetwork.IsMasterClient) return;
+
         _currentStage = 0;
         _waveTimer = 0f;
         _startTime = _stageDelay;                 // 웨이브 시작 후 아이템 생성 초기 시간
@@ -59,6 +67,9 @@ public class WaveManager : MonoBehaviour
 
     private void Update()
     {
+        // 🟢 방장이 아니면 시간 계산을 아예 하지 않음 (각자 계산하면 싱크가 어긋납니다)
+        if (!PhotonNetwork.IsMasterClient) return;
+
         if (!_isWaveActive) return;
 
         _waveTimer += Time.deltaTime;
@@ -79,8 +90,11 @@ public class WaveManager : MonoBehaviour
 
             SetupNextItemSpawn(); // 다음 웨이브의 랜덤 스폰 시간 다시 세팅
             
-            // 🟢 지휘자는 그저 현재 몇 단계인지만 동네방네 소문냅니다.
-            TrollEvents.OnWaveStageChanged?.Invoke(_currentStage);
+            // 🟢 방장이 다음 단계로 넘어갔음을 모두에게 전파
+            if (NetworkGameManager.Instance != null)
+            {
+                NetworkGameManager.Instance.BroadcastWaveStage(_currentStage);
+            }
         }
     }
 
@@ -94,6 +108,9 @@ public class WaveManager : MonoBehaviour
     // 아이템을 판별하고 스폰하는 핵심 함수
     private void SpawnItemForCurrentWave()
     {
+        // 다시 한 번 방장 체크 (이중 안전장치)
+        if (!PhotonNetwork.IsMasterClient) return;
+
         _hasSpawnedItemInCurrentWave = true; // 중복 생성 방지
 
         // 배열 범위를 초과하지 않도록 안전장치 (9단계를 넘어가면 마지막 값 유지)
@@ -128,8 +145,9 @@ public class WaveManager : MonoBehaviour
             int randomSpawnIndex = Random.Range(0, _itemSpawnPoints.Length);
             Transform spawnPoint = _itemSpawnPoints[randomSpawnIndex];
 
-            Instantiate(prefabToSpawn, spawnPoint.position, spawnPoint.rotation);
-            Debug.Log($"🎁 [WaveManager] 아이템 드롭: {prefabToSpawn.name} (위치: {spawnPoint.name})");
+           // 🟢 Instantiate 대신 서버 매니저의 네트워크 소환 로직 사용!
+            string prefabName = prefabToSpawn.name;
+            NetworkGameManager.Instance.SpawnNetworkObject(prefabName, spawnPoint.position, spawnPoint.rotation);
         }
     }
 }

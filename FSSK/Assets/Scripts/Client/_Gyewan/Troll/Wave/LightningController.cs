@@ -3,8 +3,9 @@ using UnityEngine.UI;
 using DG.Tweening;
 using IEnumerator = System.Collections.IEnumerator;
 using System.Collections.Generic;
+using Photon.Pun; // 🟢 포톤 네임스페이스 추가
 
-public class LightningController : MonoBehaviour
+public class LightningController : MonoBehaviourPun
 {
     [System.Serializable]
     public struct LightningPattern
@@ -47,6 +48,9 @@ public class LightningController : MonoBehaviour
 
     private void HandleWaveStage(int stage)
     {
+        // 🟢 가장 중요한 핵심! "방장"만 번개의 주기를 계산합니다.
+        if (!PhotonNetwork.IsMasterClient) return;
+
         // 🟢 1. List 범위를 초과하는 무한 웨이브 방지용 안전장치 (최대 단계 유지)
         int targetIndex = Mathf.Min(stage, _levelProgression.Count - 1);
         
@@ -82,35 +86,40 @@ public class LightningController : MonoBehaviour
     {
         while (true)
         {
-            // 🟢 현재 레벨에 맞춰 추가된 패턴들 중 하나를 뽑아옵니다.
-            LightningPattern selectedPattern = GetRandomPattern(level);
+            // 1. 방장이 다음 번개의 패턴과 대기 시간을 뽑습니다.
+            int maxPatternIndex = Mathf.Clamp(level, 1, 3);
+            int randomPatternIndex = Random.Range(1, maxPatternIndex + 1);
 
+            LightningPattern selectedPattern = GetPatternByIndex(randomPatternIndex);
             float waitTime = Random.Range(selectedPattern.minInterval, selectedPattern.maxInterval);
             yield return new WaitForSeconds(waitTime);
 
-            yield return StartCoroutine(ExecuteLightningSequence(selectedPattern));
+            // 2. 대기 시간이 끝나면, 모든 클라이언트에게 "이 패턴으로 연출 재생해!" 하고 소리칩니다.
+            photonView.RPC("PlayLightningStrikeRPC", RpcTarget.All, randomPatternIndex);
         }
     }
 
     // 🟢 가장 핵심이 되는 기획 로직 구현부
-    private LightningPattern GetRandomPattern(int level)
+    private LightningPattern GetPatternByIndex(int index)
     {
-        // 안전장치: 최대 3단계로 제한
-        int maxPatternIndex = Mathf.Clamp(level, 1, 3);
-        
-        // Random.Range(min, max)에서 int max는 Exclusive(제외)이므로 +1 해줍니다.
-        // - 1단계: Range(1, 2) -> 무조건 1 반환
-        // - 2단계: Range(1, 3) -> 1, 2 중 랜덤 반환
-        // - 3단계: Range(1, 4) -> 1, 2, 3 중 랜덤 반환
-        int randomIndex = Random.Range(1, maxPatternIndex + 1);
-
-        switch (randomIndex)
+        switch (index)
         {
             case 1: return _pattern1;
             case 2: return _pattern2;
             case 3: return _pattern3;
             default: return _pattern1;
         }
+    }
+
+    // 🟢 [추가됨] 사라졌던 RPC 수신 함수 복구! 모두의 화면에서 똑같은 번쩍임을 만들어냅니다.
+    [PunRPC]
+    private void PlayLightningStrikeRPC(int patternIndex)
+    {
+        // 진행 중이던 암전 연출이 있다면 강제 초기화
+        if (_blackoutPanel != null) _blackoutPanel.DOKill(); 
+        
+        LightningPattern patternToPlay = GetPatternByIndex(patternIndex);
+        StartCoroutine(ExecuteLightningSequence(patternToPlay));
     }
 
     private IEnumerator ExecuteLightningSequence(LightningPattern pattern)

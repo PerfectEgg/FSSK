@@ -704,7 +704,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 2147483647
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &238824530
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2297,7 +2297,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 961739749}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.5, y: 0, z: 0, w: 0.8660254}
   m_LocalPosition: {x: 0, y: 15, z: -8.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -2352,7 +2352,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &988971593
 Transform:
   m_ObjectHideFlags: 0
@@ -2382,22 +2382,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TrollManager
   _trollDatabase:
   - trollType: 1
-    trollPrefab: {fileID: 4793174993922422824, guid: 6e2d039c45b04da4bab08b0ff0642b41, type: 3}
+    trollPrefab: {fileID: 4793174993922422824, guid: 9431d7242ac85e945ac74f369089622c, type: 3}
     spawnWeight: 10
   - trollType: 2
-    trollPrefab: {fileID: 7882202695067215425, guid: 10afbe466be1d764282924c5fcffb1ef, type: 3}
+    trollPrefab: {fileID: 7882202695067215425, guid: 78b3a7bd048ca034588beb2371c78d1e, type: 3}
     spawnWeight: 10
   - trollType: 3
-    trollPrefab: {fileID: 100092, guid: d3dacbcc34c7b4d4bba3ec090d28a506, type: 3}
+    trollPrefab: {fileID: 100092, guid: e713b9379c9b98641bbca5e1d5dfcfd5, type: 3}
     spawnWeight: 20
   - trollType: 4
-    trollPrefab: {fileID: 6632552687034672510, guid: 6b8294999536f744bbec846d5daaaadc, type: 3}
+    trollPrefab: {fileID: 6632552687034672510, guid: 729f18d5b0bf5d943941d9f8b16039f7, type: 3}
     spawnWeight: 20
   - trollType: 5
-    trollPrefab: {fileID: 2908643636656555739, guid: 51600177e32fb5f4794800610e7751f5, type: 3}
+    trollPrefab: {fileID: 2908643636656555739, guid: 0222d4e57bf57db4d86c03eb67dace2b, type: 3}
     spawnWeight: 20
   - trollType: 6
-    trollPrefab: {fileID: 4445156561732808122, guid: 16206bd3a5242804bab9df8e25a1feb5, type: 3}
+    trollPrefab: {fileID: 4445156561732808122, guid: d5a3e3a3aa266c9489eeb8fc19158ec2, type: 3}
     spawnWeight: 20
   _groundSpawnPoints:
   - {fileID: 918055725}
@@ -5762,8 +5762,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveManager
   _stageDuration: 3
   _stageDelay: 1
-  _rumPrefab: {fileID: 6098799951655430639, guid: 7629b1ecadc64c64bb7292d69ef3a7f6, type: 3}
-  _octopusPrefab: {fileID: 6105795410577983554, guid: 5f0b30303c6448d42bda3c05e6b5ffe9, type: 3}
+  _rumPrefab: {fileID: 5359836104610796689, guid: 0d79cd63ee8c36f489d0c431c39021f6, type: 3}
+  _octopusPrefab: {fileID: 6105795410577983554, guid: 5e98d2e7998d9c14681d7a223f57f36c, type: 3}
   _itemSpawnPoints:
   - {fileID: 1107067885}
   - {fileID: 744521546}
