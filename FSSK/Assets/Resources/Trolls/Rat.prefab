@@ -341,7 +341,6 @@ MonoBehaviour:
   _spawnTiltAngle: -90
   _spawnY: -0.5
   _throwForce: 20
-  _holdDistance: 12.5
   _moveSpeed: 5
   _arrivalThreshold: 1
   _heldGoldStoneVisual: {fileID: 8444669582023812560}
@@ -362,10 +361,11 @@ MonoBehaviour:
   Group: 0
   prefixField: -1
   Synchronization: 3
-  OwnershipTransfer: 0
+  OwnershipTransfer: 1
   observableSearch: 2
   ObservedComponents:
   - {fileID: 2764546437121855009}
+  - {fileID: -1411370937200031576}
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0

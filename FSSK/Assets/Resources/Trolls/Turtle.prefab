@@ -421,7 +421,6 @@ MonoBehaviour:
   _spawnTiltAngle: -90
   _spawnY: 0.5
   _throwForce: 20
-  _holdDistance: 12.5
   _moveSpeed: 1
 --- !u!114 &2104888419640460250
 MonoBehaviour:
@@ -457,10 +456,11 @@ MonoBehaviour:
   Group: 0
   prefixField: -1
   Synchronization: 3
-  OwnershipTransfer: 0
+  OwnershipTransfer: 1
   observableSearch: 2
   ObservedComponents:
   - {fileID: 6743063401390027577}
+  - {fileID: 1275445291049203391}
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0

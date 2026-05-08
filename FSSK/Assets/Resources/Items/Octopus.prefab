@@ -845,7 +845,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Octopus
   _throwForce: 100
-  _holdDistance: 10
 --- !u!114 &8954435648478758941
 MonoBehaviour:
   m_ObjectHideFlags: 0

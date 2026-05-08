@@ -44,7 +44,6 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     [Header("Animal Settings")]
     [SerializeField] protected float _throwForce = 20f; // 던지는 힘
-    [SerializeField] private float _holdDistance = 12.5f;    // 잡고 있을 때의 거리
     private Vector3 _originalPosition;   // 움직이는 위치를 저장하고 되돌릴 때 사용할 변수
 
     protected virtual void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;

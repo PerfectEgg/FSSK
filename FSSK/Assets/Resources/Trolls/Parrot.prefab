@@ -1700,7 +1700,6 @@ MonoBehaviour:
   _spawnTiltAngle: -90
   _spawnY: 0
   _throwForce: 20
-  _holdDistance: 12.5
   _flyHeight: 5
 --- !u!114 &4927737017595231870
 MonoBehaviour:

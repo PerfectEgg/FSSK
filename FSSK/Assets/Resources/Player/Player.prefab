@@ -263,7 +263,7 @@ MonoBehaviour:
   _reachDistance: 100
   _interactableLayer:
     serializedVersion: 2
-    m_Bits: 1088
+    m_Bits: 64
   _holdDistance: 7.5
   _holdWeight: 0.4
   _ikTransitionSpeed: 5

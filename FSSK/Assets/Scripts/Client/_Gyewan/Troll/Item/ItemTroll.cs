@@ -11,7 +11,6 @@ public abstract class ItemTroll : TrollBase, IDraggable
 
     [Header("Item Settings")]
     [SerializeField] protected float _throwForce = 100f; // 던지는 힘
-    [SerializeField] private float _holdDistance = 10f;    // 잡고 있을 때의 거리
 
     protected Vector3 _grabbedScale = Vector3.zero; // 🟢 잡았을 때 원래 크기
 
