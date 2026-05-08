@@ -27,6 +27,11 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private int _winScoreDelta = 10; // 플러스 점수
     [SerializeField] private int _loseScoreDelta = -10; // 마이너스 점수
 
+    // 플레이어 스폰을 위한 변수
+    [Header("Player Spawn")]
+    [SerializeField] private Transform[] _spawnPoints; // 인스펙터에서 의자 2개 할당
+    [SerializeField] private string _playerPrefabName = "Player"; // Resources 폴더 안의 해적 프리팹 이름
+
     // ──────────────────────────────────────────────────────────────
     //  상태
     // ──────────────────────────────────────────────────────────────
@@ -60,8 +65,33 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
     void Start()
     {
+        // 방에 들어온 '모든 클라이언트'는 무조건 자신의 캐릭터를 스폰합니다.
+        if (PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InRoom)
+        {
+            SpawnMyPlayer();
+        }
+
         if (PhotonNetwork.IsMasterClient)
             BeginGame();
+    }
+
+    // 플레이어 스폰 함수 추가 (안전한 나머지 연산자 사용)
+    private void SpawnMyPlayer()
+    {
+        if (_spawnPoints == null || _spawnPoints.Length == 0)
+        {
+            Debug.LogError("🚨 [NetworkGameManager] 인스펙터에 스폰 포인트가 설정되지 않았습니다!");
+            return;
+        }
+
+        int actorNum = PhotonNetwork.LocalPlayer.ActorNumber;
+        int safeIdx = (actorNum - 1) % _spawnPoints.Length; // 1번 유저는 0번 자리, 2번 유저는 1번 자리
+        Transform spawnPoint = _spawnPoints[safeIdx];
+
+        // ⚠️ 주의: 프리팹은 반드시 'Resources' 폴더 안에 있어야 합니다.
+        PhotonNetwork.Instantiate(_playerPrefabName, spawnPoint.position, spawnPoint.rotation);
+        
+        Debug.Log($"[NetworkGameManager] 내 캐릭터 소환 완료 (Actor: {actorNum}, 자리: {safeIdx}번)");
     }
 
     void Update()
