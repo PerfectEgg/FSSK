@@ -3056,7 +3056,7 @@ MonoBehaviour:
   _spawnPoints:
   - {fileID: 1782137700}
   - {fileID: 1549789360}
-  _playerPrefabName: Player
+  _playerPrefabName: Player/Player
 --- !u!114 &1291943542
 MonoBehaviour:
   m_ObjectHideFlags: 0
