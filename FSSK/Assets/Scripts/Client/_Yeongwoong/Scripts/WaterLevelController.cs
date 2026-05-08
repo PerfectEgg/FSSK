@@ -102,22 +102,27 @@ public sealed class WaterLevelController : MonoBehaviour
     [SerializeField] private bool syncStageDurationFromWaveManager = true;
 
     [Header("Water Root Y")]
-    [SerializeField] private float hiddenY = -214.4f;
+    [SerializeField] private float hiddenY = -122.4f;
     [FormerlySerializedAs("lowerStartY")]
-    [SerializeField] private float startY = -214.4f;
+    [SerializeField] private float startY = -122.4f;
     [FormerlySerializedAs("deckTargetY")]
-    [SerializeField] private float targetY = -16.6f;
+    [SerializeField] private float targetY = -16.5f;
+
+    [Header("Final Surge")]
+    [SerializeField] private bool surgeAfterTargetStage = true;
+    [SerializeField] private float surgeY = -5.5f;
+    [SerializeField, Min(0f)] private float surgeDurationSeconds = 2f;
 
     [Header("Wave Scale")]
     [SerializeField] private float defaultWaveScale = 1f;
-    [SerializeField] private float reducedWaveScale = 0.3f;
-    [SerializeField] private float scaleDownStartY = -60f;
-    [SerializeField] private float scaleRestoreStartY = -38.5f;
-    [SerializeField] private float scaleRestoreEndY = -16.6f;
+    [SerializeField] private float reducedWaveScale = 0.05f;
+    [SerializeField] private float scaleDownStartY = -54f;
+    [SerializeField] private float scaleRestoreStartY = -47f;
+    [SerializeField] private float scaleRestoreEndY = -40f;
 
     [Header("Water")]
     [FormerlySerializedAs("lowerWater")]
-    [SerializeField] private WaterLayer water = new("Water");
+    [SerializeField] private WaterLayer water = new("Lower");
 
     private int _currentStage;
     private float _stageStartedAt;
@@ -152,6 +157,11 @@ public sealed class WaterLevelController : MonoBehaviour
     {
         targetStage = Mathf.Max(targetStage, appearStage + 1);
         stageDurationSeconds = Mathf.Max(0.01f, stageDurationSeconds);
+        if (surgeAfterTargetStage)
+        {
+            surgeY = Mathf.Max(surgeY, targetY);
+            surgeDurationSeconds = Mathf.Max(0f, surgeDurationSeconds);
+        }
     }
 
     public void SetStage(int stage)
@@ -166,7 +176,7 @@ public sealed class WaterLevelController : MonoBehaviour
 
     private void SetStage(int stage, bool force)
     {
-        int clampedStage = Mathf.Max(0, stage);
+        int clampedStage = Mathf.Clamp(stage, 0, GetStopStage());
 
         if (!force && _hasStage && _currentStage == clampedStage)
         {
@@ -196,10 +206,16 @@ public sealed class WaterLevelController : MonoBehaviour
 
     private float GetStagePosition()
     {
-        int stage = Mathf.Max(0, _currentStage);
+        int stopStage = GetStopStage();
+        int stage = Mathf.Clamp(_currentStage, 0, stopStage);
+        if (stage >= stopStage)
+        {
+            return stopStage;
+        }
+
         float duration = GetStageDurationSeconds();
         float progress = Mathf.Clamp01((Time.time - _stageStartedAt) / duration);
-        return stage + progress;
+        return Mathf.Min(stage + progress, stopStage);
     }
 
     private float GetStageDurationSeconds()
@@ -226,6 +242,18 @@ public sealed class WaterLevelController : MonoBehaviour
 
     private float GetWaterY(float stagePosition)
     {
+        if (surgeAfterTargetStage && stagePosition >= targetStage + 1)
+        {
+            if (surgeDurationSeconds <= 0f)
+            {
+                return surgeY;
+            }
+
+            float elapsed = Mathf.Max(0f, Time.time - _stageStartedAt);
+            float surgeT = Mathf.Clamp01(elapsed / surgeDurationSeconds);
+            return Mathf.Lerp(targetY, surgeY, surgeT);
+        }
+
         if (stagePosition >= targetStage)
         {
             return targetY;
@@ -233,6 +261,12 @@ public sealed class WaterLevelController : MonoBehaviour
 
         float t = Mathf.InverseLerp(appearStage, targetStage, stagePosition);
         return Mathf.Lerp(startY, targetY, t);
+    }
+
+    private int GetStopStage()
+    {
+        int stopStage = surgeAfterTargetStage ? targetStage + 1 : targetStage;
+        return Mathf.Max(stopStage, appearStage + 1);
     }
 
     private float GetWaveScale(float waterY)
