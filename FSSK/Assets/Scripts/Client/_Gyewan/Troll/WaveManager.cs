@@ -17,8 +17,8 @@ public class WaveManager : MonoBehaviour
     private float _endTime;          // 웨이브 아이템 드랍 종료 시점
 
     [Header("아이템 설정")]
-    [SerializeField] private GameObject _rumPrefab;         // 드랍할 아이템 프리팹
-    [SerializeField] private GameObject _octopusPrefab;     // 드랍할 아이템 프리팹
+    [SerializeField] private string _rumPrefabPath = "Items/Rum";         // 예: Resources/Items/Rum.prefab
+    [SerializeField] private string _octopusPrefabPath = "Items/Octopus"; // 예: Resources/Items/Octopus.prefab
     [SerializeField] private Transform[] _itemSpawnPoints;  // 아이템 스폰 포인트
 
     // 내부 상태 변수
@@ -117,7 +117,8 @@ public class WaveManager : MonoBehaviour
         int targetIndex = Mathf.Min(_currentStage, _itemProgression.Count - 1);
         int itemType = _itemProgression[targetIndex];
 
-        GameObject prefabToSpawn = null;
+        // 🟢 소환할 문자열(경로)을 담을 변수
+        string prefabPathToSpawn = "";
 
         // switch 문으로 아이템 종류 할당
         switch (itemType)
@@ -127,26 +128,26 @@ public class WaveManager : MonoBehaviour
                 return;
             case 0:
                 // 0은 럼 드랍
-                prefabToSpawn = _rumPrefab;
+                prefabPathToSpawn = _rumPrefabPath;
                 break;
             case 1:
                 // 1은 문어 드랍
-                prefabToSpawn = _octopusPrefab;
+                prefabPathToSpawn = _octopusPrefabPath;
                 break;
             case 2:
                 // 2는 50% 확률로 럼 또는 문어 드랍
-                prefabToSpawn = (Random.value < 0.5f) ? _rumPrefab : _octopusPrefab;
+                prefabPathToSpawn = (Random.value < 0.5f) ? _rumPrefabPath : _octopusPrefabPath;
                 break;
         }
 
         // 스폰 포인트가 할당되어 있고 프리팹이 있다면 생성!
-        if (prefabToSpawn != null && _itemSpawnPoints.Length > 0)
+        if (prefabPathToSpawn != null && _itemSpawnPoints.Length > 0)
         {
             int randomSpawnIndex = Random.Range(0, _itemSpawnPoints.Length);
             Transform spawnPoint = _itemSpawnPoints[randomSpawnIndex];
 
            // 🟢 Instantiate 대신 서버 매니저의 네트워크 소환 로직 사용!
-            string prefabName = prefabToSpawn.name;
+            string prefabName = prefabPathToSpawn;
             NetworkGameManager.Instance.SpawnNetworkObject(prefabName, spawnPoint.position, spawnPoint.rotation);
         }
     }

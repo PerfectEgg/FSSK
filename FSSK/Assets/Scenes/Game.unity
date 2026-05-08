@@ -2382,22 +2382,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TrollManager
   _trollDatabase:
   - trollType: 1
-    trollPrefab: {fileID: 4793174993922422824, guid: 9431d7242ac85e945ac74f369089622c, type: 3}
+    trollPrefabPath: Trolls/Kraken_Test
     spawnWeight: 10
   - trollType: 2
-    trollPrefab: {fileID: 7882202695067215425, guid: 78b3a7bd048ca034588beb2371c78d1e, type: 3}
+    trollPrefabPath: Trolls/Siren_Test
     spawnWeight: 10
   - trollType: 3
-    trollPrefab: {fileID: 100092, guid: e713b9379c9b98641bbca5e1d5dfcfd5, type: 3}
+    trollPrefabPath: Trolls/Parrot
     spawnWeight: 20
   - trollType: 4
-    trollPrefab: {fileID: 6632552687034672510, guid: 729f18d5b0bf5d943941d9f8b16039f7, type: 3}
+    trollPrefabPath: Trolls/Rat
     spawnWeight: 20
   - trollType: 5
-    trollPrefab: {fileID: 2908643636656555739, guid: 0222d4e57bf57db4d86c03eb67dace2b, type: 3}
+    trollPrefabPath: Trolls/Turtle
     spawnWeight: 20
   - trollType: 6
-    trollPrefab: {fileID: 4445156561732808122, guid: d5a3e3a3aa266c9489eeb8fc19158ec2, type: 3}
+    trollPrefabPath: Trolls/SeaCrab
     spawnWeight: 20
   _groundSpawnPoints:
   - {fileID: 918055725}
@@ -5762,8 +5762,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveManager
   _stageDuration: 3
   _stageDelay: 1
-  _rumPrefab: {fileID: 5359836104610796689, guid: 0d79cd63ee8c36f489d0c431c39021f6, type: 3}
-  _octopusPrefab: {fileID: 6105795410577983554, guid: 5e98d2e7998d9c14681d7a223f57f36c, type: 3}
+  _rumPrefabPath: Items/Rum
+  _octopusPrefabPath: Items/Octopus
   _itemSpawnPoints:
   - {fileID: 1107067885}
   - {fileID: 744521546}

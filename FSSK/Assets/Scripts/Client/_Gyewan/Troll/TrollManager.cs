@@ -12,7 +12,7 @@ public class TrollManager : MonoBehaviour
     public struct TrollData
     {
         public TrollType trollType;
-        public GameObject trollPrefab;      // Resources 폴더 내의 프리팹
+        public string trollPrefabPath;  // Resources 폴더 내의 프리팹 경로
         [Tooltip("등장 확률 가중치 (예: 10, 20)")]
         public int spawnWeight;
     }
@@ -130,9 +130,9 @@ public class TrollManager : MonoBehaviour
         Debug.Log($"🚨 [트롤링 매니저] {_executionCount}번째 이벤트: {selectedTroll.trollType} 발생!");
 
         // 트롤 생성
-        if (selectedTroll.trollPrefab != null)
+        if (selectedTroll.trollPrefabPath != null)
         {
-            string prefabName = selectedTroll.trollPrefab.name;
+            string prefabName = selectedTroll.trollPrefabPath; // 예: "Trolls/Kraken"
             Vector3 spawnPos;
 
             if (selectedTroll.trollType == TrollType.Kraken || selectedTroll.trollType == TrollType.Siren)
