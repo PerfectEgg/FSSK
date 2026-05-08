@@ -77,7 +77,11 @@ public abstract class ItemTroll : TrollBase, IDraggable
         // 🟢 물리 연산 복구 (던지기 위해)
         if (rb != null) rb.isKinematic = false;
 
-        Throw(Camera.main.transform.forward);
+        if (photonView.IsMine)
+        {
+            if (rb != null) rb.isKinematic = false;
+            Throw(Camera.main.transform.forward);
+        }
     }
 
     private void Throw(Vector3 direction)

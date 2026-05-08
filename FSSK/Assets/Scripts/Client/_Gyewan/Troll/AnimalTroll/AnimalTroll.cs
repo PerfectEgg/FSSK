@@ -233,7 +233,10 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     {
         _isGrabbed = false;
 
-        CheckDropLocation();
+        if (photonView.IsMine)
+        {
+            CheckDropLocation();
+        }
     }
 
     private void CheckDropLocation()

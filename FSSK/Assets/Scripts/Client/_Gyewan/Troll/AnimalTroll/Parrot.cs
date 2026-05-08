@@ -25,8 +25,7 @@ public class Parrot : AnimalTroll
         // 애니메이터 컴포넌트 캐싱
         _animator = GetComponent<Animator>();
 
-        // 🟢 [멀티플레이 핵심] 목적지와 비행 시간 등 '랜덤'이 들어가는 계산은 오직 방장(주인)만 합니다!
-        // 남의 컴퓨터에서 각자 랜덤을 돌리면 앵무새가 서로 다른 곳으로 날아가게 됩니다.
+        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
         if (!photonView.IsMine) return;
 
         _startPos = transform.position;
