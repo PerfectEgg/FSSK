@@ -440,6 +440,7 @@ MonoBehaviour:
   consumeTurnWhenBlocked: 1
   countForBlockerStackWin: 1
   attachmentTarget: {fileID: 0}
+  followAnimatedVisualSurface: 1
 --- !u!114 &8502061164072753538
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -66,6 +66,10 @@ MonoBehaviour:
   - SyncAnimationRPC
   - SyncAnimationSetFloatRPC
   - RpcApplyPlacementResult
+  - RpcApplyBlockedPlacementResult
+  - RpcApplyRemovalResult
+  - RpcRequestRandomRemoval
+  - RpcConfirmRemovalRequest
   - RpcSubmitPlacementRequest
   - ChangeStateRPC
   - RestoreToTableRPC

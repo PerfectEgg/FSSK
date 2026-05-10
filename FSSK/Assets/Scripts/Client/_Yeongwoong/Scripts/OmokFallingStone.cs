@@ -25,15 +25,25 @@ public class OmokFallingStone : MonoBehaviour
     private Vector2Int _targetCoordinate;
     private Vector3 _targetWorldPosition;
     private Quaternion _targetWorldRotation = Quaternion.identity;
+    private Vector3 _releaseWorldPosition;
     private float _targetSnapOffsetAlongGridUp;
     private bool _hasTargetSnapOffset;
     private float _gravityScale = 1f;
     private bool _guideStraightToTarget;
     private bool _hasBlockerAnchor;
+    private bool _hasForcedBlockerSnapshot;
+    private bool _forcedBlockerConsumesTurn;
+    private bool _forcedBlockerCountsForStackWin;
+    private Transform _forcedBlockerTarget;
+    private Vector3 _forcedBlockerLocalPosition;
+    private Quaternion _forcedBlockerLocalRotation = Quaternion.identity;
     private Vector3 _straightGuideStartPosition;
     private Vector3 _previousBlockerProbePosition;
     private Vector3 _blockerAnchorLocalPosition;
     private Quaternion _blockerAnchorLocalRotation;
+    private Collider _blockerVisualSurfaceCollider;
+    private bool _followBlockerVisualSurface;
+    private float _blockerVisualSurfaceBaseOffset;
 
     public Vector2Int Coordinate { get; private set; }
     public bool IsSnapped => _isSnapped;
@@ -45,6 +55,13 @@ public class OmokFallingStone : MonoBehaviour
     public bool HasReservedTarget => _hasReservedTarget;
     public Vector2Int TargetCoordinate => _targetCoordinate;
     public Vector3 TargetWorldPosition => _targetWorldPosition;
+    public Vector3 ReleaseWorldPosition => _releaseWorldPosition;
+    public bool HasForcedBlockerSnapshot => _hasForcedBlockerSnapshot;
+    public bool ForcedBlockerConsumesTurn => _forcedBlockerConsumesTurn;
+    public bool ForcedBlockerCountsForStackWin => _forcedBlockerCountsForStackWin;
+    public Transform ForcedBlockerTarget => _forcedBlockerTarget;
+    public Vector3 ForcedBlockerLocalPosition => _forcedBlockerLocalPosition;
+    public Quaternion ForcedBlockerLocalRotation => _forcedBlockerLocalRotation;
 
     private void Awake()
     {
@@ -78,6 +95,15 @@ public class OmokFallingStone : MonoBehaviour
         _hasBoardContact = false;
         _boardContactTime = 0f;
         _hasBlockerAnchor = false;
+        _blockerVisualSurfaceCollider = null;
+        _followBlockerVisualSurface = false;
+        _blockerVisualSurfaceBaseOffset = 0f;
+        _hasForcedBlockerSnapshot = false;
+        _forcedBlockerTarget = null;
+        _forcedBlockerLocalPosition = default;
+        _forcedBlockerLocalRotation = Quaternion.identity;
+        _forcedBlockerConsumesTurn = true;
+        _forcedBlockerCountsForStackWin = true;
         _hasTargetSnapOffset = false;
         _spawnTime = Time.time;
         StoneColor = stoneColor;
@@ -86,6 +112,7 @@ public class OmokFallingStone : MonoBehaviour
         _targetCoordinate = reservedCoordinate;
         _targetWorldPosition = snappedWorldPosition;
         _targetWorldRotation = snappedWorldRotation;
+        _releaseWorldPosition = transform.position;
         if (_grid != null)
         {
             _targetSnapOffsetAlongGridUp = CalculateSnapOffsetAlongNormal(_grid.transform.up);
@@ -96,6 +123,28 @@ public class OmokFallingStone : MonoBehaviour
         _guideStraightToTarget = guideStraight;
         _straightGuideStartPosition = transform.position;
         _previousBlockerProbePosition = GetBlockerProbePosition();
+    }
+
+    public void ConfigureForcedBlockerSnapshot(
+        Transform blockerTarget,
+        Vector3 localPosition,
+        Quaternion localRotation,
+        bool consumeTurnWhenBlocked,
+        bool countForStackWin)
+    {
+        if (blockerTarget == null)
+        {
+            _hasForcedBlockerSnapshot = false;
+            _forcedBlockerTarget = null;
+            return;
+        }
+
+        _hasForcedBlockerSnapshot = true;
+        _forcedBlockerTarget = blockerTarget;
+        _forcedBlockerLocalPosition = localPosition;
+        _forcedBlockerLocalRotation = localRotation;
+        _forcedBlockerConsumesTurn = consumeTurnWhenBlocked;
+        _forcedBlockerCountsForStackWin = countForStackWin;
     }
 
     private void Update()
@@ -134,6 +183,7 @@ public class OmokFallingStone : MonoBehaviour
 
         transform.localPosition = _blockerAnchorLocalPosition;
         transform.localRotation = _blockerAnchorLocalRotation;
+        ApplyBlockerVisualSurfaceFollow();
     }
 
     private void FixedUpdate()
@@ -294,6 +344,9 @@ public class OmokFallingStone : MonoBehaviour
         _isSnapped = false;
         _isBlockedByBlocker = false;
         _hasReservedTarget = false;
+        _blockerVisualSurfaceCollider = null;
+        _followBlockerVisualSurface = false;
+        _blockerVisualSurfaceBaseOffset = 0f;
 
         if (_cachedRigidbody != null)
         {
@@ -319,15 +372,39 @@ public class OmokFallingStone : MonoBehaviour
 
     public void StickToBlocker(Transform blockerTarget, int blockerLayer)
     {
-        StickToBlocker(blockerTarget, blockerLayer, false, default);
+        StickToBlocker(blockerTarget, blockerLayer, false, default, null, false, 0f);
     }
 
     public void StickToBlocker(Transform blockerTarget, int blockerLayer, Vector3 worldPosition)
     {
-        StickToBlocker(blockerTarget, blockerLayer, true, worldPosition);
+        StickToBlocker(blockerTarget, blockerLayer, true, worldPosition, null, false, 0f);
     }
 
-    private void StickToBlocker(Transform blockerTarget, int blockerLayer, bool applyPosition, Vector3 worldPosition)
+    public void StickToBlocker(
+        Transform blockerTarget,
+        int blockerLayer,
+        Vector3 worldPosition,
+        Collider visualSurfaceCollider,
+        float visualSurfaceBaseOffset)
+    {
+        StickToBlocker(
+            blockerTarget,
+            blockerLayer,
+            true,
+            worldPosition,
+            visualSurfaceCollider,
+            true,
+            visualSurfaceBaseOffset);
+    }
+
+    private void StickToBlocker(
+        Transform blockerTarget,
+        int blockerLayer,
+        bool applyPosition,
+        Vector3 worldPosition,
+        Collider visualSurfaceCollider,
+        bool followVisualSurface,
+        float visualSurfaceBaseOffset)
     {
         if (_isBlockedByBlocker)
         {
@@ -338,6 +415,9 @@ public class OmokFallingStone : MonoBehaviour
         _hasReservedTarget = false;
         _guideStraightToTarget = false;
         BlockerTarget = blockerTarget;
+        _blockerVisualSurfaceCollider = visualSurfaceCollider;
+        _followBlockerVisualSurface = followVisualSurface && visualSurfaceCollider != null;
+        _blockerVisualSurfaceBaseOffset = visualSurfaceBaseOffset;
 
         if (_cachedRigidbody != null)
         {
@@ -360,6 +440,27 @@ public class OmokFallingStone : MonoBehaviour
         if (blockerLayer >= 0)
         {
             SetLayerRecursively(transform, blockerLayer);
+        }
+    }
+
+    private void ApplyBlockerVisualSurfaceFollow()
+    {
+        if (!_followBlockerVisualSurface ||
+            _owner == null ||
+            _blockerVisualSurfaceCollider == null ||
+            !_owner.TryGetBlockerVisualSurfaceDelta(
+                _blockerVisualSurfaceCollider,
+                _blockerVisualSurfaceBaseOffset,
+                out Vector3 surfaceDelta))
+        {
+            return;
+        }
+
+        transform.position += surfaceDelta;
+        if (_cachedRigidbody != null)
+        {
+            _cachedRigidbody.position = transform.position;
+            _cachedRigidbody.rotation = transform.rotation;
         }
     }
 
@@ -389,6 +490,12 @@ public class OmokFallingStone : MonoBehaviour
 
         if (Time.time - _spawnTime < minLifetimeBeforeSnap)
         {
+            return;
+        }
+
+        if (_hasForcedBlockerSnapshot && _forcedBlockerTarget != null)
+        {
+            _owner.TryStickStoneToBlockerSnapshot(this);
             return;
         }
 

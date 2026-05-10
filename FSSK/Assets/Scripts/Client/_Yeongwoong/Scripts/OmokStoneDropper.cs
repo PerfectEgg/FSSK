@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Photon.Pun;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Serialization;
@@ -41,13 +42,25 @@ public readonly struct OmokStonePlacementRequest
         Vector2Int targetCoordinate,
         Vector3 releasePosition,
         bool lockToTargetCoordinate = false,
-        bool allowBlockedCoordinateForBlocker = false)
+        bool allowBlockedCoordinateForBlocker = false,
+        bool hasBlockerSnapshot = false,
+        int blockerViewId = 0,
+        Vector3 blockerLocalPosition = default,
+        Quaternion blockerLocalRotation = default,
+        bool blockerConsumesTurnWhenBlocked = true,
+        bool blockerCountsForStackWin = true)
     {
         StoneColor = stoneColor;
         TargetCoordinate = targetCoordinate;
         ReleasePosition = releasePosition;
         LockToTargetCoordinate = lockToTargetCoordinate;
         AllowBlockedCoordinateForBlocker = allowBlockedCoordinateForBlocker;
+        HasBlockerSnapshot = hasBlockerSnapshot;
+        BlockerViewId = blockerViewId;
+        BlockerLocalPosition = blockerLocalPosition;
+        BlockerLocalRotation = hasBlockerSnapshot ? blockerLocalRotation : Quaternion.identity;
+        BlockerConsumesTurnWhenBlocked = blockerConsumesTurnWhenBlocked;
+        BlockerCountsForStackWin = blockerCountsForStackWin;
     }
 
     public OmokStoneColor StoneColor { get; }
@@ -55,20 +68,69 @@ public readonly struct OmokStonePlacementRequest
     public Vector3 ReleasePosition { get; }
     public bool LockToTargetCoordinate { get; }
     public bool AllowBlockedCoordinateForBlocker { get; }
+    public bool HasBlockerSnapshot { get; }
+    public int BlockerViewId { get; }
+    public Vector3 BlockerLocalPosition { get; }
+    public Quaternion BlockerLocalRotation { get; }
+    public bool BlockerConsumesTurnWhenBlocked { get; }
+    public bool BlockerCountsForStackWin { get; }
 }
 
 public readonly struct OmokBlockedStoneResult
 {
     public OmokBlockedStoneResult(OmokStoneColor stoneColor, Transform blockerTarget, int consecutiveSameColorStackCount)
+        : this(stoneColor, blockerTarget, consecutiveSameColorStackCount, default)
+    {
+    }
+
+    public OmokBlockedStoneResult(
+        OmokStoneColor stoneColor,
+        Transform blockerTarget,
+        int consecutiveSameColorStackCount,
+        Vector2Int targetCoordinate)
+        : this(
+            stoneColor,
+            blockerTarget,
+            consecutiveSameColorStackCount,
+            targetCoordinate,
+            false,
+            0,
+            default,
+            Quaternion.identity)
+    {
+    }
+
+    public OmokBlockedStoneResult(
+        OmokStoneColor stoneColor,
+        Transform blockerTarget,
+        int consecutiveSameColorStackCount,
+        Vector2Int targetCoordinate,
+        bool hasBlockerSnapshot,
+        int blockerViewId,
+        Vector3 blockerLocalPosition,
+        Quaternion blockerLocalRotation,
+        Vector3 releasePosition = default)
     {
         StoneColor = stoneColor;
         BlockerTarget = blockerTarget;
         ConsecutiveSameColorStackCount = consecutiveSameColorStackCount;
+        TargetCoordinate = targetCoordinate;
+        HasBlockerSnapshot = hasBlockerSnapshot;
+        BlockerViewId = blockerViewId;
+        BlockerLocalPosition = blockerLocalPosition;
+        BlockerLocalRotation = hasBlockerSnapshot ? blockerLocalRotation : Quaternion.identity;
+        ReleasePosition = releasePosition;
     }
 
     public OmokStoneColor StoneColor { get; }
     public Transform BlockerTarget { get; }
     public int ConsecutiveSameColorStackCount { get; }
+    public Vector2Int TargetCoordinate { get; }
+    public bool HasBlockerSnapshot { get; }
+    public int BlockerViewId { get; }
+    public Vector3 BlockerLocalPosition { get; }
+    public Quaternion BlockerLocalRotation { get; }
+    public Vector3 ReleasePosition { get; }
 }
 
 [RequireComponent(typeof(OmokAimController))]
@@ -175,8 +237,6 @@ public class OmokStoneDropper : MonoBehaviour
 
     [Header("Preview")]
     [SerializeField] private bool showPreview = true;
-    [FormerlySerializedAs("releaseDragWhenParrotTouchesPreview")]
-    [SerializeField] private bool cancelDragWhenParrotOverlapsPreview = true;
     [SerializeField] private Color validPreviewColor = new(0.25f, 1f, 0.45f, 0.95f);
     [SerializeField] private Color blockedPreviewColor = new(1f, 0.3f, 0.3f, 0.95f);
     [SerializeField, Min(0.005f)] private float previewLineWidth = 1f;
@@ -191,6 +251,8 @@ public class OmokStoneDropper : MonoBehaviour
     private readonly HashSet<Vector2Int> _reservedCoordinates = new();
     private readonly Dictionary<Vector2Int, OmokFallingStone> _stonesByCoordinate = new();
     private readonly Dictionary<Transform, float> _blockerCenterStackTopY = new();
+    private readonly Dictionary<Transform, float> _blockerVisualSurfaceBaseOffset = new();
+    private readonly Dictionary<Transform, Collider> _blockerVisualSurfaceColliders = new();
     private readonly Dictionary<Transform, List<OmokFallingStone>> _blockerStoneStacks = new();
     private readonly List<Material> _draggedStonePreviewMaterials = new();
     private LineRenderer _previewRenderer;
@@ -226,8 +288,6 @@ public class OmokStoneDropper : MonoBehaviour
     public OmokStoneColor LocalManualStoneColor => GetLocalManualStoneColor();
     public OmokLocalPlayerContext LocalPlayerContext => localPlayerContext;
     public bool IsDragging => _isDraggingLauncher;
-    public bool CancelDragWhenParrotOverlapsPreview => cancelDragWhenParrotOverlapsPreview;
-    public bool ReleaseDragWhenParrotTouchesPreview => cancelDragWhenParrotOverlapsPreview;
     public event Action<OmokStonePlacementRequest> OnPlacementRequested;
     public event Action<Vector2Int, OmokStoneColor> OnStonePlaced;
     public event Action<OmokBlockedStoneResult> OnStoneBlocked;
@@ -851,11 +911,6 @@ public class OmokStoneDropper : MonoBehaviour
             !aimController.TryGetBoardAim(GetEffectiveDragHoverHeight(), raycastDistance, out OmokAimState aimState))
         {
             UpdateDraggedStoneOffBoard();
-            if (CancelDragIfParrotOverlapsPreviewScreen())
-            {
-                return;
-            }
-
             HidePreview();
             return;
         }
@@ -867,21 +922,13 @@ public class OmokStoneDropper : MonoBehaviour
             aimController.SetCurrentAimPosition(dragAimPosition);
         }
 
-        if (CancelDragIfParrotOverlapsPreviewScreen())
-        {
-            return;
-        }
-
         if (!aimState.HasCoordinate)
         {
             HidePreview();
             return;
         }
 
-        Vector2Int rawCoordinate = TryGetCoordinate(dragAimPosition, out Vector2Int clampedCoordinate)
-            ? clampedCoordinate
-            : aimState.Coordinate;
-        Vector2Int targetCoordinate = rawCoordinate;
+        Vector2Int targetCoordinate = aimState.Coordinate;
         _currentDragCoordinate = targetCoordinate;
         _currentDragReleasePosition = dragAimPosition;
         if (!IsInsideBoard(targetCoordinate))
@@ -941,10 +988,11 @@ public class OmokStoneDropper : MonoBehaviour
         GameObject releasedPreviewObject = _draggedStoneObject;
         Vector3 releasePosition = GetCurrentDragReleasePosition();
         bool isBlockerStackTarget = false;
+        PlacementPreviewState releasePreviewState = default;
         if (canPlace && releasedPreviewObject != null && IsInsideBoard(targetCoordinate))
         {
             Vector3 draggedStoneCenter = GetDraggedStonePreviewProbeCenter(_currentDragReleasePosition);
-            PlacementPreviewState releasePreviewState = BuildPlacementPreviewState(targetCoordinate, draggedStoneCenter);
+            releasePreviewState = BuildPlacementPreviewState(targetCoordinate, draggedStoneCenter);
             isBlockerStackTarget = releasePreviewState.IsBlockerStackTarget;
         }
 
@@ -960,6 +1008,8 @@ public class OmokStoneDropper : MonoBehaviour
                                                            releasePosition,
                                                            targetCoordinate,
                                                            isBlockerStackTarget,
+                                                           releasePreviewState,
+                                                           releasedPreviewObject.transform,
                                                            out request);
         }
 
@@ -1041,6 +1091,11 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        if (request.HasBlockerSnapshot && request.AllowBlockedCoordinateForBlocker)
+        {
+            return TryExecuteBlockedPlacementSnapshot(launcher, request);
+        }
+
         bool guideStraightToTarget = request.LockToTargetCoordinate;
         bool spawnAtTarget = snapTiming == OmokStoneSnapTiming.OnPlacement && !guideStraightToTarget;
         Vector3 spawnPosition = spawnAtTarget
@@ -1096,6 +1151,87 @@ public class OmokStoneDropper : MonoBehaviour
                                 snappedRotation,
                                 GetEffectiveFallGravityScale(),
                                 guideStraightToTarget);
+
+        ConfigureRigidbody(rigidbody);
+        ApplyReleaseMotion(stoneObject.transform, rigidbody);
+        return true;
+    }
+
+    public bool TryApplyBlockedPlacementVisual(OmokBlockedStoneResult blockedResult)
+    {
+        if (!blockedResult.HasBlockerSnapshot ||
+            !TryGetLauncherForColor(blockedResult.StoneColor, out OmokStoneLauncher launcher) ||
+            !IsLauncherConfigured(launcher) ||
+            grid == null ||
+            !grid.IsReady ||
+            !IsInsideBoard(blockedResult.TargetCoordinate))
+        {
+            return false;
+        }
+
+        OmokStonePlacementRequest request = new(
+            blockedResult.StoneColor,
+            blockedResult.TargetCoordinate,
+            blockedResult.ReleasePosition,
+            false,
+            true,
+            true,
+            blockedResult.BlockerViewId,
+            blockedResult.BlockerLocalPosition,
+            blockedResult.BlockerLocalRotation,
+            true,
+            true);
+
+        return TryExecuteBlockedPlacementSnapshot(launcher, request);
+    }
+
+    private bool TryExecuteBlockedPlacementSnapshot(OmokStoneLauncher launcher, OmokStonePlacementRequest request)
+    {
+        PhotonView blockerView = PhotonView.Find(request.BlockerViewId);
+        if (blockerView == null)
+        {
+            return false;
+        }
+
+        Transform blockerTarget = blockerView.transform;
+        Vector3 targetWorldPosition = blockerTarget.TransformPoint(request.BlockerLocalPosition);
+        Quaternion targetWorldRotation = blockerTarget.rotation * request.BlockerLocalRotation;
+        Vector3 spawnPosition = EnsureDropStartsAboveTarget(request.ReleasePosition, targetWorldPosition);
+        GameObject stoneObject = Instantiate(launcher.StonePrefab, spawnPosition, targetWorldRotation, stoneRoot);
+        stoneObject.transform.rotation = targetWorldRotation;
+
+        ActivateStoneColliders(stoneObject);
+
+        Rigidbody rigidbody = stoneObject.GetComponent<Rigidbody>();
+        if (rigidbody == null)
+        {
+            rigidbody = stoneObject.AddComponent<Rigidbody>();
+        }
+
+        OmokFallingStone fallingStone = stoneObject.GetComponent<OmokFallingStone>();
+        if (fallingStone == null)
+        {
+            fallingStone = stoneObject.AddComponent<OmokFallingStone>();
+        }
+
+        fallingStone.Initialize(this,
+                                grid,
+                                rigidbody,
+                                request.StoneColor,
+                                snapTiming,
+                                false,
+                                request.TargetCoordinate,
+                                targetWorldPosition,
+                                targetWorldRotation,
+                                GetEffectiveFallGravityScale(),
+                                false);
+
+        fallingStone.ConfigureForcedBlockerSnapshot(
+            blockerTarget,
+            request.BlockerLocalPosition,
+            request.BlockerLocalRotation,
+            request.BlockerConsumesTurnWhenBlocked,
+            request.BlockerCountsForStackWin);
 
         ConfigureRigidbody(rigidbody);
         ApplyReleaseMotion(stoneObject.transform, rigidbody);
@@ -1424,12 +1560,12 @@ public class OmokStoneDropper : MonoBehaviour
                 _blockerCenterStackTopY[stackKey] = Vector3.Dot(stickPosition, up) + halfHeight;
             }
 
-            stone.StickToBlocker(blockerTarget, _blockerLayer, stickPosition);
+            StickStoneToBlocker(stone, blockerTarget, blockerCollider, stackKey, stickPosition);
         }
         else
         {
             Vector3 stickPosition = GetBlockerSurfaceStonePosition(blockerCollider, stone, stone.transform.position);
-            stone.StickToBlocker(blockerTarget, _blockerLayer, stickPosition);
+            StickStoneToBlocker(stone, blockerTarget, blockerCollider, stackKey, stickPosition);
         }
 
         int consecutiveSameColorStackCount = blockerSettings.CountForBlockerStackWin
@@ -1438,7 +1574,103 @@ public class OmokStoneDropper : MonoBehaviour
 
         if (blockerSettings.ConsumeTurnWhenBlocked)
         {
-            OnStoneBlocked?.Invoke(new OmokBlockedStoneResult(stone.StoneColor, stackKey, consecutiveSameColorStackCount));
+            bool hasBlockerSnapshot = TryBuildBlockerPlacementSnapshot(
+                blockerCollider,
+                stone.transform.position,
+                stone.transform.rotation,
+                out int blockerViewId,
+                out Vector3 blockerLocalPosition,
+                out Quaternion blockerLocalRotation,
+                out _,
+                out _);
+
+            OnStoneBlocked?.Invoke(new OmokBlockedStoneResult(
+                stone.StoneColor,
+                stackKey,
+                consecutiveSameColorStackCount,
+                stone.TargetCoordinate,
+                hasBlockerSnapshot,
+                blockerViewId,
+                blockerLocalPosition,
+                blockerLocalRotation,
+                stone.ReleaseWorldPosition));
+        }
+
+        return true;
+    }
+
+    private void StickStoneToBlocker(
+        OmokFallingStone stone,
+        Transform blockerTarget,
+        Collider blockerCollider,
+        Transform stackKey,
+        Vector3 stickPosition)
+    {
+        if (TryGetBlockerVisualSurfaceBaseOffset(
+                blockerCollider,
+                stackKey,
+                out Collider visualSurfaceCollider,
+                out float visualSurfaceBaseOffset))
+        {
+            stone.StickToBlocker(
+                blockerTarget,
+                _blockerLayer,
+                stickPosition,
+                visualSurfaceCollider,
+                visualSurfaceBaseOffset);
+            return;
+        }
+
+        stone.StickToBlocker(blockerTarget, _blockerLayer, stickPosition);
+    }
+
+    internal bool TryStickStoneToBlockerSnapshot(OmokFallingStone stone)
+    {
+        if (stone == null ||
+            !stone.HasForcedBlockerSnapshot ||
+            stone.ForcedBlockerTarget == null)
+        {
+            return false;
+        }
+
+        Transform blockerTarget = stone.ForcedBlockerTarget;
+        Vector3 stickPosition = blockerTarget.TransformPoint(stone.ForcedBlockerLocalPosition);
+        Quaternion stickRotation = blockerTarget.rotation * stone.ForcedBlockerLocalRotation;
+        Transform stackKey = blockerTarget;
+        Collider blockerCollider = blockerTarget.GetComponentInChildren<Collider>();
+
+        ReleaseReservation(stone.TargetCoordinate);
+        stone.transform.rotation = stickRotation;
+
+        if (blockerCollider != null)
+        {
+            StickStoneToBlocker(stone, blockerTarget, blockerCollider, stackKey, stickPosition);
+        }
+        else
+        {
+            stone.StickToBlocker(blockerTarget, _blockerLayer, stickPosition);
+        }
+
+        stone.transform.localPosition = stone.ForcedBlockerLocalPosition;
+        stone.transform.localRotation = stone.ForcedBlockerLocalRotation;
+
+        int consecutiveSameColorStackCount = stone.ForcedBlockerCountsForStackWin
+            ? RegisterBlockedStone(stackKey, stone)
+            : 0;
+
+        if (stone.ForcedBlockerConsumesTurn)
+        {
+            PhotonView blockerView = blockerTarget.GetComponentInParent<PhotonView>();
+            OnStoneBlocked?.Invoke(new OmokBlockedStoneResult(
+                stone.StoneColor,
+                stackKey,
+                consecutiveSameColorStackCount,
+                stone.TargetCoordinate,
+                blockerView != null && blockerView.ViewID > 0,
+                blockerView != null ? blockerView.ViewID : 0,
+                stone.ForcedBlockerLocalPosition,
+                stone.ForcedBlockerLocalRotation,
+                stone.ReleaseWorldPosition));
         }
 
         return true;
@@ -1580,9 +1812,13 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         bool isCoordinateBlocked = IsCoordinateBlocked(coordinate);
-        if (TryGetBlockerPreviewStonePosition(coordinate, stoneProbeCenter, out Vector3 blockerPreviewPosition))
+        if (TryGetBlockerPreviewStonePosition(
+                coordinate,
+                stoneProbeCenter,
+                out Vector3 blockerPreviewPosition,
+                out Collider blockerCollider))
         {
-            return new PlacementPreviewState(false, true, blockerPreviewPosition, stoneProbeCenter, blockerPreviewPosition, true);
+            return new PlacementPreviewState(false, true, blockerPreviewPosition, stoneProbeCenter, blockerPreviewPosition, true, blockerCollider);
         }
 
         return new PlacementPreviewState(isCoordinateBlocked, false, default, stoneProbeCenter, boardTargetPosition);
@@ -1714,6 +1950,137 @@ public class OmokStoneDropper : MonoBehaviour
         return grid != null ? grid.transform.up : Vector3.up;
     }
 
+    internal bool TryGetBlockerVisualSurfaceDelta(
+        Collider blockerCollider,
+        float baseSurfaceOffset,
+        out Vector3 surfaceDelta)
+    {
+        surfaceDelta = Vector3.zero;
+
+        if (!TryGetBlockerVisualSurfaceOffset(blockerCollider, out float currentSurfaceOffset))
+        {
+            return false;
+        }
+
+        Vector3 up = GetGridUp();
+        if (up.sqrMagnitude <= 0.0001f)
+        {
+            return false;
+        }
+
+        up.Normalize();
+        float offsetDelta = currentSurfaceOffset - baseSurfaceOffset;
+        if (Mathf.Abs(offsetDelta) <= 0.0001f)
+        {
+            return false;
+        }
+
+        surfaceDelta = up * offsetDelta;
+        return true;
+    }
+
+    private bool TryGetBlockerVisualSurfaceBaseOffset(
+        Collider blockerCollider,
+        Transform stackKey,
+        out Collider visualSurfaceCollider,
+        out float baseSurfaceOffset)
+    {
+        visualSurfaceCollider = null;
+        baseSurfaceOffset = 0f;
+
+        if (stackKey != null &&
+            _blockerVisualSurfaceColliders.TryGetValue(stackKey, out Collider cachedCollider) &&
+            cachedCollider != null &&
+            _blockerVisualSurfaceBaseOffset.TryGetValue(stackKey, out baseSurfaceOffset))
+        {
+            visualSurfaceCollider = cachedCollider;
+            return true;
+        }
+
+        visualSurfaceCollider = ResolveBlockerVisualSurfaceCollider(blockerCollider, stackKey);
+        if (visualSurfaceCollider == null ||
+            !TryGetBlockerVisualSurfaceOffset(visualSurfaceCollider, out float currentSurfaceOffset))
+        {
+            return false;
+        }
+
+        baseSurfaceOffset = currentSurfaceOffset;
+        if (stackKey != null &&
+            _blockerVisualSurfaceBaseOffset.TryGetValue(stackKey, out float cachedBaseSurfaceOffset))
+        {
+            baseSurfaceOffset = cachedBaseSurfaceOffset;
+            _blockerVisualSurfaceColliders[stackKey] = visualSurfaceCollider;
+            return true;
+        }
+
+        if (stackKey != null)
+        {
+            _blockerVisualSurfaceBaseOffset[stackKey] = baseSurfaceOffset;
+            _blockerVisualSurfaceColliders[stackKey] = visualSurfaceCollider;
+        }
+
+        return true;
+    }
+
+    private static Collider ResolveBlockerVisualSurfaceCollider(Collider blockerCollider, Transform stackKey)
+    {
+        if (blockerCollider != null &&
+            blockerCollider.GetComponentInParent<OmokFallingStone>() == null)
+        {
+            return blockerCollider;
+        }
+
+        Transform root = stackKey != null ? stackKey : GetBlockerVisualBoundsRoot(blockerCollider);
+        if (root == null)
+        {
+            return null;
+        }
+
+        Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
+        foreach (Collider candidate in colliders)
+        {
+            if (candidate == null ||
+                !candidate.enabled ||
+                candidate.GetComponentInParent<OmokFallingStone>() != null)
+            {
+                continue;
+            }
+
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private bool TryGetBlockerVisualSurfaceOffset(Collider blockerCollider, out float surfaceOffset)
+    {
+        surfaceOffset = 0f;
+
+        if (!ShouldFollowBlockerVisualSurface(blockerCollider))
+        {
+            return false;
+        }
+
+        Vector3 up = GetGridUp();
+        if (up.sqrMagnitude <= 0.0001f)
+        {
+            return false;
+        }
+
+        up.Normalize();
+        Physics.SyncTransforms();
+
+        if (!TryGetBlockerVisualBounds(blockerCollider, out Bounds visualBounds))
+        {
+            return false;
+        }
+
+        float visualTopHeight = GetBoundsMaxAlongAxis(visualBounds, up);
+        float colliderTopHeight = GetBoundsMaxAlongAxis(blockerCollider.bounds, up);
+        surfaceOffset = visualTopHeight - colliderTopHeight;
+        return true;
+    }
+
     private Vector3 GetBlockerStackStonePosition(Collider blockerCollider, OmokFallingStone stone, Transform stackKey)
     {
         Physics.SyncTransforms();
@@ -1742,7 +2109,8 @@ public class OmokStoneDropper : MonoBehaviour
         Vector3 up = GetGridUp();
         float halfHeight = stone != null ? stone.GetSnapOffsetAlongNormal(up) : 0f;
         float gap = GetEffectiveBlockerCenterStackGap();
-        float targetHeight = GetBoundsMaxAlongAxis(blockerCollider.bounds, up) + halfHeight + gap;
+        Vector3 surfacePoint = ResolveBlockerSurfacePoint(blockerCollider, fallbackPosition, up);
+        float targetHeight = Vector3.Dot(surfacePoint, up.normalized) + halfHeight + gap;
         return MovePointAlongAxis(fallbackPosition, up, targetHeight);
     }
 
@@ -1854,9 +2222,11 @@ public class OmokStoneDropper : MonoBehaviour
     private bool TryGetBlockerPreviewStonePosition(
         Vector2Int coordinate,
         Vector3 origin,
-        out Vector3 blockerPreviewPosition)
+        out Vector3 blockerPreviewPosition,
+        out Collider blockerCollider)
     {
         blockerPreviewPosition = default;
+        blockerCollider = null;
 
         if (grid == null || !grid.IsReady)
         {
@@ -1876,6 +2246,7 @@ public class OmokStoneDropper : MonoBehaviour
         {
             Vector3 impactStoneCenter = BuildBlockerPreviewImpactStoneCenter(coordinateBlocker, origin, up);
             blockerPreviewPosition = BuildBlockerPreviewStonePosition(coordinateBlocker, impactStoneCenter);
+            blockerCollider = coordinateBlocker;
             return true;
         }
 
@@ -1883,6 +2254,7 @@ public class OmokStoneDropper : MonoBehaviour
         {
             Vector3 impactStoneCenter = BuildBlockerPreviewImpactStoneCenter(boundsBlocker, origin, up);
             blockerPreviewPosition = BuildBlockerPreviewStonePosition(boundsBlocker, impactStoneCenter);
+            blockerCollider = boundsBlocker;
             return true;
         }
 
@@ -1892,6 +2264,7 @@ public class OmokStoneDropper : MonoBehaviour
             if (TryGetNearestBlockerCollider(overlappingColliders, origin, out Collider overlappingBlocker))
             {
                 blockerPreviewPosition = BuildBlockerPreviewStonePosition(overlappingBlocker, origin);
+                blockerCollider = overlappingBlocker;
                 return true;
             }
 
@@ -1900,6 +2273,7 @@ public class OmokStoneDropper : MonoBehaviour
             {
                 Vector3 impactStoneCenter = origin + (direction * sphereHit.distance);
                 blockerPreviewPosition = BuildBlockerPreviewStonePosition(sphereHit.collider, impactStoneCenter);
+                blockerCollider = sphereHit.collider;
                 return true;
             }
 
@@ -1909,6 +2283,7 @@ public class OmokStoneDropper : MonoBehaviour
             {
                 Vector3 impactStoneCenter = BuildBlockerPreviewImpactStoneCenter(capsuleBlocker, origin, up);
                 blockerPreviewPosition = BuildBlockerPreviewStonePosition(capsuleBlocker, impactStoneCenter);
+                blockerCollider = capsuleBlocker;
                 return true;
             }
 
@@ -1922,6 +2297,7 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         blockerPreviewPosition = BuildBlockerPreviewStonePosition(rayHit.collider, rayHit.point);
+        blockerCollider = rayHit.collider;
         return true;
     }
 
@@ -1962,7 +2338,8 @@ public class OmokStoneDropper : MonoBehaviour
         Vector3 up = GetGridUp();
         float halfHeight = GetDraggedStonePreviewExtent(up);
         float gap = GetEffectiveBlockerCenterStackGap();
-        float targetHeight = GetBoundsMaxAlongAxis(blockerCollider.bounds, up) + halfHeight + gap;
+        Vector3 surfacePoint = ResolveBlockerSurfacePoint(blockerCollider, fallbackPosition, up);
+        float targetHeight = Vector3.Dot(surfacePoint, up.normalized) + halfHeight + gap;
         return MovePointAlongAxis(fallbackPosition, up, targetHeight);
     }
 
@@ -2069,6 +2446,8 @@ public class OmokStoneDropper : MonoBehaviour
         Vector3 releasePosition,
         Vector2Int targetCoordinate,
         bool allowBlockedCoordinateForBlocker,
+        PlacementPreviewState previewState,
+        Transform previewTransform,
         out OmokStonePlacementRequest request)
     {
         request = default;
@@ -2088,12 +2467,81 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        bool hasBlockerSnapshot = false;
+        int blockerViewId = 0;
+        Vector3 blockerLocalPosition = default;
+        Quaternion blockerLocalRotation = Quaternion.identity;
+        bool blockerConsumesTurnWhenBlocked = true;
+        bool blockerCountsForStackWin = true;
+        if (allowBlockedCoordinateForBlocker &&
+            previewState.IsBlockerStackTarget &&
+            previewState.BlockerCollider != null &&
+            previewTransform != null)
+        {
+            Quaternion stoneRotation = GetStoneRotation(previewTransform, stoneColor);
+            hasBlockerSnapshot = TryBuildBlockerPlacementSnapshot(
+                previewState.BlockerCollider,
+                previewState.StoneWorldPosition,
+                stoneRotation,
+                out blockerViewId,
+                out blockerLocalPosition,
+                out blockerLocalRotation,
+                out blockerConsumesTurnWhenBlocked,
+                out blockerCountsForStackWin);
+        }
+
         request = new OmokStonePlacementRequest(
             stoneColor,
             targetCoordinate,
             releasePosition,
             false,
-            allowBlockedCoordinateForBlocker);
+            allowBlockedCoordinateForBlocker,
+            hasBlockerSnapshot,
+            blockerViewId,
+            blockerLocalPosition,
+            blockerLocalRotation,
+            blockerConsumesTurnWhenBlocked,
+            blockerCountsForStackWin);
+        return true;
+    }
+
+    private bool TryBuildBlockerPlacementSnapshot(
+        Collider blockerCollider,
+        Vector3 stoneWorldPosition,
+        Quaternion stoneWorldRotation,
+        out int blockerViewId,
+        out Vector3 blockerLocalPosition,
+        out Quaternion blockerLocalRotation,
+        out bool blockerConsumesTurnWhenBlocked,
+        out bool blockerCountsForStackWin)
+    {
+        blockerViewId = 0;
+        blockerLocalPosition = default;
+        blockerLocalRotation = Quaternion.identity;
+        blockerConsumesTurnWhenBlocked = true;
+        blockerCountsForStackWin = true;
+
+        if (!TryResolveBlockerSettings(blockerCollider, out ResolvedBlockerSettings blockerSettings) ||
+            !blockerSettings.KeepBlockedStone)
+        {
+            return false;
+        }
+
+        Transform blockerTarget = GetBlockerAttachmentTarget(blockerCollider);
+        PhotonView blockerView = blockerTarget != null
+            ? blockerTarget.GetComponentInParent<PhotonView>()
+            : blockerCollider.GetComponentInParent<PhotonView>();
+        if (blockerView == null || blockerView.ViewID <= 0)
+        {
+            return false;
+        }
+
+        Transform anchor = blockerView.transform;
+        blockerViewId = blockerView.ViewID;
+        blockerLocalPosition = anchor.InverseTransformPoint(stoneWorldPosition);
+        blockerLocalRotation = Quaternion.Inverse(anchor.rotation) * stoneWorldRotation;
+        blockerConsumesTurnWhenBlocked = blockerSettings.ConsumeTurnWhenBlocked;
+        blockerCountsForStackWin = blockerSettings.CountForBlockerStackWin;
         return true;
     }
 
@@ -2737,6 +3185,8 @@ public class OmokStoneDropper : MonoBehaviour
         _reservedCoordinates.Clear();
         _stonesByCoordinate.Clear();
         _blockerCenterStackTopY.Clear();
+        _blockerVisualSurfaceBaseOffset.Clear();
+        _blockerVisualSurfaceColliders.Clear();
         _blockerStoneStacks.Clear();
 
         if (grid == null || !grid.IsReady)
@@ -2983,6 +3433,8 @@ public class OmokStoneDropper : MonoBehaviour
         {
             _blockerStoneStacks.Remove(stackKey);
             _blockerCenterStackTopY.Remove(stackKey);
+            _blockerVisualSurfaceBaseOffset.Remove(stackKey);
+            _blockerVisualSurfaceColliders.Remove(stackKey);
         }
     }
 
@@ -3016,6 +3468,71 @@ public class OmokStoneDropper : MonoBehaviour
         return blockerCollider != null ? blockerCollider.transform : null;
     }
 
+    private static bool ShouldFollowBlockerVisualSurface(Collider blockerCollider)
+    {
+        if (blockerCollider == null)
+        {
+            return false;
+        }
+
+        OmokBlockerTarget blockerTarget = blockerCollider.GetComponentInParent<OmokBlockerTarget>();
+        return blockerTarget != null &&
+               blockerTarget.FollowAnimatedVisualSurface &&
+               !TryGetExplicitAttachmentTarget(blockerCollider, out _);
+    }
+
+    private static bool TryGetBlockerVisualBounds(Collider blockerCollider, out Bounds visualBounds)
+    {
+        visualBounds = default;
+
+        Transform root = GetBlockerVisualBoundsRoot(blockerCollider);
+        if (root == null)
+        {
+            return false;
+        }
+
+        bool hasBounds = false;
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null ||
+                !renderer.enabled ||
+                renderer.GetComponentInParent<OmokFallingStone>() != null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                visualBounds = renderer.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            visualBounds.Encapsulate(renderer.bounds);
+        }
+
+        return hasBounds;
+    }
+
+    private static Transform GetBlockerVisualBoundsRoot(Collider blockerCollider)
+    {
+        if (blockerCollider == null)
+        {
+            return null;
+        }
+
+        OmokBlockerTarget blockerTarget = blockerCollider.GetComponentInParent<OmokBlockerTarget>();
+        if (blockerTarget != null)
+        {
+            return blockerTarget.transform;
+        }
+
+        return blockerCollider.attachedRigidbody != null
+            ? blockerCollider.attachedRigidbody.transform
+            : blockerCollider.transform;
+    }
+
     private static float ProjectBoundsExtent(Vector3 boundsExtents, Vector3 axis)
     {
         axis.Normalize();
@@ -3028,6 +3545,41 @@ public class OmokStoneDropper : MonoBehaviour
     {
         axis.Normalize();
         return Vector3.Dot(bounds.center, axis) + ProjectBoundsExtent(bounds.extents, axis);
+    }
+
+    private static float GetBoundsMinAlongAxis(Bounds bounds, Vector3 axis)
+    {
+        axis.Normalize();
+        return Vector3.Dot(bounds.center, axis) - ProjectBoundsExtent(bounds.extents, axis);
+    }
+
+    private Vector3 ResolveBlockerSurfacePoint(Collider blockerCollider, Vector3 referencePosition, Vector3 up)
+    {
+        if (blockerCollider == null)
+        {
+            return referencePosition;
+        }
+
+        up.Normalize();
+        Bounds bounds = blockerCollider.bounds;
+        float topHeight = GetBoundsMaxAlongAxis(bounds, up);
+        float bottomHeight = GetBoundsMinAlongAxis(bounds, up);
+        float rayMargin = Mathf.Max(0.05f, GetGridCellSize(), ProjectBoundsExtent(bounds.extents, up) * 0.25f);
+        Vector3 rayOrigin = MovePointAlongAxis(referencePosition, up, topHeight + rayMargin);
+        float rayDistance = Mathf.Max(0.05f, topHeight - bottomHeight + (rayMargin * 2f));
+
+        if (blockerCollider.Raycast(new Ray(rayOrigin, -up), out RaycastHit hit, rayDistance))
+        {
+            return hit.point;
+        }
+
+        Vector3 closestPoint = blockerCollider.ClosestPoint(referencePosition);
+        if ((closestPoint - referencePosition).sqrMagnitude > 0.000001f)
+        {
+            return closestPoint;
+        }
+
+        return MovePointAlongAxis(referencePosition, up, topHeight);
     }
 
     private int BuildLauncherLayerMask()
@@ -3050,112 +3602,6 @@ public class OmokStoneDropper : MonoBehaviour
         {
             mask |= 1 << current.gameObject.layer;
         }
-    }
-
-    private bool CancelDragIfParrotOverlapsPreviewScreen()
-    {
-        if (!cancelDragWhenParrotOverlapsPreview ||
-            !_isDraggingLauncher ||
-            _draggedStoneObject == null)
-        {
-            return false;
-        }
-
-        Camera cameraToUse = targetCamera != null ? targetCamera : Camera.main;
-        if (cameraToUse == null ||
-            !TryGetDraggedStoneViewportRect(cameraToUse, out Rect draggedStoneRect))
-        {
-            return false;
-        }
-
-        Parrot[] parrots = FindObjectsByType<Parrot>(FindObjectsSortMode.None);
-        foreach (Parrot parrot in parrots)
-        {
-            if (parrot == null ||
-                !parrot.isActiveAndEnabled ||
-                !TryGetObjectViewportRect(parrot.gameObject, cameraToUse, out Rect parrotRect))
-            {
-                continue;
-            }
-
-            if (!draggedStoneRect.Overlaps(parrotRect, true))
-            {
-                continue;
-            }
-
-            CancelDrag();
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryGetObjectViewportRect(GameObject targetObject, Camera cameraToUse, out Rect viewportRect)
-    {
-        viewportRect = default;
-
-        if (targetObject == null ||
-            cameraToUse == null ||
-            !TryGetObjectBounds(targetObject, out Bounds bounds))
-        {
-            return false;
-        }
-
-        return TryGetViewportRectFromBounds(cameraToUse, bounds, out viewportRect);
-    }
-
-    private static bool TryGetObjectBounds(GameObject targetObject, out Bounds combinedBounds)
-    {
-        combinedBounds = default;
-
-        if (targetObject == null)
-        {
-            return false;
-        }
-
-        bool hasBounds = false;
-        Renderer[] renderers = targetObject.GetComponentsInChildren<Renderer>(true);
-        foreach (Renderer renderer in renderers)
-        {
-            if (renderer == null || !renderer.enabled)
-            {
-                continue;
-            }
-
-            if (!hasBounds)
-            {
-                combinedBounds = renderer.bounds;
-                hasBounds = true;
-                continue;
-            }
-
-            combinedBounds.Encapsulate(renderer.bounds);
-        }
-
-        if (hasBounds)
-        {
-            return true;
-        }
-
-        Collider[] colliders = targetObject.GetComponentsInChildren<Collider>(true);
-        foreach (Collider collider in colliders)
-        {
-            if (collider == null || !collider.enabled)
-            {
-                continue;
-            }
-
-            if (!hasBounds)
-            {
-                combinedBounds = collider.bounds;
-                hasBounds = true;
-                continue;
-            }
-
-            combinedBounds.Encapsulate(collider.bounds);
-        }
-
-        return hasBounds;
     }
 
     private void ApplyDraggedStonePreviewAppearance(OmokStoneLauncher launcher, GameObject previewObject)
@@ -3422,7 +3868,8 @@ public class OmokStoneDropper : MonoBehaviour
             Vector3 stoneWorldPosition,
             Vector3 rayStartPosition,
             Vector3 rayTargetPosition,
-            bool isBlockerStackTarget = false)
+            bool isBlockerStackTarget = false,
+            Collider blockerCollider = null)
         {
             IsBlocked = isBlocked;
             HasStoneWorldPosition = hasStoneWorldPosition;
@@ -3430,6 +3877,7 @@ public class OmokStoneDropper : MonoBehaviour
             RayStartPosition = rayStartPosition;
             RayTargetPosition = rayTargetPosition;
             IsBlockerStackTarget = isBlockerStackTarget;
+            BlockerCollider = blockerCollider;
         }
 
         public bool IsBlocked { get; }
@@ -3438,5 +3886,6 @@ public class OmokStoneDropper : MonoBehaviour
         public Vector3 StoneWorldPosition { get; }
         public Vector3 RayStartPosition { get; }
         public Vector3 RayTargetPosition { get; }
+        public Collider BlockerCollider { get; }
     }
 }

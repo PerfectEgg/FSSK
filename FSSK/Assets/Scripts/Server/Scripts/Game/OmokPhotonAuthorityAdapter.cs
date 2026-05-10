@@ -20,6 +20,7 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
     private OmokMatchManager _matchManager;
     private OmokGrid _grid;
     private OmokStoneDropper _subscribedStoneDropper;
+    private OmokMatchManager _subscribedMatchManager;
 
     protected override void OnEnable()
     {
@@ -119,6 +120,109 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
         }
     }
 
+    private void HandleStoneBlockedOnAuthority(OmokBlockedStoneResult blockedResult)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        if (!PhotonNetwork.InRoom) return;
+        if (!EnsurePhotonView()) return;
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] Master blocked placement broadcast: ({blockedResult.TargetCoordinate.x},{blockedResult.TargetCoordinate.y}) {blockedResult.StoneColor}");
+        _photonView.RPC(nameof(RpcApplyBlockedPlacementResult), RpcTarget.Others,
+            blockedResult.TargetCoordinate.x,
+            blockedResult.TargetCoordinate.y,
+            (int)blockedResult.StoneColor,
+            blockedResult.ConsecutiveSameColorStackCount,
+            blockedResult.HasBlockerSnapshot,
+            blockedResult.BlockerViewId,
+            blockedResult.BlockerLocalPosition,
+            blockedResult.BlockerLocalRotation,
+            blockedResult.ReleasePosition);
+    }
+
+    [PunRPC]
+    private void RpcApplyBlockedPlacementResult(
+        int x,
+        int y,
+        int stoneColorInt,
+        int consecutiveSameColorStackCount,
+        bool hasBlockerSnapshot,
+        int blockerViewId,
+        Vector3 blockerLocalPosition,
+        Quaternion blockerLocalRotation,
+        Vector3 releasePosition)
+    {
+        if (PhotonNetwork.IsMasterClient) return;
+
+        EnsureCachedReferences();
+
+        OmokStoneColor color = (OmokStoneColor)stoneColorInt;
+        Vector2Int coordinate = new(x, y);
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] Remote blocked result received: ({x},{y}) {color}");
+
+        OmokBlockedStoneResult blockedResult = new OmokBlockedStoneResult(
+            color,
+            null,
+            consecutiveSameColorStackCount,
+            coordinate,
+            hasBlockerSnapshot,
+            blockerViewId,
+            blockerLocalPosition,
+            blockerLocalRotation,
+            releasePosition);
+
+        bool visualApplied = _stoneDropper != null &&
+                             _stoneDropper.TryApplyBlockedPlacementVisual(blockedResult);
+        if (!visualApplied)
+        {
+            OmokStonePlacementRequest request = new OmokStonePlacementRequest(
+                stoneColor: color,
+                targetCoordinate: coordinate,
+                releasePosition: ResolveRemoteReleasePosition(coordinate),
+                lockToTargetCoordinate: true,
+                allowBlockedCoordinateForBlocker: true);
+
+            if (!TryApplyPlacementVisual(request))
+            {
+                Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote blocked visual placement failed at ({x},{y}) {color}.", this);
+            }
+        }
+
+        if (!TryApplyBlockedResult(blockedResult))
+        {
+            Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote blocked result registration failed at ({x},{y}) {color}.", this);
+        }
+    }
+
+    private void HandleStoneRemovedOnAuthority(OmokStoneRemovalResult removalResult)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        if (!PhotonNetwork.InRoom) return;
+        if (!EnsurePhotonView()) return;
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] Master removal broadcast: ({removalResult.Coordinate.x},{removalResult.Coordinate.y}) {removalResult.StoneColor}");
+        _photonView.RPC(nameof(RpcApplyRemovalResult), RpcTarget.Others,
+            removalResult.Coordinate.x,
+            removalResult.Coordinate.y,
+            (int)removalResult.StoneColor);
+    }
+
+    [PunRPC]
+    private void RpcApplyRemovalResult(int x, int y, int stoneColorInt)
+    {
+        if (PhotonNetwork.IsMasterClient) return;
+
+        EnsureCachedReferences();
+
+        OmokStoneColor color = (OmokStoneColor)stoneColorInt;
+        OmokStoneRemovalResult removalTarget = new OmokStoneRemovalResult(new Vector2Int(x, y), color);
+
+        if (!TryApplyRemoval(removalTarget, out _))
+        {
+            Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote removal failed at ({x},{y}) {color}.", this);
+        }
+    }
+
     // ──────────────────────────────────────────────
     //  4단계: 리모트 → 마스터 (요청 송신)
     // ──────────────────────────────────────────────
@@ -140,33 +244,147 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
 
         Debug.Log($"[OmokPhotonAuthorityAdapter] 리모트→마스터 착수 요청: ({request.TargetCoordinate.x},{request.TargetCoordinate.y}) {request.StoneColor}");
         _photonView.RPC(nameof(RpcSubmitPlacementRequest), RpcTarget.MasterClient,
-            request.TargetCoordinate.x, request.TargetCoordinate.y, (int)request.StoneColor);
+            request.TargetCoordinate.x,
+            request.TargetCoordinate.y,
+            (int)request.StoneColor,
+            request.ReleasePosition.x,
+            request.ReleasePosition.y,
+            request.ReleasePosition.z,
+            request.LockToTargetCoordinate,
+            request.AllowBlockedCoordinateForBlocker,
+            request.HasBlockerSnapshot,
+            request.BlockerViewId,
+            request.BlockerLocalPosition,
+            request.BlockerLocalRotation,
+            request.BlockerConsumesTurnWhenBlocked,
+            request.BlockerCountsForStackWin);
+    }
+
+    protected override void SendRandomRemovalRequestToAuthority()
+    {
+        if (!EnsurePhotonView()) return;
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Debug.LogWarning("[OmokPhotonAuthorityAdapter] Master attempted to request random removal from authority - ignored.", this);
+            return;
+        }
+
+        _photonView.RPC(nameof(RpcRequestRandomRemoval), RpcTarget.MasterClient);
+    }
+
+    protected override void SendRemovalConfirmationToAuthority(OmokStoneRemovalResult removalTarget)
+    {
+        if (!EnsurePhotonView()) return;
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Debug.LogWarning("[OmokPhotonAuthorityAdapter] Master attempted to confirm removal to authority - ignored.", this);
+            return;
+        }
+
+        _photonView.RPC(nameof(RpcConfirmRemovalRequest), RpcTarget.MasterClient,
+            removalTarget.Coordinate.x,
+            removalTarget.Coordinate.y,
+            (int)removalTarget.StoneColor);
     }
 
     [PunRPC]
-    private void RpcSubmitPlacementRequest(int x, int y, int stoneColorInt, PhotonMessageInfo info)
+    private void RpcSubmitPlacementRequest(
+        int x,
+        int y,
+        int stoneColorInt,
+        float releaseX,
+        float releaseY,
+        float releaseZ,
+        bool lockToTargetCoordinate,
+        bool allowBlockedCoordinateForBlocker,
+        bool hasBlockerSnapshot,
+        int blockerViewId,
+        Vector3 blockerLocalPosition,
+        Quaternion blockerLocalRotation,
+        bool blockerConsumesTurnWhenBlocked,
+        bool blockerCountsForStackWin,
+        PhotonMessageInfo info)
     {
         if (!PhotonNetwork.IsMasterClient) return;
 
         EnsureCachedReferences();
-        if (_stoneDropper == null)
+        if (_matchManager == null)
         {
-            Debug.LogWarning("[OmokPhotonAuthorityAdapter] StoneDropper missing on master - drop remote request.", this);
+            Debug.LogWarning("[OmokPhotonAuthorityAdapter] MatchManager missing on master - drop remote request.", this);
             return;
         }
 
         OmokStoneColor color = (OmokStoneColor)stoneColorInt;
         Vector2Int coordinate = new(x, y);
+        Vector3 releasePosition = new(releaseX, releaseY, releaseZ);
         int senderActor = info.Sender != null ? info.Sender.ActorNumber : -1;
 
         Debug.Log($"[OmokPhotonAuthorityAdapter] 마스터가 리모트 요청 수신: ({x},{y}) {color} from actor {senderActor}");
 
-        // 마스터의 정상 입력 경로와 동일하게 stoneDropper 통해 요청
-        // → OmokMatchManager.HandlePlacementRequested → 검증 → 시각화 → OnStonePlaced → broadcast
-        bool accepted = _stoneDropper.TryRequestPlacement(color, coordinate);
+        OmokStonePlacementRequest request = new(
+            color,
+            coordinate,
+            releasePosition,
+            lockToTargetCoordinate,
+            allowBlockedCoordinateForBlocker,
+            hasBlockerSnapshot,
+            blockerViewId,
+            blockerLocalPosition,
+            blockerLocalRotation,
+            blockerConsumesTurnWhenBlocked,
+            blockerCountsForStackWin);
+
+        // Preserve the remote-built request so blocker placement flags and release height
+        // survive the authority hop.
+        bool accepted = _matchManager.TryProcessPlacementRequest(request);
         if (!accepted)
         {
             Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Master rejected remote placement ({x},{y}) {color}.", this);
+        }
+    }
+
+    [PunRPC]
+    private void RpcRequestRandomRemoval(PhotonMessageInfo info)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        EnsureCachedReferences();
+        if (_matchManager == null)
+        {
+            Debug.LogWarning("[OmokPhotonAuthorityAdapter] MatchManager missing on master - drop random removal request.", this);
+            return;
+        }
+
+        if (!_matchManager.TryRemoveRandomStone(out OmokStoneRemovalResult removalResult))
+        {
+            int senderActor = info.Sender != null ? info.Sender.ActorNumber : -1;
+            Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Master rejected random removal request from actor {senderActor}.", this);
+            return;
+        }
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] Master accepted random removal: ({removalResult.Coordinate.x},{removalResult.Coordinate.y}) {removalResult.StoneColor}");
+    }
+
+    [PunRPC]
+    private void RpcConfirmRemovalRequest(int x, int y, int stoneColorInt, PhotonMessageInfo info)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        EnsureCachedReferences();
+        if (_matchManager == null)
+        {
+            Debug.LogWarning("[OmokPhotonAuthorityAdapter] MatchManager missing on master - drop removal confirmation.", this);
+            return;
+        }
+
+        OmokStoneColor color = (OmokStoneColor)stoneColorInt;
+        OmokStoneRemovalResult removalTarget = new OmokStoneRemovalResult(new Vector2Int(x, y), color);
+        if (!_matchManager.TryConfirmRemoveStone(removalTarget, out _))
+        {
+            int senderActor = info.Sender != null ? info.Sender.ActorNumber : -1;
+            Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Master rejected removal ({x},{y}) {color} from actor {senderActor}.", this);
         }
     }
 
@@ -220,14 +438,30 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
         if (_stoneDropper == null) return;
 
         _stoneDropper.OnStonePlaced += HandleStonePlacedOnAuthority;
+        _stoneDropper.OnStoneBlocked += HandleStoneBlockedOnAuthority;
         _subscribedStoneDropper = _stoneDropper;
+
+        if (_matchManager != null)
+        {
+            _matchManager.OnStoneRemoved += HandleStoneRemovedOnAuthority;
+            _subscribedMatchManager = _matchManager;
+        }
     }
 
     private void UnsubscribeFromStoneDropper()
     {
-        if (_subscribedStoneDropper == null) return;
-        _subscribedStoneDropper.OnStonePlaced -= HandleStonePlacedOnAuthority;
-        _subscribedStoneDropper = null;
+        if (_subscribedStoneDropper != null)
+        {
+            _subscribedStoneDropper.OnStonePlaced -= HandleStonePlacedOnAuthority;
+            _subscribedStoneDropper.OnStoneBlocked -= HandleStoneBlockedOnAuthority;
+            _subscribedStoneDropper = null;
+        }
+
+        if (_subscribedMatchManager != null)
+        {
+            _subscribedMatchManager.OnStoneRemoved -= HandleStoneRemovedOnAuthority;
+            _subscribedMatchManager = null;
+        }
     }
 
     private Vector3 ResolveRemoteReleasePosition(Vector2Int coordinate)
