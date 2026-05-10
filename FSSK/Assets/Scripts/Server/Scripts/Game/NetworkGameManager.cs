@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Photon.Pun;
 using Photon.Realtime;
+using Unity.Cinemachine;
 using UnityEngine;
 
 /// <summary>
@@ -31,6 +32,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [Header("Player Spawn")]
     [SerializeField] private Transform[] _spawnPoints; // 인스펙터에서 의자 2개 할당
     [SerializeField] private string _playerPrefabName = "Player/Player"; // Resources 폴더 안의 해적 프리팹 이름
+    [SerializeField] private bool _spawnSoloOpponentCharacter = true;
 
 
     // ──────────────────────────────────────────────────────────────
@@ -42,6 +44,8 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private const float TIME_SYNC_INTERVAL = 1f; // RPC 보내는 주기
     private float _timeSyncAccum; // 동기화 시간 누적기
     private readonly HashSet<int> _claimedItemIds = new(); // 누군가 먹은 아이템(중복 x)
+    private bool _spawnedMyPlayer;
+    private bool _spawnedSoloOpponentCharacter;
 
     // ──────────────────────────────────────────────────────────────
     //  Unity 라이프사이클
@@ -60,9 +64,14 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     void Start()
     {
         // 방에 들어온 '모든 클라이언트'는 무조건 자신의 캐릭터를 스폰합니다.
-        if (PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InRoom)
+        if (CanSpawnMyPlayer())
         {
             SpawnMyPlayer();
+        }
+
+        if (CanSpawnSoloOpponentCharacter())
+        {
+            SpawnSoloOpponentCharacter();
         }
 
         if (PhotonNetwork.IsMasterClient)
@@ -72,6 +81,11 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     // 플레이어 스폰 함수 추가 (안전한 나머지 연산자 사용)
     private void SpawnMyPlayer()
     {
+        if (_spawnedMyPlayer)
+        {
+            return;
+        }
+
         if (_spawnPoints == null || _spawnPoints.Length == 0)
         {
             Debug.LogError("🚨 [NetworkGameManager] 인스펙터에 스폰 포인트가 설정되지 않았습니다!");
@@ -84,8 +98,110 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         // ⚠️ 주의: 프리팹은 반드시 'Resources' 폴더 안에 있어야 합니다.
         PhotonNetwork.Instantiate(_playerPrefabName, spawnPoint.position, spawnPoint.rotation);
+        _spawnedMyPlayer = true;
         
         Debug.Log($"[NetworkGameManager] 내 캐릭터 소환 완료 (Actor: {actorNum}, 자리: {safeIdx}번)");
+    }
+
+    public override void OnJoinedRoom()
+    {
+        if (CanSpawnMyPlayer())
+        {
+            SpawnMyPlayer();
+        }
+
+        if (CanSpawnSoloOpponentCharacter())
+        {
+            SpawnSoloOpponentCharacter();
+        }
+    }
+
+    private bool CanSpawnMyPlayer()
+    {
+        return !_spawnedMyPlayer &&
+               PhotonNetwork.InRoom &&
+               (PhotonNetwork.IsConnectedAndReady || PhotonNetwork.OfflineMode);
+    }
+
+    private bool CanSpawnSoloOpponentCharacter()
+    {
+        return _spawnSoloOpponentCharacter &&
+               !_spawnedSoloOpponentCharacter &&
+               PhotonNetwork.OfflineMode &&
+               PhotonNetwork.InRoom;
+    }
+
+    private void SpawnSoloOpponentCharacter()
+    {
+        if (_spawnPoints == null || _spawnPoints.Length == 0)
+        {
+            Debug.LogError("[NetworkGameManager] Solo opponent spawn failed: spawn points are not assigned.");
+            return;
+        }
+
+        GameObject prefab = Resources.Load<GameObject>(_playerPrefabName);
+        if (prefab == null)
+        {
+            Debug.LogError($"[NetworkGameManager] Solo opponent spawn failed: Resources/{_playerPrefabName} not found.");
+            return;
+        }
+
+        int opponentSpawnIndex = _spawnPoints.Length > 1 ? 1 : 0;
+        Transform spawnPoint = _spawnPoints[opponentSpawnIndex];
+        GameObject opponent = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
+        opponent.name = $"{prefab.name}_SoloOpponent";
+        ConfigureSoloOpponentCharacter(opponent);
+
+        _spawnedSoloOpponentCharacter = true;
+        Debug.Log($"[NetworkGameManager] Solo opponent character spawned (spawnIndex: {opponentSpawnIndex}).");
+    }
+
+    private static void ConfigureSoloOpponentCharacter(GameObject opponent)
+    {
+        if (opponent == null)
+        {
+            return;
+        }
+
+        foreach (CameraModeController component in opponent.GetComponentsInChildren<CameraModeController>(true))
+        {
+            component.enabled = false;
+        }
+
+        foreach (PlayerController component in opponent.GetComponentsInChildren<PlayerController>(true))
+        {
+            component.enabled = false;
+        }
+
+        foreach (PlayerInteraction component in opponent.GetComponentsInChildren<PlayerInteraction>(true))
+        {
+            component.enabled = false;
+        }
+
+        foreach (CinemachineCamera component in opponent.GetComponentsInChildren<CinemachineCamera>(true))
+        {
+            component.gameObject.SetActive(false);
+        }
+
+        foreach (CinemachineInputAxisController component in opponent.GetComponentsInChildren<CinemachineInputAxisController>(true))
+        {
+            component.enabled = false;
+        }
+
+        foreach (PhotonAnimatorView component in opponent.GetComponentsInChildren<PhotonAnimatorView>(true))
+        {
+            component.enabled = false;
+        }
+
+        foreach (PhotonTransformView component in opponent.GetComponentsInChildren<PhotonTransformView>(true))
+        {
+            component.enabled = false;
+        }
+
+        foreach (PhotonView component in opponent.GetComponentsInChildren<PhotonView>(true))
+        {
+            component.enabled = false;
+        }
     }
 
     void Update()

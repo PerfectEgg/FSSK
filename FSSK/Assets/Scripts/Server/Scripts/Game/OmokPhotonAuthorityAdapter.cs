@@ -60,6 +60,15 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
             return false;
         }
 
+        if (PhotonNetwork.OfflineMode)
+        {
+            TurnSystem.SetGameMode(OmokTurnGameMode.SingleLocalVsAi);
+            TurnSystem.SetLocalPlayerColor(OmokStoneColor.Gold);
+            TurnSystem.SetSelectedAiType(SoloPlaySettings.SelectedAiType);
+            Debug.Log("[OmokPhotonAuthorityAdapter] Offline solo mode configured.", this);
+            return true;
+        }
+
         bool isMaster = PhotonNetwork.IsMasterClient;
         OmokTurnGameMode mode = isMaster
             ? OmokTurnGameMode.MultiplayerHost

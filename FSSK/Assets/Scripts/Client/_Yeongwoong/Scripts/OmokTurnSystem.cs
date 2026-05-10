@@ -84,7 +84,7 @@ public class OmokTurnSystem : MonoBehaviour
     [SerializeField] private OmokTurnGameMode gameMode = OmokTurnGameMode.SingleLocalVsAi;
     [SerializeField] private bool useAi = true;
     [SerializeField] private OmokAiType selectedAiType = OmokAiType.Easy;
-    [SerializeField] private OmokStoneColor localPlayerColor = OmokStoneColor.Silver;
+    [SerializeField] private OmokStoneColor localPlayerColor = OmokStoneColor.Gold;
     [SerializeField] private bool allowManualInput = true;
     [SerializeField] private bool restrictManualDragToCurrentTurn = true;
     [SerializeField, Min(0f)] private float aiTurnDelay = 0.35f;
@@ -213,7 +213,7 @@ public class OmokTurnSystem : MonoBehaviour
 
         if (localPlayerColor != OmokStoneColor.Gold && localPlayerColor != OmokStoneColor.Silver)
         {
-            localPlayerColor = useAi ? OmokStoneColor.Silver : OmokStoneColor.None;
+            localPlayerColor = useAi ? OmokStoneColor.Gold : OmokStoneColor.None;
         }
 
         blockerVerticalWinLength = Mathf.Max(1, blockerVerticalWinLength);
@@ -259,6 +259,7 @@ public class OmokTurnSystem : MonoBehaviour
         {
             case OmokTurnGameMode.SingleLocalVsAi:
                 useAi = true;
+                localPlayerColor = OmokStoneColor.Gold;
                 allowManualInput = true;
                 restrictManualDragToCurrentTurn = true;
                 authorityMode = OmokTurnAuthorityMode.LocalOnly;

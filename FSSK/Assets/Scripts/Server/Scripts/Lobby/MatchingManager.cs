@@ -2,6 +2,7 @@ using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
@@ -12,17 +13,30 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     [Header("Room Settings")]
     [SerializeField] private byte _maxPlayers = 2;
     [SerializeField] private string _gameSceneName = "GameTest";
+    [SerializeField] private string _soloSceneName = "Game";
+    [SerializeField] private OmokAiType _soloAiType = OmokAiType.Easy;
 
     [Header("UI")]
     [SerializeField] private Button _mutiMatchButton;
+    [SerializeField] private Button _soloPlayButton;
     [SerializeField] private TextMeshProUGUI _statusText;
     [SerializeField] private TextMeshProUGUI _timerText;
 
+    private const string SOLO_BUTTON_NAME = "SoloPlayBtn";
+
     private float _matchingTime;
     private bool _isMatching;
+    private bool _isStartingSolo;
 
     void Start()
     {
+        WireSoloButton();
+
+        if (PhotonNetwork.OfflineMode)
+        {
+            PhotonNetwork.OfflineMode = false;
+        }
+
         PhotonNetwork.AutomaticallySyncScene = true; // 마스터 씬 이동시 다른 인원도 같이 이동하는 기능
 
         // 이미 로비에 있으면 (랭킹 갔다 돌아온 경우) 즉시 활성화
@@ -50,6 +64,22 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         PhotonNetwork.ConnectUsingSettings();
     }
 
+    public override void OnLeftRoom()
+    {
+        if (!_isStartingSolo)
+        {
+            return;
+        }
+
+        if (PhotonNetwork.IsConnected)
+        {
+            PhotonNetwork.Disconnect();
+            return;
+        }
+
+        StartOfflineSoloRoom();
+    }
+
     void Update()
     {
         if (!_isMatching) return;
@@ -63,6 +93,8 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 매칭 버튼 클릭 → 랜덤 매칭 시도 (실패 시 OnJoinRandomFailed 에서 새 방 생성)
     public void OnClickMatchButton()
     {
+        _isStartingSolo = false;
+
         Debug.Log("[MatchingManager] 랜덤 매칭 시작...");
 
         _mutiMatchButton.interactable = false;
@@ -72,6 +104,57 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         SetStatus("매칭 중...");
 
         PhotonNetwork.JoinRandomRoom();
+    }
+
+    public void OnClickSoloPlayButton()
+    {
+        if (!CanLoadScene(_soloSceneName))
+        {
+            return;
+        }
+
+        SoloPlaySettings.SetAiType(_soloAiType);
+        Debug.Log($"[MatchingManager] Starting solo play: '{_soloSceneName}'");
+
+        _isStartingSolo = true;
+        _isMatching = false;
+        if (_timerText != null) _timerText.text = "00:00";
+        SetButtonInteractable(_mutiMatchButton, false);
+        SetButtonInteractable(_soloPlayButton, false);
+        SetStatus("Starting solo play...");
+
+        PhotonNetwork.AutomaticallySyncScene = false;
+
+        if (PhotonNetwork.InRoom)
+        {
+            PhotonNetwork.LeaveRoom();
+            return;
+        }
+
+        if (PhotonNetwork.IsConnected)
+        {
+            PhotonNetwork.Disconnect();
+            return;
+        }
+
+        StartOfflineSoloRoom();
+    }
+
+    public void SetSoloAiEasy()
+    {
+        SetSoloAiType(OmokAiType.Easy);
+    }
+
+    public void SetSoloAiNormal()
+    {
+        SetSoloAiType(OmokAiType.Normal);
+    }
+
+    public void SetSoloAiType(OmokAiType aiType)
+    {
+        _soloAiType = aiType;
+        SoloPlaySettings.SetAiType(aiType);
+        SetStatus($"Solo AI: {aiType}");
     }
 
     // 랜덤 매칭 실패 (입장 가능한 방 없음) → 새 방 생성 (이름 null = Photon 자동 생성)
@@ -91,6 +174,11 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 대기실 입장
     public override void OnConnectedToMaster()
     {
+        if (_isStartingSolo && PhotonNetwork.OfflineMode)
+        {
+            return;
+        }
+
         Debug.Log($"[MatchingManager] 마스터 서버 연결 완료 - 로비 입장 Region: '{PhotonNetwork.CloudRegion}', AppVersion: '{PhotonNetwork.AppVersion}'");
         PhotonNetwork.JoinLobby();
     }
@@ -106,6 +194,12 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 로비 입장 및 인원 수 체크
     public override void OnJoinedRoom()
     {
+        if (_isStartingSolo && PhotonNetwork.OfflineMode)
+        {
+            LoadSoloScene();
+            return;
+        }
+
         Debug.Log($"[MatchingManager] 플레이어 인원 수 : ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         SetStatus($"대기 중... ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         CheckStartGame();
@@ -138,6 +232,12 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 연결 끊김
     public override void OnDisconnected(DisconnectCause cause)
     {
+        if (_isStartingSolo)
+        {
+            StartOfflineSoloRoom();
+            return;
+        }
+
         Debug.LogWarning($"[MatchingManager] Disconnected (cause: {cause}) — reconnecting.");
         _isMatching = false;
         _mutiMatchButton.interactable = false;
@@ -171,5 +271,113 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     {
         if (_statusText != null)
             _statusText.text = msg;
+    }
+
+    private void WireSoloButton()
+    {
+        if (_soloPlayButton == null)
+        {
+            GameObject soloButtonObject = GameObject.Find(SOLO_BUTTON_NAME);
+            if (soloButtonObject != null)
+            {
+                _soloPlayButton = soloButtonObject.GetComponent<Button>();
+            }
+        }
+
+        if (_soloPlayButton == null)
+        {
+            Debug.LogWarning("[MatchingManager] Solo play button is not assigned.");
+            return;
+        }
+
+        _soloPlayButton.onClick.RemoveListener(OnClickSoloPlayButton);
+        _soloPlayButton.onClick.AddListener(OnClickSoloPlayButton);
+    }
+
+    private void StartOfflineSoloRoom()
+    {
+        if (!CanLoadScene(_soloSceneName))
+        {
+            ResetSoloStartState();
+            return;
+        }
+
+        if (PhotonNetwork.IsConnected)
+        {
+            PhotonNetwork.Disconnect();
+            return;
+        }
+
+        PhotonNetwork.AutomaticallySyncScene = false;
+        PhotonNetwork.OfflineMode = true;
+
+        RoomOptions options = new()
+        {
+            MaxPlayers = 1,
+            IsOpen = false,
+            IsVisible = false
+        };
+
+        if (!PhotonNetwork.CreateRoom("SoloPlay", options, TypedLobby.Default))
+        {
+            Debug.LogError("[MatchingManager] Failed to create offline solo room.");
+            ResetSoloStartState();
+        }
+    }
+
+    private void LoadSoloScene()
+    {
+        if (!CanLoadScene(_soloSceneName))
+        {
+            ResetSoloStartState();
+            return;
+        }
+
+        Debug.Log($"[MatchingManager] Loading solo scene: '{_soloSceneName}'");
+        SceneManager.LoadScene(_soloSceneName);
+    }
+
+    private bool CanLoadScene(string sceneName)
+    {
+        if (string.IsNullOrEmpty(sceneName))
+        {
+            Debug.LogError("[MatchingManager] Solo scene name is empty.");
+            SetStatus("Solo scene is not set.");
+            return false;
+        }
+
+        if (!Application.CanStreamedLevelBeLoaded(sceneName))
+        {
+            Debug.LogError($"[MatchingManager] Scene '{sceneName}' is not in Build Settings.");
+            SetStatus("Solo scene is not in Build Settings.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ResetSoloStartState()
+    {
+        _isStartingSolo = false;
+        SetButtonInteractable(_mutiMatchButton, true);
+        SetButtonInteractable(_soloPlayButton, true);
+    }
+
+    private static void SetButtonInteractable(Button button, bool value)
+    {
+        if (button != null)
+        {
+            button.interactable = value;
+        }
+    }
+}
+
+public static class SoloPlaySettings
+{
+    public static OmokAiType SelectedAiType { get; private set; } = OmokAiType.Easy;
+
+    public static void SetAiType(OmokAiType aiType)
+    {
+        SelectedAiType = aiType;
     }
 }

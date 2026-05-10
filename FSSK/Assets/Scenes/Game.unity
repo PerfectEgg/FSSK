@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: eba04bb4a24a26345b7a5a461293e488, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -1143,7 +1143,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaterLevelController
   appearStage: 4
   targetStage: 19
-  stageDurationSeconds: 30
+  stageDurationSeconds: 20
   syncStageDurationFromWaveManager: 1
   hiddenY: -122.4
   startY: -122.4
@@ -1233,7 +1233,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 581814016}
-  m_Mesh: {fileID: 1584280703}
+  m_Mesh: {fileID: 1553939601}
 --- !u!23 &581814021
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -1259,7 +1259,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 008541be8ad8b3f42a5318e1c4a73d1c, type: 2}
+  - {fileID: 2100000, guid: 16ca5feb16ef2d744852096378401523, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1397,10 +1397,10 @@ MonoBehaviour:
     source: {fileID: 187038046}
     stonePrefab: {fileID: 6460034516728088667, guid: 3bd79bf7fa14a134285c700f9a3b0c2e, type: 3}
   useBuiltInMouseInput: 1
-  allowGoldManualPlacement: 0
+  allowGoldManualPlacement: 1
   allowSilverManualPlacement: 0
   restrictManualDragToCurrentTurn: 1
-  localManualStoneColor: 2
+  localManualStoneColor: 1
   dragHoverHeight: 3
   keepDraggedStoneOnScreen: 1
   draggedStoneScreenPadding: 0.015
@@ -1418,7 +1418,6 @@ MonoBehaviour:
   initialFallSpeed: 0.5
   fallGravityScale: 1.5
   showPreview: 1
-  cancelDragWhenParrotOverlapsPreview: 1
   validPreviewColor: {r: 0.25, g: 1, b: 0.45, a: 0.95}
   blockedPreviewColor: {r: 1, g: 0.3, b: 0.3, a: 0.95}
   previewLineWidth: 1.5
@@ -1932,7 +1931,7 @@ MonoBehaviour:
   gameMode: 0
   useAi: 1
   selectedAiType: 0
-  localPlayerColor: 2
+  localPlayerColor: 1
   allowManualInput: 1
   restrictManualDragToCurrentTurn: 1
   aiTurnDelay: 0.35
@@ -1943,16 +1942,16 @@ MonoBehaviour:
   goldSeat:
     stoneColor: 1
     displayColor: {r: 1, g: 0.72, b: 0.18, a: 1}
-    actorType: 3
-    actorLabel: AI (Easy)
+    actorType: 1
+    actorLabel: Player
     isCurrentTurn: 1
     canAct: 1
     placedStoneCount: 0
   silverSeat:
     stoneColor: 2
     displayColor: {r: 0.82, g: 0.86, b: 0.9, a: 1}
-    actorType: 1
-    actorLabel: Player
+    actorType: 3
+    actorLabel: AI (Easy)
     isCurrentTurn: 0
     canAct: 0
     placedStoneCount: 0
@@ -1965,7 +1964,7 @@ MonoBehaviour:
   processPlacementRequestsLocally: 1
   applyStoneResultsLocally: 1
   currentTurn: 1
-  currentTurnActor: AI (Easy)
+  currentTurnActor: Player
   isMatchEnded: 0
   winner: 0
   nextRandomRemovalColor: 1
@@ -3260,13 +3259,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60eca7ee0f8f2c24184194b7cf932db4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkGameManager
-  _gameDuration: 600
+  _gameDuration: 400
   _winScoreDelta: 10
   _loseScoreDelta: -10
   _spawnPoints:
   - {fileID: 1782137700}
   - {fileID: 1549789360}
   _playerPrefabName: Player/Player
+  _spawnSoloOpponentCharacter: 1
 --- !u!114 &1291943542
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3779,9 +3779,9 @@ MonoBehaviour:
   useWindVisualVelocityEvent: 1
   showRainLog: 1
   rainLevelProgression: 00000000000000000100000002000000020000000200000003000000030000000300000003000000
-  rainLevel1RateOverTime: 333
-  rainLevel2RateOverTime: 999
-  rainLevel3RateOverTime: 2997
+  rainLevel1RateOverTime: 555
+  rainLevel2RateOverTime: 1555
+  rainLevel3RateOverTime: 3555
   windVelocityTransitionSeconds: 1.5
 --- !u!1001 &1451964796
 PrefabInstance:
@@ -4454,13 +4454,13 @@ Transform:
   m_Children: []
   m_Father: {fileID: 466410295}
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
---- !u!43 &1584280703
+--- !u!43 &1553939601
 Mesh:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: WaterVolume-116004
+  m_Name: WaterVolume-75700
   serializedVersion: 12
   m_SubMeshes:
   - serializedVersion: 2
@@ -6166,7 +6166,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &2122399430
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6179,8 +6179,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 97d3ddff8a15b2446aedcf61706a498b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaveManager
-  _stageDuration: 3
-  _stageDelay: 1
+  _stageDuration: 20
+  _stageDelay: 3
   _rumPrefabPath: Items/Rum
   _octopusPrefabPath: Items/Octopus
   _itemSpawnPoints:
