@@ -61,6 +61,12 @@ MonoBehaviour:
   - LightningStrikeRpc
   - SyncGrabItemRPC
   - SyncStoneVisualRPC
+  - ReportTrollFinishedRPC
+  - SyncAnimationResetRPC
+  - SyncAnimationRPC
+  - SyncAnimationSetFloatRPC
+  - RpcApplyPlacementResult
+  - RpcSubmitPlacementRequest
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

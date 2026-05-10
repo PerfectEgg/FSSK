@@ -1869,6 +1869,7 @@ GameObject:
   - component: {fileID: 814945733}
   - component: {fileID: 814945735}
   - component: {fileID: 814945736}
+  - component: {fileID: 814945737}
   m_Layer: 0
   m_Name: BoardSystem
   m_TagString: Untagged
@@ -1928,8 +1929,8 @@ MonoBehaviour:
   matchManager: {fileID: 2073535677}
   stoneDropper: {fileID: 652747163}
   localPlayerContext: {fileID: 0}
-  gameMode: 1
-  useAi: 0
+  gameMode: 0
+  useAi: 1
   selectedAiType: 0
   localPlayerColor: 2
   allowManualInput: 1
@@ -1942,8 +1943,8 @@ MonoBehaviour:
   goldSeat:
     stoneColor: 1
     displayColor: {r: 1, g: 0.72, b: 0.18, a: 1}
-    actorType: 4
-    actorLabel: Player 1
+    actorType: 3
+    actorLabel: AI (Easy)
     isCurrentTurn: 1
     canAct: 1
     placedStoneCount: 0
@@ -1951,7 +1952,7 @@ MonoBehaviour:
     stoneColor: 2
     displayColor: {r: 0.82, g: 0.86, b: 0.9, a: 1}
     actorType: 1
-    actorLabel: Local Player
+    actorLabel: Player
     isCurrentTurn: 0
     canAct: 0
     placedStoneCount: 0
@@ -1960,11 +1961,11 @@ MonoBehaviour:
   blockedAttemptConsumesTurn: 1
   allowBlockerVerticalWin: 1
   blockerVerticalWinLength: 5
-  authorityMode: 1
+  authorityMode: 0
   processPlacementRequestsLocally: 1
   applyStoneResultsLocally: 1
   currentTurn: 1
-  currentTurnActor: Player 1
+  currentTurnActor: AI (Easy)
   isMatchEnded: 0
   winner: 0
   nextRandomRemovalColor: 1
@@ -1988,10 +1989,33 @@ MonoBehaviour:
   m_GameObject: {fileID: 814945732}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c990650596e04a499f03eb1e72148f04, type: 3}
+  m_Script: {fileID: 11500000, guid: 1d610b7a7eadea141b4c39bdb47b0951, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::OmokTurnAuthorityAdapter
-  turnSystem: {fileID: 0}
+  m_EditorClassIdentifier: Assembly-CSharp::OmokPhotonAuthorityAdapter
+  turnSystem: {fileID: 814945735}
+  autoConfigureOnEnable: 1
+--- !u!114 &814945737
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 814945732}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa584fbee541324448dd18d8409c7a41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: PhotonUnityNetworking::Photon.Pun.PhotonView
+  ObservedComponentsFoldoutOpen: 1
+  Group: 0
+  prefixField: -1
+  Synchronization: 3
+  OwnershipTransfer: 0
+  observableSearch: 2
+  ObservedComponents: []
+  sceneViewId: 2
+  InstantiationId: 0
+  isRuntimeInstantiated: 0
 --- !u!1 &854579451
 GameObject:
   m_ObjectHideFlags: 0
@@ -3236,7 +3260,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60eca7ee0f8f2c24184194b7cf932db4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkGameManager
-  _turnDuration: 30
   _gameDuration: 600
   _winScoreDelta: 10
   _loseScoreDelta: -10

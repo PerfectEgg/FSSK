@@ -5,8 +5,9 @@ using UnityEngine;
 
 /// <summary>
 /// 게임 씬 네트워크 통합 매니저 (싱글톤 + PunRPC).
-/// 권위 처리(턴 진행, 검증, 스폰 결정, 결과 판정)는 모두 마스터 클라이언트가 수행하고
-/// 결과만 RPC로 전체 전파한다. 게임 씬에서만 살아있고, 로비로 돌아가면 같이 파괴됨.
+/// 게임 전체 시간, 스폰/파괴, (트롤·환경 효과 broadcast), 종료 처리만 담당한다.
+/// 오목 턴 진행/턴 타이머는 OmokTurnSystem, 착수 동기화는 OmokPhotonAuthorityAdapter 가 담당.
+/// 게임 씬에서만 살아있고, 로비로 돌아가면 같이 파괴됨.
 ///
 /// ⚠️ 같은 GameObject에 PhotonView 컴포넌트가 반드시 붙어있어야 RPC가 동작.
 /// </summary>
@@ -19,8 +20,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     //  공통 설정
     // ──────────────────────────────────────────────────────────────
     [Header("Game Timing")]
-    [SerializeField] private float _turnDuration = 30f; // 턴 시간
-    [SerializeField] private float _gameDuration = 600f; // 게임 시간
+    [SerializeField] private float _gameDuration = 600f; // 게임 전체 시간 (턴 진행/타이머는 OmokTurnSystem 담당)
 
     // 추후 랭킹 계산 방법 논의
     [Header("Score Delta")]
@@ -32,18 +32,12 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private Transform[] _spawnPoints; // 인스펙터에서 의자 2개 할당
     [SerializeField] private string _playerPrefabName = "Player/Player"; // Resources 폴더 안의 해적 프리팹 이름
 
+
     // ──────────────────────────────────────────────────────────────
     //  상태
     // ──────────────────────────────────────────────────────────────
-    public int CurrentTurnActor { get; private set; } = -1; // 현재 플레이어 턴
-    public float TurnTimeLeft { get; private set; } // 턴 시간
-    public float GameTimeLeft { get; private set; } // 게임 시간
+    public float GameTimeLeft { get; private set; } // 게임 전체 남은 시간
     public bool IsGameOver { get; private set; } // 게임 끝남 여부
-
-    // 내 턴 여부
-    public bool IsMyTurn =>
-        PhotonNetwork.LocalPlayer != null &&
-        CurrentTurnActor == PhotonNetwork.LocalPlayer.ActorNumber;
 
     private const float TIME_SYNC_INTERVAL = 1f; // RPC 보내는 주기
     private float _timeSyncAccum; // 동기화 시간 누적기
@@ -108,7 +102,8 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  1. 플레이어 턴 관리
+    //  1. 게임 시작 / 게임 전체 시간 동기화
+    //     (턴 진행/턴 타이머는 OmokTurnSystem 이, 착수 동기화는 OmokPhotonAuthorityAdapter 가 담당)
     // ──────────────────────────────────────────────────────────────
     private void BeginGame()
     {
@@ -121,79 +116,18 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         GameTimeLeft = _gameDuration;
         IsGameOver = false;
-
-        int firstActor = players[0].ActorNumber;
-        photonView.RPC(nameof(StartTurnRpc), RpcTarget.AllBuffered, firstActor, _turnDuration);
-        Debug.Log($"[NetworkGameManager] 게임 시작 - 첫 턴 actor: {firstActor}");
+        Debug.Log($"[NetworkGameManager] 게임 시작 (전체 시간: {_gameDuration:F0}s)");
     }
 
-    // 플레이어 턴 끝날 시
-    public void RequestEndTurn()
-    {
-        if (!IsMyTurn)
-        {
-            Debug.Log("[NetworkGameManager] 턴 종료 요청 무시 - 내 턴이 아님");
-            return;
-        }
-        photonView.RPC(nameof(RequestEndTurnRpc), RpcTarget.MasterClient,
-            PhotonNetwork.LocalPlayer.ActorNumber);
-    }
-
-    [PunRPC]
-    private void RequestEndTurnRpc(int requesterActor)
-    {
-        if (!PhotonNetwork.IsMasterClient) return;
-        if (requesterActor != CurrentTurnActor)
-        {
-            Debug.LogWarning($"[NetworkGameManager] EndTurn rejected - actor {requesterActor} is not current ({CurrentTurnActor}).");
-            return;
-        }
-        AdvanceTurn();
-    }
-
-    // 턴 넘기기
-    private void AdvanceTurn()
-    {
-        var players = PhotonNetwork.PlayerList;
-        if (players.Length == 0) return;
-
-        int currentIdx = System.Array.FindIndex(players, p => p.ActorNumber == CurrentTurnActor);
-        int nextIdx = (currentIdx + 1) % players.Length;
-        int nextActor = players[nextIdx].ActorNumber;
-
-        photonView.RPC(nameof(StartTurnRpc), RpcTarget.AllBuffered, nextActor, _turnDuration);
-        Debug.Log($"[NetworkGameManager] 턴 전환 {CurrentTurnActor} → {nextActor}");
-    }
-
-    [PunRPC]
-    private void StartTurnRpc(int actorNumber, float duration)
-    {
-        CurrentTurnActor = actorNumber;
-        TurnTimeLeft = duration;
-        Debug.Log($"[NetworkGameManager] 턴 시작 (actor: {actorNumber}, duration: {duration:F1}s)");
-        // TODO: UI 턴 표시 / 입력 활성화 분기 => 이벤트 함수 추가 필요
-    }
-
-    // ──────────────────────────────────────────────────────────────
-    //  2. 게임 타이머 동기화 (마스터가 1초마다 클라들에 보정값 전파)
-    // ──────────────────────────────────────────────────────────────
     private void TickTimers(float dt)
     {
-        TurnTimeLeft = Mathf.Max(0f, TurnTimeLeft - dt);
         GameTimeLeft = Mathf.Max(0f, GameTimeLeft - dt);
         _timeSyncAccum += dt;
-
-        // 시간 동기화 유지
         if (_timeSyncAccum >= TIME_SYNC_INTERVAL)
         {
             _timeSyncAccum = 0f;
-            photonView.RPC(nameof(SyncTimeRpc), RpcTarget.Others, TurnTimeLeft, GameTimeLeft);
-        }
-
-        if (TurnTimeLeft <= 0f)
-        {
-            Debug.Log($"[NetworkGameManager] 턴 시간 초과 (actor: {CurrentTurnActor}) - 강제 전환");
-            AdvanceTurn();
+            photonView.RPC(nameof(SyncTimeRpc), RpcTarget.Others, GameTimeLeft);
+            //Debug.Log($"[NetworkGameManager] 게임 남은 시간 (master): {GameTimeLeft:F1}s");
         }
 
         if (GameTimeLeft <= 0f && !IsGameOver)
@@ -204,54 +138,14 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     }
 
     [PunRPC]
-    private void SyncTimeRpc(float turnLeft, float gameLeft)
+    private void SyncTimeRpc(float gameLeft)
     {
-        TurnTimeLeft = turnLeft;
         GameTimeLeft = gameLeft;
+        //Debug.Log($"[NetworkGameManager] 게임 남은 시간 (remote): {GameTimeLeft:F1}s");
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  3. 착수 (좌표 → 마스터 검증 → 전체 전파)
-    // ──────────────────────────────────────────────────────────────
-    public void RequestPlaceStone(int x, int y)
-    {
-        if (!IsMyTurn)
-        {
-            Debug.Log("[NetworkGameManager] 착수 거부 - 내 턴이 아님");
-            return;
-        }
-        photonView.RPC(nameof(RequestPlaceStoneRpc), RpcTarget.MasterClient,
-            x, y, PhotonNetwork.LocalPlayer.ActorNumber);
-    }
-
-    [PunRPC]
-    private void RequestPlaceStoneRpc(int x, int y, int requesterActor)
-    {
-        if (!PhotonNetwork.IsMasterClient) return;
-        if (requesterActor != CurrentTurnActor)
-        {
-            Debug.LogWarning($"[NetworkGameManager] Stone request rejected - actor {requesterActor} not current.");
-            return;
-        }
-
-        // TODO: 보드 상태 검증(이미 착수된 자리, 놓을수 없는 자리 등) - 마스터 권위 처리
-        bool valid = true;
-        if (!valid) return;
-
-        photonView.RPC(nameof(OnStonePlacedRpc), RpcTarget.AllBuffered, x, y, requesterActor);
-    }
-
-    [PunRPC]
-    private void OnStonePlacedRpc(int x, int y, int actorNumber)
-    {
-        Debug.Log($"[NetworkGameManager] 착수 ({x}, {y}) by actor {actorNumber}");
-        // TODO: 보드에서 (x, y) 좌표 돌 생성 + 승리 조건 체크 + 착수 소리 => 이벤트 함수 추가 필요
-    }
-
-   
-
-    // ──────────────────────────────────────────────────────────────
-    //  4. 스폰 및 파괴 (트롤, 아이템 등) - 프리팹은 Resources 폴더 필요
+    //  2. 스폰 및 파괴 (트롤, 아이템 등) - 프리팹은 Resources 폴더 필요
     // ──────────────────────────────────────────────────────────────
     public void SpawnNetworkObject(string prefabName, Vector3 pos, Quaternion rot)
     {
@@ -503,7 +397,8 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         if (draw)
         {
-            ReturnToLobby();
+            // 무승부일 경우 UI창 뛰우고 나가기 버튼 클릭시 ReturnToLobby 실행
+            //ReturnToLobby();
             return;
         }
 
