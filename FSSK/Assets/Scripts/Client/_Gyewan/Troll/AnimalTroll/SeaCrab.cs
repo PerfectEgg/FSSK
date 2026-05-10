@@ -5,7 +5,6 @@ using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 public class SeaCrab : AnimalTroll
 {
     [SerializeField] private float _moveSpeed = 2.5f;  // 속도 측정
-    private Vector3 _targetDirection;
     private Vector3 _targetPosition;
 
     private bool isArrive = false;  // 도착 여부 체크
@@ -21,6 +20,8 @@ public class SeaCrab : AnimalTroll
     // 목표 지점을 바라보는 함수
     private void LookAtTarget()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         // 생성 시 겹치지 않는 위치를 파악 후 이동
         Vector3 safePos = TrollEvents.GetSafePosition();
 
@@ -37,26 +38,26 @@ public class SeaCrab : AnimalTroll
     {
         base.OnStateEnter(state);
 
-        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
-        if (!photonView.IsMine) return;
-
-        if (state == AnimalState.Action)
-            LookAtTarget();
+        if (PhotonNetwork.IsMasterClient)
+        {
+            if (state == AnimalState.Action)
+                LookAtTarget();
+        }
 
         // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
         if (_animator != null)
         {
             // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            SendAnimationReset(_enterTrigger);
-            SendAnimationReset(_exitTrigger);
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
 
             switch(state)
             {
                 case AnimalState.Action:
-                    SendAnimationTrigger(_enterTrigger);
+                    _animator.SetTrigger(_enterTrigger);
                     break;
                 case AnimalState.Waiting:
-                    SendAnimationTrigger(_exitTrigger);
+                    _animator.SetTrigger(_exitTrigger);
                     break;
             }
         }
@@ -71,9 +72,7 @@ public class SeaCrab : AnimalTroll
             if(!isArrive)
             {
                 // 🟢 파괴하기 전, 마스터에게 완료 보고를 먼저 합니다.
-                photonView.RPC("ReportTrollFinishedRPC", RpcTarget.MasterClient);
-                StartCoroutine(DelayedNetworkDestroy(3f));
-                return;
+                TrollEvents.TriggerTrollFinished();
             }
         }
     }
@@ -101,6 +100,8 @@ public class SeaCrab : AnimalTroll
 
     protected override void UpdateState()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         switch(_currentState)
         {
             case AnimalState.Entering:

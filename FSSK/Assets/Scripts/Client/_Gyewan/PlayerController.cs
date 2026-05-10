@@ -33,12 +33,22 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     {
         TrollEvents.OnExpansionModeChanged += HandleModeChanged;
         TrollEvents.OnStunEffect += HandleStunEffect;
+
+        if (photonView.IsMine) 
+        {
+            TrollEvents.OnKrakenDodgeCheck += HandleDodgeCheck;
+        }
     }
 
     private void OnDisable()
     {
         TrollEvents.OnExpansionModeChanged -= HandleModeChanged;
         TrollEvents.OnStunEffect -= HandleStunEffect;
+
+        if (photonView.IsMine) 
+        {
+            TrollEvents.OnKrakenDodgeCheck -= HandleDodgeCheck;
+        }
     }
 
     private void HandleModeChanged(bool isExpansionMode)
@@ -55,6 +65,18 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         }
     }
 
+    // 🟢 크라켄이 호출할 회피 판정 함수
+    private bool HandleDodgeCheck(bool isKrakenOnMyRight)
+    {
+        float dodgeThreshold = 5f; // 인정해줄 최소 기울기 각도
+
+        // 현재 내 상체가 어느 쪽으로 기울어졌는지 판별
+        bool isLeaningLeft = _currentBodyLean > dodgeThreshold;   
+        bool isLeaningRight = _currentBodyLean < -dodgeThreshold; 
+
+        // 크라켄 위치와 반대 방향으로 기울였는지 결과 반환
+        return (isKrakenOnMyRight && isLeaningLeft) || (!isKrakenOnMyRight && isLeaningRight);
+    }
 
     private void Start()
     {

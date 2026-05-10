@@ -29,21 +29,19 @@ public class Rat : AnimalTroll
         if (_heldSilverStoneVisual != null) _heldSilverStoneVisual.SetActive(false);
 
         // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
-        if (!photonView.IsMine) return;
+        if (!PhotonNetwork.IsMasterClient) return;
 
         _waittingTime = 3f;
     }
 
-    protected override void OnEnable()
+    void OnEnable()
     {
-        base.OnEnable();
         // 매니저가 보내주는 타겟 정보를 수신 대기
         TrollEvents.OnStoneTargetCallback += HandleTargetAssigned;
     }
 
-    protected override void OnDisable()
+    void OnDisable()
     {
-        base.OnDisable();
         TrollEvents.OnStoneTargetCallback -= HandleTargetAssigned;
     }
 
@@ -51,7 +49,7 @@ public class Rat : AnimalTroll
     private void HandleTargetAssigned(int color, Transform pos)
     {
         // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
-        if (!photonView.IsMine) return;
+        if (!PhotonNetwork.IsMasterClient) return;
 
         // 이미 목표가 있거나 움직이는 중이면 무시
         if (_currentState != AnimalState.Action) return;
@@ -72,42 +70,49 @@ public class Rat : AnimalTroll
         // Transform.position으로 방향 설정
         transform.LookAt(_targetPosition.position);
 
-        SendAnimationTrigger(_enterTrigger);
         Debug.Log($"🐀 [도둑쥐] 목표 설정 완료: {pos} (색상: {color})");
     }
 
     protected override void OnStateEnter(AnimalState state)
     {
-        // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
-        if (!photonView.IsMine) return;
-
         if(state == AnimalState.Entering || state == AnimalState.Action || state == AnimalState.Action2 || state == AnimalState.Exiting)
             _isInteractable = false;
         else
             _isInteractable = true;
 
-        if (state == AnimalState.Action)
+
+        // 🟢 [수정 4] 방장만 수행해야 하는 '데이터' 관련 로직
+        if (PhotonNetwork.IsMasterClient)
         {
-            _isTargetAssigned = false;
-            TrollEvents.TriggerRequestStoneToSteal();
-        }
-        
-        if (state == AnimalState.Action2)
-        {
-            transform.LookAt(_finalSpawnPos);
+            if (state == AnimalState.Action)
+            {
+                _isTargetAssigned = false;
+                TrollEvents.TriggerRequestStoneToSteal();
+            }
+            
+            if (state == AnimalState.Action2)
+            {
+                transform.LookAt(_finalSpawnPos);
+            }
+
+            // 퇴장 시작 시점에 딱 한 번만 좌표 계산
+            if (state == AnimalState.Hiding) SetHide();
         }
 
         // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
         if (_animator != null)
         {
             // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            SendAnimationReset(_enterTrigger);
-            SendAnimationReset(_exitTrigger);
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
             
             switch(state)
             {
+                case AnimalState.Action:
+                    _animator.SetTrigger(_enterTrigger);
+                    break;
                 case AnimalState.Hiding:
-                    SendAnimationTrigger(_exitTrigger);
+                    _animator.SetTrigger(_exitTrigger);
                     break;
             }
         }
@@ -115,6 +120,8 @@ public class Rat : AnimalTroll
 
     protected override void UpdateState()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         switch(_currentState)
         {
             case AnimalState.Entering:
@@ -157,7 +164,6 @@ public class Rat : AnimalTroll
                 }
                 break;
             case AnimalState.Hiding:
-                SetHide();
                 HideAction();
                 break;
             case AnimalState.Exiting:
@@ -189,5 +195,10 @@ public class Rat : AnimalTroll
             _heldGoldStoneVisual.SetActive(true);
         else if (color == 2 && _heldSilverStoneVisual != null)
             _heldSilverStoneVisual.SetActive(true);
+        else if (color == 0) // 빈손인 경우 (혹시 모를 초기화용)
+        {
+            if (_heldGoldStoneVisual != null) _heldGoldStoneVisual.SetActive(false);
+            if (_heldSilverStoneVisual != null) _heldSilverStoneVisual.SetActive(false);
+        }
     }
 }

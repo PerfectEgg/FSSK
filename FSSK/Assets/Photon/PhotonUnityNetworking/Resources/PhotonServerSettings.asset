@@ -67,6 +67,10 @@ MonoBehaviour:
   - SyncAnimationSetFloatRPC
   - RpcApplyPlacementResult
   - RpcSubmitPlacementRequest
+  - ChangeStateRPC
+  - RestoreToTableRPC
+  - SyncGrabbedStateRPC
+  - RequestStateChangeRPC
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

@@ -4,10 +4,6 @@ using UnityEngine;
 // 트롤 및 환경, 웨이브 관련 이벤트
 public static class TrollEvents
 {
-    // 트롤 관련 이벤트: (상태, 대상 오브젝트)
-    public static Action<bool, GameObject> OnTrollInteraction;
-    public static void TriggerTrollInteraction(bool isGrabbed, GameObject obj) => OnTrollInteraction?.Invoke(isGrabbed, obj);
-    
     // 아이템 관련 이벤트: (아이템 타입, 대상 오브젝트)
     public static Action<string, GameObject> OnItemCollected;
     public static void TriggerItemCollected(string itemTag, GameObject obj) => OnItemCollected?.Invoke(itemTag, obj);
@@ -34,6 +30,9 @@ public static class TrollEvents
     // 바다 게: 자리를 다 쓰고 반납하는 이벤트
     public static Action<Vector3> OnPositionReleased;
     public static void TriggerPositionReleased(Vector3 pos) => OnPositionReleased?.Invoke(pos);
+
+    // 크라켄: "오른쪽(true)에서 공격하는데 피했니?" 라고 물어보면, bool(성공 여부)로 대답하는 이벤트
+    public static Func<bool, bool> OnKrakenDodgeCheck;
 
     // 세이렌: 매혹 동안 확장 시야 고정 이벤트
     public static Action<bool, Transform> OnSirenEffect;

@@ -1,12 +1,11 @@
 using UnityEngine;
 using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 using IEnumerator = System.Collections.IEnumerator;
-using Mono.Cecil.Cil;
 
 public enum AnimalState { Entering, Waiting, Action, Action2, Hiding, Exiting }
 
 // 동물의 경우 (마우스로 치울 수 있음)
-public abstract class AnimalTroll : TrollBase, IDraggable 
+public abstract class AnimalTroll : TrollBase, IDraggable
 {
     [Header("스폰 연출 설정 (오크통 등장)")]
     [SerializeField] protected float _spawnDepth = 2f;    // 오크통 아래로 파고들어 있을 깊이
@@ -46,21 +45,30 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [SerializeField] protected float _throwForce = 20f; // 던지는 힘
     private Vector3 _originalPosition;   // 움직이는 위치를 저장하고 되돌릴 때 사용할 변수
 
-    protected virtual void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
-    protected virtual void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
-
-    private void HandleTrollInteraction(bool isGrabbedEvent, GameObject target)
+    public void SetGrabbedState(bool isGrabbed)
     {
-        if (target != gameObject) return;
+        // ✅ 잡기 전 원래 위치를 방장이 확정해서 전파
+        photonView.RPC("SyncGrabbedStateRPC", RpcTarget.All, isGrabbed, transform.position);
+    }
 
-        if (isGrabbedEvent) OnDragStart();  // 잡힘 이벤트 -> 잡기 로직 실행
-        else OnDragEnd();                   // 놓임 이벤트 -> 놓기 로직 실행
+    [PunRPC]
+    public void SyncGrabbedStateRPC(bool isGrabbed, Vector3 authorativePosition)
+    {
+        if (isGrabbed)
+        {
+            // ✅ 방장이 확정한 위치를 _originalPosition으로 세팅
+            _originalPosition = authorativePosition;
+            OnDragStart();
+        }
+        else
+        {
+            OnDragEnd();
+        }
     }
 
     protected virtual void Start()
     {
-        // 🟢 [멀티플레이] 초기 스폰 연출 위치 계산은 주인(방장)만 수행합니다.
-        if (!photonView.IsMine) return;
+        if (!PhotonNetwork.IsMasterClient) return; // ✅ 소유권 없으면 초기화 skip
 
         Vector3 spawnPoint = transform.position;
         spawnPoint.y = _spawnY; // Y축 높이 조정
@@ -71,7 +79,6 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
         // 🟢 추가: 무조건 바둑판 중앙(예: Vector3.zero)을 바라보는 회전값을 '정면'으로 설정
         Vector3 lookTarget = new Vector3(0, transform.position.y, transform.position.z); // 바둑판 중앙 좌표
-
         // 내 원래 회전값이 아니라, 중앙을 바라보는 회전값을 최종 목표로 덮어씌움!
         _finalSpawnRot = Quaternion.LookRotation(lookTarget - transform.position);
         
@@ -79,9 +86,12 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         _hiddenSpawnPos = _finalSpawnPos + Vector3.down * _spawnDepth;
         _hiddenSpawnRot = _finalSpawnRot * Quaternion.Euler(_spawnTiltAngle, 0, 0);
 
-        // 3. 땅속 초기 세팅
-        transform.position = _hiddenSpawnPos;
-        transform.rotation = _hiddenSpawnRot;
+        // 🟢 [수정 1-2] 실제 초기 위치 세팅만 방장(주인)이 하고, 나머지는 동기화를 따라갑니다.
+        if (photonView.IsMine)
+        {
+            transform.position = _hiddenSpawnPos;
+            transform.rotation = _hiddenSpawnRot;
+        }
     }
 
     protected virtual void SetHide()
@@ -98,7 +108,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     private void Update()
     {
         // 🟢 [멀티플레이] 초기 스폰 연출 위치 계산은 주인(방장)만 수행합니다.
-        if (!photonView.IsMine) return;
+        if (!PhotonNetwork.IsMasterClient) return;
 
         // 잡힌 순간 타이머 작동 X
         if (_isGrabbed) return;
@@ -106,16 +116,27 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         // 타이머 작동 (잡혀있지 않을 때만 시간이 흐름)
         _currentTime += Time.deltaTime;
 
-        _originalPosition = transform.position;
-
         UpdateState();
     }
 
+    // 🟢 [핵심 2] 상태 변경은 오직 주인(방장)만 지시하고, 결과를 모두에게 RPC로 뿌립니다!
     protected void ChangeState(AnimalState newState)
     {
-        _currentState = newState;
-        _currentTime = 0;        // 타이머 0으로 세팅
-        OnStateEnter(newState); // 상태 진입 순간 1회 실행
+        if (PhotonNetwork.IsMasterClient) // ✅ 방장(주인)만 상태 변경 권한
+        {
+            // AllBuffered를 사용하면 늦게 들어온 클라이언트도 상태를 올바르게 동기화합니다.
+            photonView.RPC("ChangeStateRPC", RpcTarget.AllBuffered, (int)newState);
+        }
+    }
+
+    // 🟢 [핵심 3] 모든 클라이언트가 이 함수를 통해 동시에 상태에 진입합니다!
+    // 이제 클라이언트의 애니메이터도 정상적으로 Exit 트리거를 받아 다음 애니메이션으로 넘어갑니다.
+    [PunRPC]
+    protected void ChangeStateRPC(int stateIndex)
+    {
+        _currentState = (AnimalState)stateIndex;
+        _currentTime = 0f;
+        OnStateEnter(_currentState); 
     }
 
     // 상태에 막 진입했을 때 할 일 (무적 판정, 애니메이션 재생 등)
@@ -132,6 +153,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         switch(_currentState)
         {
             case AnimalState.Entering:
+                Debug.Log($"테스트 1: {gameObject.name}이(가) Entering 상태에 진입했습니다.");
                 EnterAction();
                 break;
             case AnimalState.Waiting:
@@ -153,74 +175,45 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     {
         // 🟢 [멀티플레이] 트롤 파괴 시 이벤트는 '주인(마지막으로 들고 있던 사람)'만 쏩니다.
         // 안 그러면 모든 유저의 컴퓨터에서 중복으로 이벤트가 발생해 웨이브 타이머가 꼬일 수 있습니다.
-        if (photonView.IsMine)
+        if (PhotonNetwork.IsMasterClient)
         {
             TrollEvents.TriggerTrollFinished();
         }
     }
-
 
     // --- TrollBase(추상 클래스)의 메서드 구현 ---
     public override void ApplyEffect() {  }
     public override void EndTroll() 
     { 
         // 🟢 [멀티플레이 핵심 3] 일반 Destroy 대신 포톤 네트워크 파괴를 사용하되, 코루틴으로 3초 지연시킵니다.
-        if (photonView.IsMine)
+        if (PhotonNetwork.IsMasterClient)
         {
-            // 🟢 파괴하기 전, 마스터에게 완료 보고를 먼저 합니다.
-            photonView.RPC("ReportTrollFinishedRPC", RpcTarget.MasterClient);
-            StartCoroutine(DelayedNetworkDestroy(3f));
+            StartCoroutine(DelayedNetworkDestroy(2f));
         }
     }
 
     public IEnumerator DelayedNetworkDestroy(float delayTime)
     {
         yield return new WaitForSeconds(delayTime);
-        PhotonNetwork.Destroy(gameObject);
-    }
-
-
-    [PunRPC]
-    public void ReportTrollFinishedRPC()
-    {
-        // 이 로직은 MasterClient(방장)의 컴퓨터에서만 실행됩니다.
-        TrollEvents.TriggerTrollFinished();
-        Debug.Log($"[Master] 클라이언트로부터 트롤 종료 보고 수신: {gameObject.name}");
-    }
-    
-    
-    // 🟢 애니메이션 동기화를 위한 RPC 래퍼 (자식 클래스에서 사용)
-    protected void SendAnimationTrigger(string triggerName)
-    {
-        if (photonView.IsMine)
+        
+        if (PhotonNetwork.IsMasterClient)
         {
-            photonView.RPC("SyncAnimationRPC", RpcTarget.All, triggerName);
+            if (!photonView.IsMine)
+            {
+                photonView.RequestOwnership();
+                // 소유권 이전 시간을 잠시 기다림
+                yield return new WaitUntil(() => photonView.IsMine);
+            }
+            PhotonNetwork.Destroy(gameObject);
         }
-    }
-
-    [PunRPC]
-    public void SyncAnimationRPC(string triggerName)
-    {
-        if (_animator != null) _animator.SetTrigger(triggerName);
-    }
-
-    // 🟢 애니메이션 동기화를 위한 RPC 래퍼 (자식 클래스에서 사용)
-    protected void SendAnimationReset(string triggerName)
-    {
-        if (photonView.IsMine)
-        {
-            photonView.RPC("SyncAnimationResetRPC", RpcTarget.All, triggerName);
-        }
-    }
-
-    [PunRPC]
-    public void SyncAnimationResetRPC(string triggerName)
-    {
-        if (_animator != null) _animator.ResetTrigger(triggerName);
     }
 
     protected virtual void EnterAction()
     {
+        if (!PhotonNetwork.IsMasterClient) return; // ✅ 방장이 아닐 경우 위치 계산 skip
+
+        Debug.Log($"테스트 2: {gameObject.name}이(가) EnterAction 상태에 진입했습니다.");
+
         // 0.0 ~ 1.0 사이의 진행률 계산
         float progress = _currentTime / _enteringTime;
 
@@ -242,6 +235,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     protected virtual void HideAction()
     {
+        if (!PhotonNetwork.IsMasterClient) return; // ✅ 방장이 아닐 경우 위치 계산 skip
+
         // 0.0 ~ 1.0 사이의 진행률 계산 (들어갈 때도 _enteringTime 활용)
         float progress = _currentTime / _enteringTime;
 
@@ -263,14 +258,18 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     {
         // 상호작용 불가능 상태면 리턴
         if(!_isInteractable) return;
+        // 🟢 [중복 집기 방지] 이미 잡혀있다면 무시
+        if (_isGrabbed) return;
+
         _isGrabbed = true;
 
-        if (_rb != null) 
-        {
-            _rb.linearVelocity = Vector3.zero;
-            _rb.angularVelocity = Vector3.zero;
-        }
+        // 🟢 [수정 2] 잡는 순간 마우스 레이캐스트에 안 걸리게 무시 레이어로 덮어씌움
+        gameObject.layer = LayerMask.NameToLayer("Ignore"); // 프로젝트의 무시 레이어 이름으로 맞춰주세요!
+
+        // 🟢 [핵심 1] 잡는 순간 애니메이터를 기절시켜 위치 간섭을 완벽 차단!
+        if (_animator != null) _animator.enabled = false;
         
+        transform.position += Vector3.up * 1f; // 살짝 띄워서 잡힌 느낌 연출
     }
 
     public void OnDragEnd()
@@ -280,6 +279,12 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         if (photonView.IsMine)
         {
             CheckDropLocation();
+        }
+        else
+        {
+            // ✅ 비소유자는 시각적 복구만
+            gameObject.layer = LayerMask.NameToLayer("Interactable");
+            if (_animator != null) _animator.enabled = true;
         }
     }
 
@@ -293,18 +298,47 @@ public abstract class AnimalTroll : TrollBase, IDraggable
             // 물리 방어막을 해제해서 힘을 받을 수 있게 만듦
             if (_rb != null) 
             {
-                _rb.isKinematic = false; 
+                _rb.isKinematic = false;
                 _rb.useGravity = true; // 중력도 필요하다면 켭니다.
             }
 
             Throw(Camera.main.transform.forward);
-            
-            ChangeState(AnimalState.Exiting);
+            photonView.RPC("RequestStateChangeRPC", RpcTarget.MasterClient, (int)AnimalState.Exiting);
         }
         else
         {
             Debug.Log("아직 책상 위입니다! 방해 계속 진행");
-            transform.position = _originalPosition;     // 원래 위치로 되돌리기
+
+            transform.position = _originalPosition;     
+            gameObject.layer = LayerMask.NameToLayer("Interactable"); 
+            if (_animator != null) _animator.enabled = true;
+
+            // ✅ 위치 복구: 방장이 확정한 원래 위치로 되돌리고, 레이어와 애니메이터도 복구
+            photonView.RPC("RestoreToTableRPC", RpcTarget.MasterClient, _originalPosition);
+        }
+    }
+
+    [PunRPC]
+    public void RequestStateChangeRPC(int stateIndex)
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            ChangeState((AnimalState)stateIndex);
+        }
+    }
+
+    // 🟢 [7] 방장 컴퓨터에서만 안전하게 위치/권한을 복구하는 단일 진실 공급원
+    [PunRPC]
+    public void RestoreToTableRPC(Vector3 origPos)
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            // 방장이 물리적 권한과 AI 권한을 모두 온전히 회수
+            photonView.RequestOwnership(); 
+            
+            transform.position = origPos;
+            gameObject.layer = LayerMask.NameToLayer("Interactable"); 
+            if (_animator != null) _animator.enabled = true;
         }
     }
 

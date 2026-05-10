@@ -127,7 +127,7 @@ public class CameraModeController : MonoBehaviourPun
             if (_isExpansionMode && _panTilt != null)
             {
                 _panTilt.PanAxis.Value = 0f;
-                _panTilt.TiltAxis.Value = 20f;
+                _panTilt.TiltAxis.Value = 10f;
             }
 
             SetCameraMode(_isExpansionMode);
@@ -158,13 +158,15 @@ public class CameraModeController : MonoBehaviourPun
     private void ForceLookAtSiren()
     {
         Vector3 direction = _sirenTarget.position - _expansionCam.transform.position;
-        
+
         if (direction != Vector3.zero)
         {
-            Quaternion targetRot = Quaternion.LookRotation(direction);
+            // 🟢 [핵심 수정] 절대 월드 각도(eulerAngles.y)가 아니라, 
+            // 내 캐릭터의 정면을 기준으로 세이렌까지의 '상대적인 각도(-180 ~ 180)'를 구합니다!
             
-            // Quaternion에서 좌우 회전값(Y축 회전 = Pan)만 추출합니다.
-            float targetPan = targetRot.eulerAngles.y;
+            // 주의: 여기서 transform.forward는 카메라가 아닌 '플레이어 캐릭터(몸체)'의 방향이어야 합니다.
+            // 만약 이 스크립트가 카메라에 붙어있다면 transform.parent.forward 등을 사용하세요.
+            float targetPan = Vector3.SignedAngle(transform.forward, direction, Vector3.up);
 
             // Mathf.LerpAngle을 사용하되, _sirenPullSpeed를 낮추어 '늪에 빠지듯' 천천히 돌아가게 만듭니다.
             _panTilt.PanAxis.Value = Mathf.LerpAngle(_panTilt.PanAxis.Value, targetPan, Time.deltaTime * _sirenPullSpeed);

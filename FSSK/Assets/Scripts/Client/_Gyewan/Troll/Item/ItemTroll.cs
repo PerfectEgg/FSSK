@@ -3,7 +3,7 @@ using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 using IEnumerator = System.Collections.IEnumerator;
 
 // 아이템의 경우 (마우스로 던질 수 있음)
-public abstract class ItemTroll : TrollBase, IDraggable 
+public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
 {
     protected Rigidbody rb;
     protected bool _isGrabbed = false;   // 드래그 중인지 여부를 체크하는 변수
@@ -14,15 +14,11 @@ public abstract class ItemTroll : TrollBase, IDraggable
 
     protected Vector3 _grabbedScale = Vector3.zero; // 🟢 잡았을 때 원래 크기
 
-    private void OnEnable() => TrollEvents.OnTrollInteraction += HandleTrollInteraction;
-    private void OnDisable() => TrollEvents.OnTrollInteraction -= HandleTrollInteraction;
-
-    private void HandleTrollInteraction(bool isGrabbedEvent, GameObject target)
+    // ✅ SyncGrabItemRPC에서 직접 호출 (로컬 이벤트 의존 제거)
+    public void SetGrabbedState(bool isGrabbed)
     {
-        if (target != gameObject) return;
-
-        if (isGrabbedEvent) OnDragStart();  // 잡힘 이벤트 -> 잡기 로직 실행
-        else OnDragEnd();                   // 놓임 이벤트 -> 놓기 로직 실행
+        if (isGrabbed) OnDragStart();
+        else OnDragEnd();
     }
 
     private void Awake() => rb = GetComponent<Rigidbody>();
@@ -73,9 +69,6 @@ public abstract class ItemTroll : TrollBase, IDraggable
 
         _isGrabbed = false;
 
-        // 🟢 물리 연산 복구 (던지기 위해)
-        if (rb != null) rb.isKinematic = false;
-
         if (photonView.IsMine)
         {
             if (rb != null) rb.isKinematic = false;
@@ -102,11 +95,26 @@ public abstract class ItemTroll : TrollBase, IDraggable
         {
             ApplyDebuff(other.gameObject);
 
+            TrollEvents.TriggerItemCollected(gameObject.tag, gameObject);
             // 🟢 즉시 파괴 시에도 네트워크 파괴 사용
             PhotonNetwork.Destroy(gameObject);
         }
     }
 
     public abstract void ApplyDebuff(GameObject target);
+
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
+    {
+        if (stream.IsWriting)
+        {
+            stream.SendNext(_isGrabbed);
+            stream.SendNext(_isThrown);
+        }
+        else
+        {
+            _isGrabbed = (bool)stream.ReceiveNext();
+            _isThrown = (bool)stream.ReceiveNext();
+        }
+    }
 }
 

@@ -27,7 +27,7 @@ public class Parrot : AnimalTroll
         _animator = GetComponent<Animator>();
 
         // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
-        if (!photonView.IsMine) return;
+        if (!PhotonNetwork.IsMasterClient) return;
 
         _startPos = transform.position;
         _startPos.y = 0;
@@ -47,27 +47,29 @@ public class Parrot : AnimalTroll
     {
         base.OnStateEnter(state);
 
-        // 🟢 [멀티플레이] 상태 변화 및 애니메이션 트리거는 주인만 실행합니다.
-        // (주인이 실행하면 Photon Animator View가 남들의 화면에도 똑같이 애니메이션을 틀어줍니다)
-        if (!photonView.IsMine) return;
-
-        if (state == AnimalState.Waiting)
-            LookAtTarget(_targetPos);
+        if (PhotonNetwork.IsMasterClient)
+        {
+            // 고개를 돌리거나 숨을 준비를 하는 '계산'은 방장만 합니다.
+            if (state == AnimalState.Waiting) LookAtTarget(_targetPos);
+            
+            // 🟢 [수정 3] 숨기 시작할 때(Hiding 진입 시) 딱 한 번만 숨는 좌표를 세팅합니다.
+            if (state == AnimalState.Hiding) SetHide(); 
+        }
 
         // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
         if (_animator != null)
         {
-            SendAnimationReset(_enterTrigger);
-            SendAnimationReset(_exitTrigger);
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
 
             switch(state)
             {
                 case AnimalState.Action:
-                    SendAnimationSetFloat("Action", 1); // Action 트리거 대신 파라미터로 제어 (연속된 애니메이션 재생 가능)
-                    SendAnimationTrigger(_enterTrigger);
+                    _animator.SetFloat("Action", 1); // Action 트리거 대신 파라미터로 제어 (연속된 애니메이션 재생 가능)
+                    _animator.SetTrigger(_enterTrigger);
                     break;
                 case AnimalState.Waiting:
-                    SendAnimationTrigger(_exitTrigger);
+                    _animator.SetTrigger(_exitTrigger);
                     break;
             }
         }
@@ -83,6 +85,8 @@ public class Parrot : AnimalTroll
 
     protected override void UpdateState()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         switch(_currentState)
         {
             case AnimalState.Entering:
@@ -143,7 +147,6 @@ public class Parrot : AnimalTroll
                 }
                 break;
             case AnimalState.Hiding:
-                SetHide();
                 HideAction();
                 break;
             case AnimalState.Exiting:
@@ -167,20 +170,5 @@ public class Parrot : AnimalTroll
 
         // 위치 적용
         transform.position = currentPos;
-    }
-
-    // 🟢 애니메이션 동기화를 위한 RPC 래퍼 (자식 클래스에서 사용)
-    private void SendAnimationSetFloat(string triggerName, float value)
-    {
-        if (photonView.IsMine)
-        {
-            photonView.RPC("SyncAnimationSetFloatRPC", RpcTarget.All, triggerName, value);
-        }
-    }
-
-    [PunRPC]
-    public void SyncAnimationSetFloatRPC(string triggerName, float value)
-    {
-        if (_animator != null) _animator.SetFloat(triggerName, value);
     }
 }

@@ -12,7 +12,6 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
     [SerializeField] private float _holdDistance = 7.5f;
 
     [Header("IK 세팅 (살짝 쥐기)")]
-    [SerializeField] [Range(0f, 1f)] private float _holdWeight = 0.4f; 
     [SerializeField] private float _ikTransitionSpeed = 5f;            
 
     [Header("IK 세팅 (던지기 연출)")]
@@ -158,24 +157,27 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         PhotonView itemPV = PhotonView.Find(itemViewId);
         if (itemPV == null) return;
 
-         TrollEvents.TriggerTrollInteraction(isGrabbed, itemPV.gameObject);
+        AnimalTroll animalTroll = itemPV.GetComponent<AnimalTroll>();
+        if (animalTroll != null) animalTroll.SetGrabbedState(isGrabbed);
 
-        if (!isGrabbed && itemPV.CompareTag("Item"))
-        {
-            TrollEvents.TriggerItemCollected(itemPV.tag, itemPV.gameObject);
-        }
+        ItemTroll itemTroll = itemPV.GetComponent<ItemTroll>();
+        if (itemTroll != null) itemTroll.SetGrabbedState(isGrabbed);
 
         if (isGrabbed)
         {
-            _currentGrabbedObject = itemPV.gameObject;
-            _grabbedTransform = itemPV.transform;
             if (itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
+
+            // 🟢 [핵심 수정] 내 캐릭터일 때만 손에 쥐도록 변경! (줄다리기 방지)
+            if (photonView.IsMine) 
+            {
+                _currentGrabbedObject = itemPV.gameObject;
+                _grabbedTransform = itemPV.transform;
+            }
         }
         else
         {
-            if (itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
-
-            if (!photonView.IsMine)
+            // 🟢 [핵심 수정] 놓을 때도 내 캐릭터만 비워줍니다.
+            if (photonView.IsMine) 
             {
                 _currentGrabbedObject = null;
                 _grabbedTransform = null;

@@ -19,6 +19,8 @@ public class Turtle : AnimalTroll
     // 목표 지점을 바라보는 함수
     private void LookAtTarget()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         _targetPosition = new Vector3(-transform.position.x, transform.position.y, -transform.position.z);
 
         _targetDirection = _targetPosition.normalized;
@@ -35,25 +37,29 @@ public class Turtle : AnimalTroll
         base.OnStateEnter(state);
 
         // 🟢 [멀티플레이 핵심] 계산은 오직 방장(주인)만!
-        if (!photonView.IsMine) return;
+        if (PhotonNetwork.IsMasterClient)
+        {
+            if (state == AnimalState.Waiting)
+                LookAtTarget();
 
-        if (state == AnimalState.Waiting)
-            LookAtTarget();
+            // 🟢 [수정 3] 숨는 위치(SetHide)는 Hiding 상태 진입 시 딱 한 번만 계산합니다!
+            if (state == AnimalState.Hiding) SetHide();
+        }
 
         // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
         if (_animator != null)
         {
             // 사용하시는 트리거 변수들을 여기서 모두 Reset 해줍니다.
-            SendAnimationReset(_enterTrigger);
-            SendAnimationReset(_exitTrigger);
+            _animator.ResetTrigger(_enterTrigger);
+            _animator.ResetTrigger(_exitTrigger);
 
             switch(state)
             {
                 case AnimalState.Action:
-                    SendAnimationTrigger(_enterTrigger);
+                    _animator.SetTrigger(_enterTrigger);
                     break;
                 case AnimalState.Hiding:
-                    SendAnimationTrigger(_exitTrigger);
+                    _animator.SetTrigger(_exitTrigger);
                     break;
             }
         }
@@ -61,6 +67,8 @@ public class Turtle : AnimalTroll
 
     protected override void UpdateState()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
         switch(_currentState)
         {
             case AnimalState.Entering:
@@ -79,7 +87,6 @@ public class Turtle : AnimalTroll
                 }
                 break;
             case AnimalState.Hiding:
-                SetHide();
                 HideAction();
                 break;
             case AnimalState.Exiting:

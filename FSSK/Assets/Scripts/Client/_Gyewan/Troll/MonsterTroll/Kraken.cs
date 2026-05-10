@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
 // 크라켄
 public class Kraken : MonsterTroll
@@ -74,21 +74,15 @@ public class Kraken : MonsterTroll
 
     private void EvaluateDodge()
     {
-        // 크라켄의 위치 판별
-        bool isKrakenOnRight = transform.position.x > 0;
-        float playerInput = 0f;
+        // 1. 내 화면 기준 크라켄 위치 판별 (시점 데칼코마니 해결)
+        bool isKrakenOnMyRight = PhotonNetwork.IsMasterClient ? transform.position.x > 0 : transform.position.x < 0;
 
-        // 플레이어의 현재 입력 상태 (-1: 왼쪽, 1: 오른쪽, 0: 입력 없음)
-        if(_isExpansionMode)
+        // 2. 🟢 이벤트를 통해 내 캐릭터에게 물리적 회피 성공 여부를 물어봅니다.
+        bool isDodgeSuccess = false;
+        if (TrollEvents.OnKrakenDodgeCheck != null)
         {
-            playerInput = Input.GetAxisRaw("Horizontal"); 
+            isDodgeSuccess = TrollEvents.OnKrakenDodgeCheck.Invoke(isKrakenOnMyRight);
         }
-
-        bool isPressingLeft = playerInput < 0;
-        bool isPressingRight = playerInput > 0;
-
-        // 회피 성공 조건 판별
-        bool isDodgeSuccess = (isKrakenOnRight && isPressingLeft) || (!isKrakenOnRight && isPressingRight);
 
         // 결과 처리
         if (isDodgeSuccess)

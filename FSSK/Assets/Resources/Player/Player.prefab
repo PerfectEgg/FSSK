@@ -265,7 +265,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   _holdDistance: 7.5
-  _holdWeight: 0.4
   _ikTransitionSpeed: 5
   _throwDuration: 0.15
   _holdDuration: 0.05
