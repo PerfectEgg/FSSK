@@ -8,7 +8,7 @@ public class Kraken : MonsterTroll
     [SerializeField] private float _enterDuration = 2f;     // 등장에 걸리는 시간
     [SerializeField] private float _attackDelay = 1f;       // 애니메이션 시작 후 타격까지의 대기 시간 (2초~3초 구간)
     [SerializeField] private float _waitDelay = 1f;         // 애니메이션 시작 후 타격까지의 대기 시간 (2초~3초 구간)
-    [SerializeField] private float _exitDuration = 2f;      // 퇴장에 걸리는 시간
+    [SerializeField] private float _exitDuration = 3f;      // 퇴장에 걸리는 시간
     [SerializeField] private float _sinkDepth = 20f;        // 아래로 가라앉을 깊이
     [SerializeField] private float _sinkBack = 40f;         // 뒤로 물러날 거리
 
