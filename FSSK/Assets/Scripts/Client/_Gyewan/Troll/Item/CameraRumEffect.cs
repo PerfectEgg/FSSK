@@ -13,7 +13,6 @@ public class CameraRumEffect : MonoBehaviourPun
     [SerializeField] private float _holdSpeedMultiplier = 4f; // AD 홀드 시 시간이 줄어드는 배속 (4배속)
 
     private float _currentTimer = 0f;
-    private bool _isEffectActive = false;
 
     private void OnEnable()
     {
@@ -38,7 +37,6 @@ public class CameraRumEffect : MonoBehaviourPun
 
     private IEnumerator RumDebuffCoroutine()
     {
-        _isEffectActive = true;
         _currentTimer = _maxDuration;
 
         Debug.Log($"🥃 [럼 피격] 찰싹! 화면에 럼이 붙었습니다! AD 연타하세요! (8초)");
@@ -78,7 +76,6 @@ public class CameraRumEffect : MonoBehaviourPun
 
     private void ClearEffect()
     {
-        _isEffectActive = false;
         Debug.Log("✨ [럼주 해제] 술기운이 깼습니다. 시야가 완전히 정상으로 돌아왔습니다.");
 
         // 쉐이더 이펙트 끄기

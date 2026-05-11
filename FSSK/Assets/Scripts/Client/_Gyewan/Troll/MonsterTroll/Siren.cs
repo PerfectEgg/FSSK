@@ -47,8 +47,11 @@ public class Siren : MonsterTroll
     }
     void OnDestroy()
     {
-        // 트롤이 제거될 때 매니저에게 종료 알림
-        TrollEvents.TriggerTrollFinished();
+        if (PhotonNetwork.IsMasterClient)
+        {
+            // 트롤이 제거될 때 매니저에게 종료 알림
+            TrollEvents.TriggerTrollFinished();
+        }
     }
 
     void Update()

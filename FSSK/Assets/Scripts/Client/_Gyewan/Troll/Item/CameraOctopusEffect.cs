@@ -17,7 +17,6 @@ public class CameraOctopusEffect : MonoBehaviourPun
 
     private GameObject _currentOctopus; // 현재 화면에 붙은 문어 인스턴스
     private float _currentTimer = 0f;
-    private bool _isEffectActive = false;
     private Transform _mainCameraTransform; // 메인 카메라 위치 정보
 
     private void Awake()
@@ -55,7 +54,6 @@ public class CameraOctopusEffect : MonoBehaviourPun
 
     private IEnumerator OctopusDebuffCoroutine()
     {
-        _isEffectActive = true;
         _currentTimer = _maxDuration;
 
         Debug.Log($"🐙 [문어 피격] 찰싹! 화면에 문어가 붙었습니다! AD 연타하세요! (8초)");
@@ -104,7 +102,6 @@ public class CameraOctopusEffect : MonoBehaviourPun
 
     private void ClearEffect()
     {
-        _isEffectActive = false;
         Debug.Log("✨ [문어 해제] 시야가 정상으로 돌아왔습니다.");
 
         // 문어 오브젝트 삭제
