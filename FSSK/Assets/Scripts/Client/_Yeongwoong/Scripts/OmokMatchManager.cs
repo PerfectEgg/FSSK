@@ -639,6 +639,12 @@ public class OmokMatchManager : MonoBehaviour
         return true;
     }
 
+    public void ForceEndMatchAsDraw()
+    {
+        if (_isMatchEnded) return;
+        EndMatch(OmokStoneColor.None);
+    }
+
     private void EndMatch(OmokStoneColor resultWinner)
     {
         _isMatchEnded = true;

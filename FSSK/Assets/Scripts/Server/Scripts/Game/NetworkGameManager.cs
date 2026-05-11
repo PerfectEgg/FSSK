@@ -3,7 +3,8 @@ using Photon.Pun;
 using Photon.Realtime;
 using Unity.Cinemachine;
 using UnityEngine;
-
+using TMPro;
+using UnityEngine.UI;
 /// <summary>
 /// 게임 씬 네트워크 통합 매니저 (싱글톤 + PunRPC).
 /// 게임 전체 시간, 스폰/파괴, (트롤·환경 효과 broadcast), 종료 처리만 담당한다.
@@ -28,6 +29,9 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private int _winScoreDelta = 10; // 플러스 점수
     [SerializeField] private int _loseScoreDelta = -10; // 마이너스 점수
 
+    [Header("Result Panel")]
+    [SerializeField] private GameResultPanel _resultPanel;
+
     // 플레이어 스폰을 위한 변수
     [Header("Player Spawn")]
     [SerializeField] private Transform[] _spawnPoints; // 인스펙터에서 의자 2개 할당
@@ -46,6 +50,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private readonly HashSet<int> _claimedItemIds = new(); // 누군가 먹은 아이템(중복 x)
     private bool _spawnedMyPlayer;
     private bool _spawnedSoloOpponentCharacter;
+    private bool _returningToLobby;
 
     // ──────────────────────────────────────────────────────────────
     //  Unity 라이프사이클
@@ -76,6 +81,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         if (PhotonNetwork.IsMasterClient)
             BeginGame();
+        
     }
 
     // 플레이어 스폰 함수 추가 (안전한 나머지 연산자 사용)
@@ -305,7 +311,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  5. 애니메이션 / 위치 공유 (연속 동기화는 PhotonTransformView/AnimatorView,
+    //  3. 애니메이션 / 위치 공유 (연속 동기화는 PhotonTransformView/AnimatorView,
     //     이벤트성 트리거만 RPC)
     // ──────────────────────────────────────────────────────────────
     public void BroadcastAnimationTrigger(int viewId, string triggerName)
@@ -357,7 +363,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  7. 환경 / 몬스터 효과 (마스터 결정 → 전체 동기화)
+    //  4. 환경 / 몬스터 효과 (마스터 결정 → 전체 동기화)
     //     RPC 수신부에서 TrollEvents.* 발사 → 기존 클라 코드(트롤 AI, UI, 카메라) 자동 연동
     //     특정 플레이어 대상 효과(Stun, Siren)는 actorNumber 비교로 본인만 적용
     // ──────────────────────────────────────────────────────────────
@@ -485,7 +491,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  8. 게임 결과 기록 (점수 처리는 BackendRank 통해)
+    //  5. 게임 결과 기록 (점수 처리는 BackendRank 통해)
     // ──────────────────────────────────────────────────────────────
     public void EndGame(int winnerActorNumber)
     {
@@ -507,28 +513,39 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         IsGameOver = true;
 
         bool draw = winnerActorNumber == -1;
-        bool iWon = winnerActorNumber == PhotonNetwork.LocalPlayer.ActorNumber;
+        bool iWon = !draw && winnerActorNumber == PhotonNetwork.LocalPlayer.ActorNumber;
+        int delta = iWon ? _winScoreDelta : _loseScoreDelta;
+        GameResultType resultType = draw ? GameResultType.Draw : (iWon ? GameResultType.Win : GameResultType.Lose);
 
-        Debug.Log($"[NetworkGameManager] 게임 종료 (winner: {winnerActorNumber}, 결과: {(draw ? "무승부" : iWon ? "승" : "패")})");
+        Debug.Log($"[NetworkGameManager] 게임 종료 (winner: {winnerActorNumber}, 결과: {resultType}, delta: {delta:+#;-#;0})");
 
         if (draw)
         {
-            // 무승부일 경우 UI창 뛰우고 나가기 버튼 클릭시 ReturnToLobby 실행
-            //ReturnToLobby();
-            return;
+            OmokMatchManager match = FindFirstObjectByType<OmokMatchManager>();
+            if (match != null) match.ForceEndMatchAsDraw();
         }
 
-        ApplyMatchResult(iWon ? _winScoreDelta : _loseScoreDelta);
+        int currentScore = (BackendManager.Instance != null && BackendManager.Instance.MyUserData != null)
+            ? BackendManager.Instance.MyUserData.score
+            : 0;
+
+        if (_resultPanel != null)
+        {
+            _resultPanel.Show(resultType, currentScore, delta);
+        }
+        else
+        {
+            Debug.LogError("[NetworkGameManager] _resultPanel NullReference.");
+        }
+        ApplyMatchResult(delta);
     }
 
     private void ApplyMatchResult(int delta)
     {
-        if (BackendRank.Instance == null || BackendManager.Instance == null || BackendManager.Instance.MyUserData == null)
-        {
-            Debug.LogError("[NetworkGameManager] BackendRank/BackendManager not ready.");
-            ReturnToLobby();
-            return;
-        }
+        if (BackendRank.Instance == null) { Debug.LogError("[NetworkGameManager] BackendRank.Instance is null."); return; }
+        if (BackendManager.Instance == null) { Debug.LogError("[NetworkGameManager] BackendManager.Instance is null."); return; }
+        if (BackendManager.Instance.MyUserData == null) { Debug.LogError("[NetworkGameManager] BackendManager.MyUserData is null."); return; }
+
 
         int next = BackendManager.Instance.MyUserData.score + delta;
         BackendRank.Instance.UpdateMyScore(next,
@@ -536,27 +553,45 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             {
                 BackendManager.Instance.MyUserData.score = next;
                 Debug.Log($"[NetworkGameManager] 점수 갱신 완료 ({next}점)");
-                ReturnToLobby();
             },
             onFail: err =>
             {
                 Debug.LogError($"[NetworkGameManager] UpdateMyScore failed: {err}");
-                ReturnToLobby();
             });
     }
 
-    private void ReturnToLobby()
+    public void ReturnToLobby()
     {
+        if(_returningToLobby) return;
+        _returningToLobby = true;
+
+        PhotonNetwork.AutomaticallySyncScene = false;
+
         if (PhotonNetwork.InRoom)
         {
-            PhotonNetwork.AutomaticallySyncScene = false;
             PhotonNetwork.LeaveRoom();
+            return;
         }
+        LoadLobbySceneDirect();
+    }
+    
+
+    public override void OnLeftRoom()
+    {
+        base.OnLeftRoom();
+        if(!_returningToLobby) return;
+        Debug.Log($"[NetworkGameManager] 방 떠남 (본인: {PhotonNetwork.LocalPlayer.NickName}, actor: {PhotonNetwork.LocalPlayer.ActorNumber})");
+        LoadLobbySceneDirect();
+    }
+
+    private void LoadLobbySceneDirect()
+    {
         if (BackendManager.Instance != null) BackendManager.Instance.LoadLobbyScene();
     }
 
+
     // ──────────────────────────────────────────────────────────────
-    //  9. 예외 상황 처리 (상대 퇴장, 본인 끊김, 마스터 이전)
+    //  6. 예외 상황 처리 (상대 퇴장, 본인 끊김, 마스터 이전)
     // ──────────────────────────────────────────────────────────────
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
@@ -605,4 +640,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         Debug.Log($"[NetworkGameManager] 마스터 클라 변경 → '{newMasterClient.NickName}' (actor: {newMasterClient.ActorNumber})");
         // 새 마스터로 권한 자동 이전
     }
+
+        
+
 }

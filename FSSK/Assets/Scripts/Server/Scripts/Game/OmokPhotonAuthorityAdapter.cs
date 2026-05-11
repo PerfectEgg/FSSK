@@ -446,6 +446,7 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
         if (_matchManager != null)
         {
             _matchManager.OnStoneRemoved += HandleStoneRemovedOnAuthority;
+            _matchManager.OnMatchEnded += HandleMatchEndedOnAuthority;
             _subscribedMatchManager = _matchManager;
         }
     }
@@ -462,8 +463,52 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
         if (_subscribedMatchManager != null)
         {
             _subscribedMatchManager.OnStoneRemoved -= HandleStoneRemovedOnAuthority;
+            _subscribedMatchManager.OnMatchEnded -= HandleMatchEndedOnAuthority;
             _subscribedMatchManager = null;
         }
+    }
+
+    // ──────────────────────────────────────────────
+    //  매치 종료 → NetworkGameManager 권한 결정 (마스터 전담)
+    //  마스터=Gold, 리모트=Silver (TryConfigureMatchFromPhoton 의 색 배정과 일치)
+    // ──────────────────────────────────────────────
+
+    private void HandleMatchEndedOnAuthority(OmokStoneColor winnerColor)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        if (NetworkGameManager.Instance == null)
+        {
+            Debug.LogError("[OmokPhotonAuthorityAdapter] NetworkGameManager.Instance is null on match end.");
+            return;
+        }
+
+        int masterActor = PhotonNetwork.MasterClient != null ? PhotonNetwork.MasterClient.ActorNumber : -1;
+        int winnerActor;
+        if (winnerColor == OmokStoneColor.None)
+        {
+            winnerActor = -1;
+        }
+        else if (winnerColor == OmokStoneColor.Gold)
+        {
+            winnerActor = masterActor;
+        }
+        else
+        {
+            winnerActor = ResolveOpponentActorNumber(masterActor);
+        }
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] 매치 종료 → NetworkGameManager.EndGame 호출 (winnerColor: {winnerColor}, winnerActor: {winnerActor})");
+        NetworkGameManager.Instance.EndGame(winnerActor);
+    }
+
+    private int ResolveOpponentActorNumber(int masterActor)
+    {
+        foreach (var p in PhotonNetwork.PlayerList)
+        {
+            if (p == null) continue;
+            if (p.ActorNumber != masterActor) return p.ActorNumber;
+        }
+        return -1;
     }
 
     private Vector3 ResolveRemoteReleasePosition(Vector2Int coordinate)

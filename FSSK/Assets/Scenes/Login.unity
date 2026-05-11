@@ -1756,6 +1756,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1030695882}
   - component: {fileID: 1030695883}
+  - component: {fileID: 1030695884}
   m_Layer: 0
   m_Name: BackendManager
   m_TagString: Untagged
@@ -1790,7 +1791,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0f73db3e42ab803468d780822b032765, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BackendManager
-  matchingSceneName: Lobby
+  _matchingSceneName: Lobby
+--- !u!114 &1030695884
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1030695881}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 532e7e1f264736444bf16b049c67d90a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BackendRank
+  _userRankUuid: 019ded1e-efea-7ae4-9c0c-5c5d3ca4d72f
 --- !u!1 &1158625019
 GameObject:
   m_ObjectHideFlags: 0
