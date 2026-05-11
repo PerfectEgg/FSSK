@@ -1,10 +1,34 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 [DefaultExecutionOrder(10000)]
 public sealed class RainParticleEffectController : MonoBehaviour
 {
     private const string RainParticlesObjectName = "rain particles";
+    private const int ScreenRainTextureSize = 256;
+    private const int ScreenRainRandomSeed = 2137;
+    private const float ScreenRainLevel1Alpha = 0.1f;
+    private const float ScreenRainLevel2Alpha = 0.2f;
+    private const float ScreenRainLevel3Alpha = 0.34f;
+    private const int ScreenRainLevel1StreakCount = 160;
+    private const int ScreenRainLevel2StreakCount = 320;
+    private const int ScreenRainLevel3StreakCount = 540;
+    private const int ScreenRainMinStreakLength = 12;
+    private const int ScreenRainMaxStreakLength = 46;
+    private const float ScreenRainDropLengthScale = 1f;
+    private const float ScreenRainFadeSpeed = 3.5f;
+    private const float ScreenRainScrollSpeed = 2.8f;
+    private const float ScreenRainNearTiling = 2.1f;
+    private const float ScreenRainFarTiling = 2.75f;
+    private const float ScreenRainSlant = -0.12f;
+    private const float ScreenRainWindReferenceVelocityX = 15f;
+    private const float ScreenRainWindAngleAtReference = 6f;
+    private const float ScreenRainWindHorizontalScrollScale = 0.025f;
+    private const float ScreenRainWindSpeedBoost = 0.1f;
+    private const float ScreenRainLayerOverscanPixels = 320f;
+    private const float ScreenRainFarLayerAlphaScale = 0.65f;
+    private const bool InvertScreenRainWindDirection = true;
 
     [Header("Preview Settings")]
     [SerializeField] private bool previewOnStart;
@@ -17,6 +41,17 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     [Header("References")]
     [SerializeField] private GameObject existingRainInstance;
+
+    [Header("Camera Coverage")]
+    [SerializeField] private bool followActiveCamera = true;
+    [SerializeField] private Transform followTarget;
+    [SerializeField] private bool resolveMainCameraAsTarget = true;
+    [SerializeField] private bool keepInitialEmitterHeight = true;
+    [SerializeField, Min(0f)] private float emitterHeightOffset = 22f;
+    [SerializeField, Min(0f)] private float emitterLookAheadDistance = 8f;
+    [SerializeField] private Vector3 emitterWorldOffset;
+    [SerializeField, Min(0.05f)] private float targetRefreshInterval = 0.5f;
+    [SerializeField] private bool forceWorldSimulationSpace = true;
 
     [Header("Wave Settings")]
     [SerializeField] private bool useWaveStageEvent = true;
@@ -33,9 +68,19 @@ public sealed class RainParticleEffectController : MonoBehaviour
     [Header("Wind Velocity Transition")]
     [SerializeField, Min(0f)] private float windVelocityTransitionSeconds = 1.5f;
 
+    [Header("Screen Rain Overlay")]
+    [SerializeField] private bool enableScreenRainOverlay = true;
+    [SerializeField] private Color screenRainColor = new(0.72f, 0.84f, 1f, 1f);
+    [SerializeField] private bool enableScreenRainWindTilt = true;
+
     private readonly List<ParticleSystem> _allParticleSystems = new();
     private readonly List<ParticleSystem> _rainParticleSystems = new();
     private GameObject _rainInstance;
+    private float _initialEmitterWorldY;
+    private bool _hasInitialEmitterWorldY;
+    private bool _missingRainInstanceWarningLogged;
+    private Camera _cachedMainCamera;
+    private float _targetRefreshElapsed;
     private int _currentRainLevel;
     private bool _hasAppliedRainLevel;
     private bool _windVelocityTransitionActive;
@@ -43,6 +88,15 @@ public sealed class RainParticleEffectController : MonoBehaviour
     private float _currentWindVelocityX;
     private float _targetWindVelocityX;
     private float _windVelocityTransitionElapsed;
+    private Canvas _screenRainCanvas;
+    private RawImage _screenRainNearLayer;
+    private RawImage _screenRainFarLayer;
+    private Texture2D _screenRainTexture;
+    private int _screenRainTextureStreakCount = -1;
+    private int _screenRainTextureSeed;
+    private float _screenRainCurrentAlpha;
+    private float _screenRainUvOffset;
+    private float _screenRainWindUvOffset;
 
     private void OnEnable()
     {
@@ -58,6 +112,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
         OmokWindVisualEvents.OnVelocityXChanged -= HandleWindVisualVelocityXChanged;
 
         StopRainParticles(true);
+        HideScreenRainOverlay();
     }
 
     private void Start()
@@ -74,7 +129,9 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void LateUpdate()
     {
+        UpdateEmitterFollow();
         UpdateWindVelocityTransition();
+        UpdateScreenRainOverlay();
         HandleKeyboardTesting();
     }
 
@@ -84,9 +141,12 @@ public sealed class RainParticleEffectController : MonoBehaviour
         rainLevel2RateOverTime = Mathf.Max(0f, rainLevel2RateOverTime);
         rainLevel3RateOverTime = Mathf.Max(0f, rainLevel3RateOverTime);
         windVelocityTransitionSeconds = Mathf.Max(0f, windVelocityTransitionSeconds);
-
+        emitterHeightOffset = Mathf.Max(0f, emitterHeightOffset);
+        emitterLookAheadDistance = Mathf.Max(0f, emitterLookAheadDistance);
+        targetRefreshInterval = Mathf.Max(0.05f, targetRefreshInterval);
         if (Application.isPlaying && isActiveAndEnabled)
         {
+            InvalidateScreenRainTexture();
             ApplyRainLevel(_currentRainLevel, true, false);
             SetWindVelocityTarget(OmokWindVisualEvents.CurrentVelocityX);
         }
@@ -192,13 +252,21 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
         if (_rainInstance == null)
         {
-            Debug.LogWarning(
-                "[RainParticleEffect] Place the Rain Particles prefab in the scene, or assign Existing Rain Instance.",
-                this);
+            if (!_missingRainInstanceWarningLogged)
+            {
+                Debug.LogWarning(
+                    "[RainParticleEffect] Place the Rain Particles prefab in the scene, or assign Existing Rain Instance.",
+                    this);
+                _missingRainInstanceWarningLogged = true;
+            }
+
             return false;
         }
 
+        _missingRainInstanceWarningLogged = false;
         CaptureParticleSystems();
+        CaptureInitialEmitterHeight();
+        ApplySimulationSpace();
         ApplyWindVelocityX(_currentWindVelocityX);
         return true;
     }
@@ -311,6 +379,37 @@ public sealed class RainParticleEffectController : MonoBehaviour
         }
     }
 
+    private void CaptureInitialEmitterHeight()
+    {
+        if (_rainInstance == null || _hasInitialEmitterWorldY)
+        {
+            return;
+        }
+
+        _initialEmitterWorldY = _rainInstance.transform.position.y;
+        _hasInitialEmitterWorldY = true;
+    }
+
+    private void ApplySimulationSpace()
+    {
+        if (!forceWorldSimulationSpace)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _rainParticleSystems.Count; i++)
+        {
+            ParticleSystem particleSystem = _rainParticleSystems[i];
+            if (particleSystem == null)
+            {
+                continue;
+            }
+
+            ParticleSystem.MainModule main = particleSystem.main;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+        }
+    }
+
     private static bool IsRainParticleSystem(ParticleSystem particleSystem)
     {
         return particleSystem != null &&
@@ -334,10 +433,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void SetWindVelocityTarget(float targetVelocityX)
     {
-        if (!ResolveRainInstance())
-        {
-            return;
-        }
+        bool hasRainInstance = ResolveRainInstance();
 
         if (Mathf.Approximately(_targetWindVelocityX, targetVelocityX) &&
             Mathf.Approximately(_currentWindVelocityX, targetVelocityX))
@@ -353,7 +449,10 @@ public sealed class RainParticleEffectController : MonoBehaviour
         {
             _currentWindVelocityX = _targetWindVelocityX;
             _windVelocityTransitionActive = false;
-            ApplyWindVelocityX(_currentWindVelocityX);
+            if (hasRainInstance)
+            {
+                ApplyWindVelocityX(_currentWindVelocityX);
+            }
             return;
         }
 
@@ -396,6 +495,99 @@ public sealed class RainParticleEffectController : MonoBehaviour
         }
     }
 
+    private void UpdateEmitterFollow()
+    {
+        if (!followActiveCamera)
+        {
+            return;
+        }
+
+        if (_rainInstance == null && _currentRainLevel <= 0)
+        {
+            return;
+        }
+
+        if (!ResolveRainInstance())
+        {
+            return;
+        }
+
+        Transform target = ResolveFollowTarget();
+        if (target == null)
+        {
+            return;
+        }
+
+        Vector3 horizontalForward = target.forward;
+        horizontalForward.y = 0f;
+        if (horizontalForward.sqrMagnitude > 0.001f)
+        {
+            horizontalForward.Normalize();
+        }
+        else
+        {
+            horizontalForward = Vector3.forward;
+        }
+
+        Vector3 position = target.position + horizontalForward * emitterLookAheadDistance;
+        position.x += emitterWorldOffset.x;
+        position.z += emitterWorldOffset.z;
+        position.y = keepInitialEmitterHeight && _hasInitialEmitterWorldY
+            ? _initialEmitterWorldY + emitterWorldOffset.y
+            : target.position.y + emitterHeightOffset + emitterWorldOffset.y;
+
+        _rainInstance.transform.position = position;
+    }
+
+    private Transform ResolveFollowTarget()
+    {
+        if (followTarget != null)
+        {
+            return followTarget;
+        }
+
+        if (!resolveMainCameraAsTarget)
+        {
+            return null;
+        }
+
+        if (_cachedMainCamera != null && _cachedMainCamera.isActiveAndEnabled)
+        {
+            return _cachedMainCamera.transform;
+        }
+
+        _targetRefreshElapsed -= Time.deltaTime;
+        if (_targetRefreshElapsed > 0f)
+        {
+            return null;
+        }
+
+        _targetRefreshElapsed = targetRefreshInterval;
+        _cachedMainCamera = FindActiveCamera();
+        return _cachedMainCamera != null ? _cachedMainCamera.transform : null;
+    }
+
+    private static Camera FindActiveCamera()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null && mainCamera.isActiveAndEnabled)
+        {
+            return mainCamera;
+        }
+
+        Camera[] cameras = Camera.allCameras;
+        for (int i = 0; i < cameras.Length; i++)
+        {
+            Camera camera = cameras[i];
+            if (camera != null && camera.isActiveAndEnabled)
+            {
+                return camera;
+            }
+        }
+
+        return null;
+    }
+
     private void PlayRainParticles()
     {
         for (int i = 0; i < _allParticleSystems.Count; i++)
@@ -422,6 +614,290 @@ public sealed class RainParticleEffectController : MonoBehaviour
                 particleSystem.Stop(true, behavior);
             }
         }
+    }
+
+    private void UpdateScreenRainOverlay()
+    {
+        float targetAlpha = enableScreenRainOverlay ? GetScreenRainAlphaForLevel(_currentRainLevel) : 0f;
+        if (targetAlpha <= 0f && _screenRainCurrentAlpha <= 0f && _screenRainCanvas == null)
+        {
+            return;
+        }
+
+        int targetStreakCount = targetAlpha > 0f
+            ? GetScreenRainStreakCountForLevel(_currentRainLevel)
+            : _screenRainTextureStreakCount;
+
+        if ((targetAlpha > 0f || _screenRainCurrentAlpha > 0f) && !EnsureScreenRainOverlay(targetStreakCount))
+        {
+            return;
+        }
+
+        _screenRainCurrentAlpha = ScreenRainFadeSpeed > 0f
+            ? Mathf.MoveTowards(_screenRainCurrentAlpha, targetAlpha, ScreenRainFadeSpeed * Time.deltaTime)
+            : targetAlpha;
+
+        if (_screenRainCanvas == null)
+        {
+            return;
+        }
+
+        bool visible = _screenRainCurrentAlpha > 0.001f;
+        if (_screenRainCanvas.gameObject.activeSelf != visible)
+        {
+            _screenRainCanvas.gameObject.SetActive(visible);
+        }
+
+        if (!visible)
+        {
+            SetScreenRainOverlayAlpha(0f);
+            return;
+        }
+
+        float screenWind = GetNormalizedScreenRainWind();
+        float scrollSpeed = ScreenRainScrollSpeed * (1f + Mathf.Abs(screenWind) * ScreenRainWindSpeedBoost);
+        _screenRainUvOffset += scrollSpeed * Time.deltaTime;
+        _screenRainWindUvOffset += (ShouldSyncScreenRainWithWind() ? GetSignedScreenRainWindVelocityX() : 0f) *
+                                   ScreenRainWindHorizontalScrollScale *
+                                   Time.deltaTime;
+
+        ApplyScreenRainWindTransform(screenWind);
+        SetScreenRainOverlayAlpha(_screenRainCurrentAlpha);
+        SetScreenRainLayerUv(
+            _screenRainFarLayer,
+            ScreenRainFarTiling,
+            _screenRainUvOffset * 0.72f,
+            _screenRainWindUvOffset * 0.58f);
+        SetScreenRainLayerUv(
+            _screenRainNearLayer,
+            ScreenRainNearTiling,
+            _screenRainUvOffset,
+            _screenRainWindUvOffset);
+    }
+
+    private bool EnsureScreenRainOverlay(int streakCount)
+    {
+        if (_screenRainCanvas != null && _screenRainNearLayer != null && _screenRainFarLayer != null)
+        {
+            return EnsureScreenRainTexture(streakCount);
+        }
+
+        GameObject canvasObject = new("Rain Screen Overlay Canvas");
+        canvasObject.transform.SetParent(transform, false);
+
+        _screenRainCanvas = canvasObject.AddComponent<Canvas>();
+        _screenRainCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        _screenRainCanvas.sortingOrder = short.MaxValue - 200;
+
+        CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight = 0.5f;
+
+        _screenRainFarLayer = CreateScreenRainLayer(canvasObject.transform, "Rain Screen Far Layer", _screenRainTexture);
+        _screenRainNearLayer = CreateScreenRainLayer(canvasObject.transform, "Rain Screen Near Layer", _screenRainTexture);
+
+        EnsureScreenRainTexture(streakCount);
+        SetScreenRainOverlayAlpha(0f);
+        canvasObject.SetActive(false);
+        return true;
+    }
+
+    private bool EnsureScreenRainTexture(int streakCount)
+    {
+        int safeStreakCount = Mathf.Max(0, streakCount);
+        if (_screenRainTexture != null &&
+            _screenRainTextureStreakCount == safeStreakCount &&
+            _screenRainTextureSeed == ScreenRainRandomSeed)
+        {
+            AssignScreenRainTexture(_screenRainTexture);
+            return true;
+        }
+
+        if (_screenRainTexture != null)
+        {
+            Destroy(_screenRainTexture);
+        }
+
+        _screenRainTexture = CreateScreenRainTexture(ScreenRainTextureSize, safeStreakCount, ScreenRainRandomSeed);
+        _screenRainTextureStreakCount = safeStreakCount;
+        _screenRainTextureSeed = ScreenRainRandomSeed;
+        AssignScreenRainTexture(_screenRainTexture);
+        return true;
+    }
+
+    private void AssignScreenRainTexture(Texture texture)
+    {
+        if (_screenRainNearLayer != null)
+        {
+            _screenRainNearLayer.texture = texture;
+        }
+
+        if (_screenRainFarLayer != null)
+        {
+            _screenRainFarLayer.texture = texture;
+        }
+    }
+
+    private RawImage CreateScreenRainLayer(Transform parent, string objectName, Texture texture)
+    {
+        GameObject imageObject = new(objectName);
+        imageObject.transform.SetParent(parent, false);
+
+        RectTransform rectTransform = imageObject.AddComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        ApplyScreenRainLayerOverscan(rectTransform);
+
+        RawImage image = imageObject.AddComponent<RawImage>();
+        image.raycastTarget = false;
+        image.texture = texture;
+        image.color = Color.clear;
+        return image;
+    }
+
+    private void SetScreenRainOverlayAlpha(float alpha)
+    {
+        Color nearColor = screenRainColor;
+        nearColor.a *= Mathf.Clamp01(alpha);
+        Color farColor = screenRainColor;
+        farColor.a *= Mathf.Clamp01(alpha * ScreenRainFarLayerAlphaScale);
+
+        if (_screenRainNearLayer != null)
+        {
+            _screenRainNearLayer.color = nearColor;
+        }
+
+        if (_screenRainFarLayer != null)
+        {
+            _screenRainFarLayer.color = farColor;
+        }
+    }
+
+    private void SetScreenRainLayerUv(RawImage image, float tiling, float verticalOffset, float horizontalOffset)
+    {
+        if (image == null)
+        {
+            return;
+        }
+
+        float safeTiling = Mathf.Max(1.8f, tiling);
+        float activeSlant = ShouldSyncScreenRainWithWind()
+            ? ScreenRainSlant * GetNormalizedScreenRainWind()
+            : 0f;
+        image.uvRect = new Rect(
+            horizontalOffset + verticalOffset * activeSlant,
+            verticalOffset,
+            safeTiling,
+            safeTiling);
+    }
+
+    private void ApplyScreenRainWindTransform(float normalizedWind)
+    {
+        float angle = ShouldSyncScreenRainWithWind()
+            ? -normalizedWind * ScreenRainWindAngleAtReference
+            : 0f;
+
+        ApplyScreenRainLayerTransform(_screenRainFarLayer, angle * 0.72f);
+        ApplyScreenRainLayerTransform(_screenRainNearLayer, angle);
+    }
+
+    private void ApplyScreenRainLayerTransform(RawImage image, float angle)
+    {
+        if (image == null)
+        {
+            return;
+        }
+
+        RectTransform rectTransform = image.rectTransform;
+        ApplyScreenRainLayerOverscan(rectTransform);
+        rectTransform.localRotation = Quaternion.Euler(0f, 0f, angle);
+    }
+
+    private void ApplyScreenRainLayerOverscan(RectTransform rectTransform)
+    {
+        if (rectTransform == null)
+        {
+            return;
+        }
+
+        float overscan = Mathf.Max(0f, ScreenRainLayerOverscanPixels);
+        rectTransform.offsetMin = new Vector2(-overscan, -overscan);
+        rectTransform.offsetMax = new Vector2(overscan, overscan);
+    }
+
+    private void HideScreenRainOverlay()
+    {
+        _screenRainCurrentAlpha = 0f;
+
+        if (_screenRainCanvas == null)
+        {
+            return;
+        }
+
+        SetScreenRainOverlayAlpha(0f);
+        _screenRainCanvas.gameObject.SetActive(false);
+    }
+
+    private Texture2D CreateScreenRainTexture(int size, int streakCount, int randomSeed)
+    {
+        Texture2D texture = new(size, size, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Repeat,
+            filterMode = FilterMode.Bilinear
+        };
+
+        Color[] pixels = new Color[size * size];
+        System.Random random = new(randomSeed);
+        int configuredMinLength = Mathf.Clamp(ScreenRainMinStreakLength, 1, size);
+        int configuredMaxLength = Mathf.Clamp(Mathf.Max(configuredMinLength, ScreenRainMaxStreakLength), configuredMinLength, size);
+        int minLength = Mathf.Clamp(Mathf.RoundToInt(configuredMinLength * ScreenRainDropLengthScale), 1, size);
+        int maxLength = Mathf.Clamp(Mathf.RoundToInt(configuredMaxLength * ScreenRainDropLengthScale), minLength, size);
+
+        for (int i = 0; i < streakCount; i++)
+        {
+            int startX = random.Next(0, size);
+            int startY = random.Next(0, size);
+            int length = random.Next(minLength, maxLength + 1);
+            int thickness = random.NextDouble() > 0.68 ? 1 : 0;
+            float alpha = 0.38f + (float)random.NextDouble() * 0.5f;
+            float diagonal = RandomRange(random, -0.12f, 0.12f);
+
+            for (int step = 0; step < length; step++)
+            {
+                float fade = 1f - Mathf.Abs((step / (float)Mathf.Max(1, length)) * 2f - 1f) * 0.55f;
+                int x = WrapIndex(startX + Mathf.RoundToInt(step * diagonal), size);
+                int y = WrapIndex(startY + step, size);
+
+                for (int width = -thickness; width <= thickness; width++)
+                {
+                    float widthFade = width == 0 ? 1f : 0.38f;
+                    BlendRainPixel(pixels, size, WrapIndex(x + width, size), y, alpha * fade * widthFade);
+                }
+            }
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply(false, false);
+        return texture;
+    }
+
+    private static void BlendRainPixel(Color[] pixels, int size, int x, int y, float alpha)
+    {
+        int index = y * size + x;
+        float blendedAlpha = Mathf.Max(pixels[index].a, Mathf.Clamp01(alpha));
+        pixels[index] = new Color(1f, 1f, 1f, blendedAlpha);
+    }
+
+    private static int WrapIndex(int value, int size)
+    {
+        value %= size;
+        return value < 0 ? value + size : value;
+    }
+
+    private static float RandomRange(System.Random random, float min, float max)
+    {
+        return min + (max - min) * (float)random.NextDouble();
     }
 
     private void HandleKeyboardTesting()
@@ -464,6 +940,59 @@ public sealed class RainParticleEffectController : MonoBehaviour
         }
     }
 
+    private float GetScreenRainAlphaForLevel(int level)
+    {
+        switch (level)
+        {
+            case 1:
+                return ScreenRainLevel1Alpha;
+            case 2:
+                return ScreenRainLevel2Alpha;
+            case 3:
+                return ScreenRainLevel3Alpha;
+            default:
+                return 0f;
+        }
+    }
+
+    private float GetNormalizedScreenRainWind()
+    {
+        if (!ShouldSyncScreenRainWithWind())
+        {
+            return 0f;
+        }
+
+        return Mathf.Clamp(
+            GetSignedScreenRainWindVelocityX() / Mathf.Max(0.01f, ScreenRainWindReferenceVelocityX),
+            -1f,
+            1f);
+    }
+
+    private bool ShouldSyncScreenRainWithWind()
+    {
+        return enableScreenRainWindTilt && useWindVisualVelocityEvent;
+    }
+
+    private float GetSignedScreenRainWindVelocityX()
+    {
+        return InvertScreenRainWindDirection ? -_currentWindVelocityX : _currentWindVelocityX;
+    }
+
+    private int GetScreenRainStreakCountForLevel(int level)
+    {
+        switch (level)
+        {
+            case 1:
+                return ScreenRainLevel1StreakCount;
+            case 2:
+                return ScreenRainLevel2StreakCount;
+            case 3:
+                return ScreenRainLevel3StreakCount;
+            default:
+                return 0;
+        }
+    }
+
     private static int GetLevelForStage(int stage, List<int> progression)
     {
         if (progression == null || progression.Count == 0)
@@ -480,6 +1009,20 @@ public sealed class RainParticleEffectController : MonoBehaviour
         if (showRainLog && allowLog)
         {
             Debug.Log($"[RainParticleEffect] {message}.", this);
+        }
+    }
+
+    private void InvalidateScreenRainTexture()
+    {
+        _screenRainTextureStreakCount = -1;
+        _screenRainTextureSeed = 0;
+    }
+
+    private void OnDestroy()
+    {
+        if (_screenRainTexture != null)
+        {
+            Destroy(_screenRainTexture);
         }
     }
 }

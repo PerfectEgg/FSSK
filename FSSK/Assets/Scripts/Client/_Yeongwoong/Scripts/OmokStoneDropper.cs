@@ -48,7 +48,8 @@ public readonly struct OmokStonePlacementRequest
         Vector3 blockerLocalPosition = default,
         Quaternion blockerLocalRotation = default,
         bool blockerConsumesTurnWhenBlocked = true,
-        bool blockerCountsForStackWin = true)
+        bool blockerCountsForStackWin = true,
+        bool forceBoardPlacement = false)
     {
         StoneColor = stoneColor;
         TargetCoordinate = targetCoordinate;
@@ -61,6 +62,7 @@ public readonly struct OmokStonePlacementRequest
         BlockerLocalRotation = hasBlockerSnapshot ? blockerLocalRotation : Quaternion.identity;
         BlockerConsumesTurnWhenBlocked = blockerConsumesTurnWhenBlocked;
         BlockerCountsForStackWin = blockerCountsForStackWin;
+        ForceBoardPlacement = forceBoardPlacement;
     }
 
     public OmokStoneColor StoneColor { get; }
@@ -74,6 +76,7 @@ public readonly struct OmokStonePlacementRequest
     public Quaternion BlockerLocalRotation { get; }
     public bool BlockerConsumesTurnWhenBlocked { get; }
     public bool BlockerCountsForStackWin { get; }
+    public bool ForceBoardPlacement { get; }
 }
 
 public readonly struct OmokBlockedStoneResult
@@ -264,8 +267,6 @@ public class OmokStoneDropper : MonoBehaviour
     private bool _hasDragBoardTarget;
     private Vector2Int _currentDragCoordinate;
     private Vector3 _currentDragReleasePosition;
-    private bool _hasCurrentDragDropSpawnPosition;
-    private Vector3 _currentDragDropSpawnPosition;
     private GameObject _draggedStoneObject;
     private int _boardLayer = -1;
     private int _blockerLayer = -1;
@@ -539,7 +540,8 @@ public class OmokStoneDropper : MonoBehaviour
                 return false;
             }
 
-            if (TryGetBlockerAtCoordinate(reservedCoordinate, GetFallingStoneBlockerProbeRadius(stone), out Collider reservedBlocker))
+            if (!stone.ForceBoardPlacement &&
+                TryGetBlockerAtCoordinate(reservedCoordinate, GetFallingStoneBlockerProbeRadius(stone), out Collider reservedBlocker))
             {
                 return TryStickStoneToBlocker(stone, reservedBlocker);
             }
@@ -563,7 +565,8 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
-        if (TryGetBlockerAtCoordinate(landedCoordinate, GetFallingStoneBlockerProbeRadius(stone), out Collider landedBlocker))
+        if (!stone.ForceBoardPlacement &&
+            TryGetBlockerAtCoordinate(landedCoordinate, GetFallingStoneBlockerProbeRadius(stone), out Collider landedBlocker))
         {
             return TryStickStoneToBlocker(stone, landedBlocker);
         }
@@ -905,7 +908,6 @@ public class OmokStoneDropper : MonoBehaviour
     private void UpdateDragState()
     {
         _hasDragBoardTarget = false;
-        ClearCurrentDragDropSpawnPosition();
 
         if (!EnsureAimController(true) ||
             !aimController.TryGetBoardAim(GetEffectiveDragHoverHeight(), raycastDistance, out OmokAimState aimState))
@@ -942,37 +944,9 @@ public class OmokStoneDropper : MonoBehaviour
 
         Vector3 draggedStoneCenter = GetDraggedStonePreviewProbeCenter(_currentDragReleasePosition);
         PlacementPreviewState previewState = BuildPlacementPreviewState(targetCoordinate, draggedStoneCenter);
-        UpdateCurrentDragDropSpawnPosition(previewState, draggedStoneCenter);
 
         UpdateDraggedStonePreviewVisual(previewState.IsBlocked);
         DrawPreview(targetCoordinate, previewState);
-    }
-
-    private void UpdateCurrentDragDropSpawnPosition(PlacementPreviewState previewState, Vector3 draggedStoneCenter)
-    {
-        if (!previewState.IsBlockerStackTarget || !previewState.HasStoneWorldPosition)
-        {
-            ClearCurrentDragDropSpawnPosition();
-            return;
-        }
-
-        Vector3 centerToTransformOffset = _currentDragReleasePosition - draggedStoneCenter;
-        Vector3 dropSpawnPosition = previewState.StoneWorldPosition + centerToTransformOffset;
-        Vector3 up = GetGridUp();
-        float spawnHeight = Vector3.Dot(dropSpawnPosition, up) + GetMinimumVisibleFallDistance();
-        _currentDragDropSpawnPosition = MovePointAlongAxis(dropSpawnPosition, up, spawnHeight);
-        _hasCurrentDragDropSpawnPosition = true;
-    }
-
-    private void ClearCurrentDragDropSpawnPosition()
-    {
-        _hasCurrentDragDropSpawnPosition = false;
-        _currentDragDropSpawnPosition = default;
-    }
-
-    private Vector3 GetCurrentDragReleasePosition()
-    {
-        return _hasCurrentDragDropSpawnPosition ? _currentDragDropSpawnPosition : _currentDragReleasePosition;
     }
 
     public bool TryReleaseDrag()
@@ -986,7 +960,7 @@ public class OmokStoneDropper : MonoBehaviour
         bool canPlace = _hasDragBoardTarget;
         Vector2Int targetCoordinate = _currentDragCoordinate;
         GameObject releasedPreviewObject = _draggedStoneObject;
-        Vector3 releasePosition = GetCurrentDragReleasePosition();
+        Vector3 releasePosition = _currentDragReleasePosition;
         bool isBlockerStackTarget = false;
         PlacementPreviewState releasePreviewState = default;
         if (canPlace && releasedPreviewObject != null && IsInsideBoard(targetCoordinate))
@@ -1064,7 +1038,6 @@ public class OmokStoneDropper : MonoBehaviour
         _isDraggingLauncher = false;
         _hasDragBoardTarget = false;
         _currentDragReleasePosition = default;
-        ClearCurrentDragDropSpawnPosition();
         if (aimController != null)
         {
             aimController.EndAimSession();
@@ -1150,7 +1123,8 @@ public class OmokStoneDropper : MonoBehaviour
                                 snappedPosition,
                                 snappedRotation,
                                 GetEffectiveFallGravityScale(),
-                                guideStraightToTarget);
+                                guideStraightToTarget,
+                                request.ForceBoardPlacement);
 
         ConfigureRigidbody(rigidbody);
         ApplyReleaseMotion(stoneObject.transform, rigidbody);
@@ -1224,7 +1198,7 @@ public class OmokStoneDropper : MonoBehaviour
                                 targetWorldPosition,
                                 targetWorldRotation,
                                 GetEffectiveFallGravityScale(),
-                                false);
+                                true);
 
         fallingStone.ConfigureForcedBlockerSnapshot(
             blockerTarget,
@@ -1541,6 +1515,11 @@ public class OmokStoneDropper : MonoBehaviour
             return false;
         }
 
+        if (stone.ForceBoardPlacement && !stone.HasForcedBlockerSnapshot)
+        {
+            return false;
+        }
+
         Transform blockerTarget = GetBlockerAttachmentTarget(blockerCollider);
         Transform stackKey = GetBlockerStackKey(blockerTarget, blockerCollider);
         ReleaseReservation(stone.TargetCoordinate);
@@ -1651,8 +1630,17 @@ public class OmokStoneDropper : MonoBehaviour
             stone.StickToBlocker(blockerTarget, _blockerLayer, stickPosition);
         }
 
-        stone.transform.localPosition = stone.ForcedBlockerLocalPosition;
-        stone.transform.localRotation = stone.ForcedBlockerLocalRotation;
+        stone.ApplyBlockerAnchorPose(
+            stone.ForcedBlockerLocalPosition,
+            stone.ForcedBlockerLocalRotation,
+            blockerCollider != null);
+
+        if (stackKey != null)
+        {
+            Vector3 up = GetGridUp();
+            float halfHeight = stone.GetSnapOffsetAlongNormal(up);
+            _blockerCenterStackTopY[stackKey] = Vector3.Dot(stone.transform.position, up) + halfHeight;
+        }
 
         int consecutiveSameColorStackCount = stone.ForcedBlockerCountsForStackWin
             ? RegisterBlockedStone(stackKey, stone)
