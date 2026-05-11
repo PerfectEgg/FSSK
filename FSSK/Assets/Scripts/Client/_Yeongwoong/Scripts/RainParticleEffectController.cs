@@ -6,28 +6,28 @@ using UnityEngine.UI;
 public sealed class RainParticleEffectController : MonoBehaviour
 {
     private const string RainParticlesObjectName = "rain particles";
-    private const int ScreenRainTextureSize = 256;
+    private const int ScreenRainTextureSize = 512;
     private const int ScreenRainRandomSeed = 2137;
-    private const float ScreenRainLevel1Alpha = 0.1f;
-    private const float ScreenRainLevel2Alpha = 0.2f;
+    private const float ScreenRainLevel1Alpha = 0.13f;
+    private const float ScreenRainLevel2Alpha = 0.23f;
     private const float ScreenRainLevel3Alpha = 0.34f;
-    private const int ScreenRainLevel1StreakCount = 160;
-    private const int ScreenRainLevel2StreakCount = 320;
-    private const int ScreenRainLevel3StreakCount = 540;
-    private const int ScreenRainMinStreakLength = 12;
-    private const int ScreenRainMaxStreakLength = 46;
+    private const int ScreenRainLevel1StreakCount = 70;
+    private const int ScreenRainLevel2StreakCount = 125;
+    private const int ScreenRainLevel3StreakCount = 205;
+    private const int ScreenRainMinStreakLength = 14;
+    private const int ScreenRainMaxStreakLength = 42;
     private const float ScreenRainDropLengthScale = 1f;
     private const float ScreenRainFadeSpeed = 3.5f;
-    private const float ScreenRainScrollSpeed = 2.8f;
-    private const float ScreenRainNearTiling = 2.1f;
-    private const float ScreenRainFarTiling = 2.75f;
-    private const float ScreenRainSlant = -0.12f;
+    private const float ScreenRainScrollSpeed = 3.05f;
+    private const float ScreenRainNearTiling = 1.85f;
+    private const float ScreenRainFarTiling = 2.55f;
+    private const float ScreenRainSlant = -0.07f;
     private const float ScreenRainWindReferenceVelocityX = 15f;
     private const float ScreenRainWindAngleAtReference = 6f;
     private const float ScreenRainWindHorizontalScrollScale = 0.025f;
     private const float ScreenRainWindSpeedBoost = 0.1f;
     private const float ScreenRainLayerOverscanPixels = 320f;
-    private const float ScreenRainFarLayerAlphaScale = 0.65f;
+    private const float ScreenRainFarLayerAlphaScale = 0.55f;
     private const bool InvertScreenRainWindDirection = true;
 
     [Header("Preview Settings")]
@@ -71,7 +71,9 @@ public sealed class RainParticleEffectController : MonoBehaviour
     [Header("Screen Rain Overlay")]
     [SerializeField] private bool enableScreenRainOverlay = true;
     [SerializeField] private Color screenRainColor = new(0.72f, 0.84f, 1f, 1f);
+    [SerializeField, Range(0.25f, 1.25f)] private float screenRainAmountMultiplier = 1f;
     [SerializeField] private bool enableScreenRainWindTilt = true;
+    [SerializeField, Range(0f, 3f)] private float screenRainWindFollowStrength = 1.6f;
 
     private readonly List<ParticleSystem> _allParticleSystems = new();
     private readonly List<ParticleSystem> _rainParticleSystems = new();
@@ -144,6 +146,9 @@ public sealed class RainParticleEffectController : MonoBehaviour
         emitterHeightOffset = Mathf.Max(0f, emitterHeightOffset);
         emitterLookAheadDistance = Mathf.Max(0f, emitterLookAheadDistance);
         targetRefreshInterval = Mathf.Max(0.05f, targetRefreshInterval);
+        screenRainAmountMultiplier = Mathf.Clamp(screenRainAmountMultiplier, 0.25f, 1.25f);
+        screenRainWindFollowStrength = Mathf.Clamp(screenRainWindFollowStrength, 0f, 3f);
+
         if (Application.isPlaying && isActiveAndEnabled)
         {
             InvalidateScreenRainTexture();
@@ -659,6 +664,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
         _screenRainUvOffset += scrollSpeed * Time.deltaTime;
         _screenRainWindUvOffset += (ShouldSyncScreenRainWithWind() ? GetSignedScreenRainWindVelocityX() : 0f) *
                                    ScreenRainWindHorizontalScrollScale *
+                                   screenRainWindFollowStrength *
                                    Time.deltaTime;
 
         ApplyScreenRainWindTransform(screenWind);
@@ -783,7 +789,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
         float safeTiling = Mathf.Max(1.8f, tiling);
         float activeSlant = ShouldSyncScreenRainWithWind()
-            ? ScreenRainSlant * GetNormalizedScreenRainWind()
+            ? ScreenRainSlant * GetNormalizedScreenRainWind() * screenRainWindFollowStrength
             : 0f;
         image.uvRect = new Rect(
             horizontalOffset + verticalOffset * activeSlant,
@@ -795,7 +801,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
     private void ApplyScreenRainWindTransform(float normalizedWind)
     {
         float angle = ShouldSyncScreenRainWithWind()
-            ? -normalizedWind * ScreenRainWindAngleAtReference
+            ? -normalizedWind * ScreenRainWindAngleAtReference * screenRainWindFollowStrength
             : 0f;
 
         ApplyScreenRainLayerTransform(_screenRainFarLayer, angle * 0.72f);
@@ -859,21 +865,45 @@ public sealed class RainParticleEffectController : MonoBehaviour
             int startX = random.Next(0, size);
             int startY = random.Next(0, size);
             int length = random.Next(minLength, maxLength + 1);
-            int thickness = random.NextDouble() > 0.68 ? 1 : 0;
-            float alpha = 0.38f + (float)random.NextDouble() * 0.5f;
-            float diagonal = RandomRange(random, -0.12f, 0.12f);
+            bool accentStreak = random.NextDouble() > 0.78;
+            if (accentStreak)
+            {
+                length = Mathf.Clamp(Mathf.RoundToInt(length * RandomRange(random, 1.15f, 1.55f)), minLength, maxLength + 18);
+            }
+
+            int thickness = accentStreak || random.NextDouble() > 0.88 ? 1 : 0;
+            float alpha = accentStreak
+                ? RandomRange(random, 0.58f, 0.9f)
+                : RandomRange(random, 0.32f, 0.62f);
+            float diagonal = RandomRange(random, -0.055f, 0.055f);
 
             for (int step = 0; step < length; step++)
             {
-                float fade = 1f - Mathf.Abs((step / (float)Mathf.Max(1, length)) * 2f - 1f) * 0.55f;
+                float progress = step / (float)Mathf.Max(1, length - 1);
+                float fade = Mathf.Sin(progress * Mathf.PI);
+                fade = 0.22f + fade * 0.78f;
                 int x = WrapIndex(startX + Mathf.RoundToInt(step * diagonal), size);
                 int y = WrapIndex(startY + step, size);
 
                 for (int width = -thickness; width <= thickness; width++)
                 {
-                    float widthFade = width == 0 ? 1f : 0.38f;
+                    float widthFade = width == 0 ? 1f : 0.3f;
                     BlendRainPixel(pixels, size, WrapIndex(x + width, size), y, alpha * fade * widthFade);
                 }
+            }
+        }
+
+        int dropletCount = Mathf.RoundToInt(streakCount * 0.45f);
+        for (int i = 0; i < dropletCount; i++)
+        {
+            int x = random.Next(0, size);
+            int y = random.Next(0, size);
+            float alpha = RandomRange(random, 0.18f, 0.42f);
+            BlendRainPixel(pixels, size, x, y, alpha);
+
+            if (random.NextDouble() > 0.72)
+            {
+                BlendRainPixel(pixels, size, WrapIndex(x + 1, size), y, alpha * 0.45f);
             }
         }
 
@@ -983,11 +1013,11 @@ public sealed class RainParticleEffectController : MonoBehaviour
         switch (level)
         {
             case 1:
-                return ScreenRainLevel1StreakCount;
+                return Mathf.RoundToInt(ScreenRainLevel1StreakCount * screenRainAmountMultiplier);
             case 2:
-                return ScreenRainLevel2StreakCount;
+                return Mathf.RoundToInt(ScreenRainLevel2StreakCount * screenRainAmountMultiplier);
             case 3:
-                return ScreenRainLevel3StreakCount;
+                return Mathf.RoundToInt(ScreenRainLevel3StreakCount * screenRainAmountMultiplier);
             default:
                 return 0;
         }
