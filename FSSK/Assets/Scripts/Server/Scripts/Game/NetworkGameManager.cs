@@ -304,185 +304,6 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         if (pv != null) PhotonNetwork.Destroy(pv.gameObject);
     }
 
-    // ──────────────────────────────────────────────────────────────
-    //  5. 애니메이션 / 위치 공유 (연속 동기화는 PhotonTransformView/AnimatorView,
-    //     이벤트성 트리거만 RPC)
-    // ──────────────────────────────────────────────────────────────
-    public void BroadcastAnimationTrigger(int viewId, string triggerName)
-    {
-        photonView.RPC(nameof(PlayAnimationTriggerRpc), RpcTarget.All, viewId, triggerName);
-    }
-
-    [PunRPC]
-    private void PlayAnimationTriggerRpc(int viewId, string triggerName)
-    {
-        var pv = PhotonView.Find(viewId);
-        if (pv == null) return;
-        var animator = pv.GetComponent<Animator>();
-        if (animator != null) animator.SetTrigger(triggerName);
-    }
-
-    // ──────────────────────────────────────────────────────────────
-    //  6. 아이템 상호작용 검증 (먼저 잡은 사람 우선)
-    //     수신 시 TrollEvents.OnItemCollected 발사 → 기존 클라 로직 자동 연동
-    // ──────────────────────────────────────────────────────────────
-    public void RequestPickupItem(int itemViewId, string itemTag)
-    {
-        photonView.RPC(nameof(RequestPickupItemRpc), RpcTarget.MasterClient,
-            itemViewId, PhotonNetwork.LocalPlayer.ActorNumber, itemTag);
-    }
-
-    [PunRPC]
-    private void RequestPickupItemRpc(int itemViewId, int actorNumber, string itemTag)
-    {
-        if (!PhotonNetwork.IsMasterClient) return;
-
-        if (_claimedItemIds.Contains(itemViewId))
-        {
-            Debug.Log($"[NetworkGameManager] 아이템 획득 거부 - 이미 처리됨 (item: {itemViewId}, late actor: {actorNumber})");
-            return;
-        }
-        _claimedItemIds.Add(itemViewId);
-
-        photonView.RPC(nameof(OnItemPickedRpc), RpcTarget.AllBuffered, itemViewId, actorNumber, itemTag);
-    }
-
-    [PunRPC]
-    private void OnItemPickedRpc(int itemViewId, int actorNumber, string itemTag)
-    {
-        Debug.Log($"[NetworkGameManager] 아이템 획득 (item: {itemViewId}, actor: {actorNumber}, tag: {itemTag})");
-        var pv = PhotonView.Find(itemViewId);
-        if (pv != null)
-            TrollEvents.TriggerItemCollected(itemTag, pv.gameObject);
-    }
-
-    // ──────────────────────────────────────────────────────────────
-    //  7. 환경 / 몬스터 효과 (마스터 결정 → 전체 동기화)
-    //     RPC 수신부에서 TrollEvents.* 발사 → 기존 클라 코드(트롤 AI, UI, 카메라) 자동 연동
-    //     특정 플레이어 대상 효과(Stun, Siren)는 actorNumber 비교로 본인만 적용
-    // ──────────────────────────────────────────────────────────────
-
-    // --- 기절 (특정 플레이어 대상/크라켄, 세이렌) ---
-    public void BroadcastStun(int targetActor, float duration)
-    {
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            Debug.LogWarning("[NetworkGameManager] Stun broadcast requested by non-master - ignored.");
-            return;
-        }
-        photonView.RPC(nameof(StunRpc), RpcTarget.All, targetActor, duration);
-    }
-
-    [PunRPC]
-    private void StunRpc(int targetActor, float duration)
-    {
-        Debug.Log($"[NetworkGameManager] 기절 수신 (target: {targetActor}, duration: {duration:F1}s)");
-        if (PhotonNetwork.LocalPlayer == null || PhotonNetwork.LocalPlayer.ActorNumber != targetActor) return;
-        TrollEvents.OnStunEffect?.Invoke(duration);
-    }
-
-    // --- 세이렌 매혹 (전체 플레이어 대상, source는 viewId로 전달) ---
-    public void BroadcastSirenEffect(bool active, int sourceViewId)
-    {
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            Debug.LogWarning("[NetworkGameManager] Siren broadcast requested by non-master - ignored.");
-            return;
-        }
-        photonView.RPC(nameof(SirenEffectRpc), RpcTarget.All, active, sourceViewId);
-    }
-
-    [PunRPC]
-    private void SirenEffectRpc(bool active, int sourceViewId)
-    {
-        Debug.Log($"[NetworkGameManager] 세이렌 효과 수신 (active: {active}, source: {sourceViewId})");
-
-        Transform sourceTransform = null;
-        if (sourceViewId > 0)
-        {
-            var pv = PhotonView.Find(sourceViewId);
-            if (pv != null) sourceTransform = pv.transform;
-        }
-        TrollEvents.OnSirenEffect?.Invoke(active, sourceTransform);
-    }
-
-    // --- 웨이브 단계 (전체 공통) ---
-    public void BroadcastWaveStage(int stage)
-    {
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            Debug.LogWarning("[NetworkGameManager] WaveStage broadcast requested by non-master - ignored.");
-            return;
-        }
-        photonView.RPC(nameof(WaveStageRpc), RpcTarget.AllBuffered, stage);
-    }
-
-    [PunRPC]
-    private void WaveStageRpc(int stage)
-    {
-        Debug.Log($"[NetworkGameManager] 웨이브 단계 수신 ({stage})");
-        TrollEvents.OnWaveStageChanged?.Invoke(stage);
-    }
-
-    // --- 환경 효과 레벨(0~3) - Rain / Wind / Lightning ---
-    public void BroadcastRainLevel(int level)
-    {
-        if (!PhotonNetwork.IsMasterClient) { Debug.LogWarning("[NetworkGameManager] Rain broadcast non-master - ignored."); return; }
-        photonView.RPC(nameof(RainLevelRpc), RpcTarget.AllBuffered, level);
-    }
-
-    [PunRPC]
-    private void RainLevelRpc(int level)
-    {
-        Debug.Log($"[NetworkGameManager] 비 레벨 수신 ({level})");
-        TrollEvents.OnRainLevelChanged?.Invoke(level);
-    }
-
-    public void BroadcastWindLevel(int level)
-    {
-        if (!PhotonNetwork.IsMasterClient) { Debug.LogWarning("[NetworkGameManager] Wind broadcast non-master - ignored."); return; }
-        photonView.RPC(nameof(WindLevelRpc), RpcTarget.AllBuffered, level);
-    }
-
-    [PunRPC]
-    private void WindLevelRpc(int level)
-    {
-        Debug.Log($"[NetworkGameManager] 바람 레벨 수신 ({level})");
-        TrollEvents.OnWindLevelChanged?.Invoke(level);
-    }
-
-    public void BroadcastLightningLevel(int level)
-    {
-        if (!PhotonNetwork.IsMasterClient) { Debug.LogWarning("[NetworkGameManager] Lightning broadcast non-master - ignored."); return; }
-        photonView.RPC(nameof(LightningLevelRpc), RpcTarget.AllBuffered, level);
-    }
-
-    [PunRPC]
-    private void LightningLevelRpc(int level)
-    {
-        Debug.Log($"[NetworkGameManager] 번개 레벨 수신 ({level})");
-        TrollEvents.OnLightningLevelChanged?.Invoke(level);
-    }
-
-    public void BroadcastLightningStrike(int level, int patternIndex)
-    {
-        if (!PhotonNetwork.IsMasterClient)
-        {
-            Debug.LogWarning("[NetworkGameManager] Lightning strike broadcast requested by non-master - ignored.");
-            return;
-        }
-
-        int clampedLevel = Mathf.Clamp(level, 0, 3);
-        int clampedPatternIndex = Mathf.Clamp(patternIndex, 1, 3);
-        photonView.RPC(nameof(LightningStrikeRpc), RpcTarget.All, clampedLevel, clampedPatternIndex);
-    }
-
-    [PunRPC]
-    private void LightningStrikeRpc(int level, int patternIndex)
-    {
-        Debug.Log($"[NetworkGameManager] Lightning strike received (level: {level}, pattern: {patternIndex})");
-        TrollEvents.OnLightningStrikeRequested?.Invoke(level, patternIndex);
-    }
 
     // ──────────────────────────────────────────────────────────────
     //  8. 게임 결과 기록 (점수 처리는 BackendRank 통해)
@@ -526,7 +347,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         if (BackendRank.Instance == null || BackendManager.Instance == null || BackendManager.Instance.MyUserData == null)
         {
             Debug.LogError("[NetworkGameManager] BackendRank/BackendManager not ready.");
-            ReturnToLobby();
+            //ReturnToLobby();
             return;
         }
 
@@ -536,12 +357,12 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             {
                 BackendManager.Instance.MyUserData.score = next;
                 Debug.Log($"[NetworkGameManager] 점수 갱신 완료 ({next}점)");
-                ReturnToLobby();
+                //ReturnToLobby();
             },
             onFail: err =>
             {
                 Debug.LogError($"[NetworkGameManager] UpdateMyScore failed: {err}");
-                ReturnToLobby();
+                //ReturnToLobby();
             });
     }
 
@@ -605,4 +426,184 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         Debug.Log($"[NetworkGameManager] 마스터 클라 변경 → '{newMasterClient.NickName}' (actor: {newMasterClient.ActorNumber})");
         // 새 마스터로 권한 자동 이전
     }
+
+    // ──────────────────────────────────────────────────────────────
+    //  5. 애니메이션 / 위치 공유 (연속 동기화는 PhotonTransformView/AnimatorView,
+    //     이벤트성 트리거만 RPC)
+    // ──────────────────────────────────────────────────────────────
+    // public void BroadcastAnimationTrigger(int viewId, string triggerName)
+    // {
+    //     photonView.RPC(nameof(PlayAnimationTriggerRpc), RpcTarget.All, viewId, triggerName);
+    // }
+
+    // [PunRPC]
+    // private void PlayAnimationTriggerRpc(int viewId, string triggerName)
+    // {
+    //     var pv = PhotonView.Find(viewId);
+    //     if (pv == null) return;
+    //     var animator = pv.GetComponent<Animator>();
+    //     if (animator != null) animator.SetTrigger(triggerName);
+    // }
+
+    // ──────────────────────────────────────────────────────────────
+    //  6. 아이템 상호작용 검증 (먼저 잡은 사람 우선)
+    //     수신 시 TrollEvents.OnItemCollected 발사 → 기존 클라 로직 자동 연동
+    // ──────────────────────────────────────────────────────────────
+    // public void RequestPickupItem(int itemViewId, string itemTag)
+    // {
+    //     photonView.RPC(nameof(RequestPickupItemRpc), RpcTarget.MasterClient,
+    //         itemViewId, PhotonNetwork.LocalPlayer.ActorNumber, itemTag);
+    // }
+
+    // [PunRPC]
+    // private void RequestPickupItemRpc(int itemViewId, int actorNumber, string itemTag)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient) return;
+
+    //     if (_claimedItemIds.Contains(itemViewId))
+    //     {
+    //         Debug.Log($"[NetworkGameManager] 아이템 획득 거부 - 이미 처리됨 (item: {itemViewId}, late actor: {actorNumber})");
+    //         return;
+    //     }
+    //     _claimedItemIds.Add(itemViewId);
+
+    //     photonView.RPC(nameof(OnItemPickedRpc), RpcTarget.AllBuffered, itemViewId, actorNumber, itemTag);
+    // }
+
+    // [PunRPC]
+    // private void OnItemPickedRpc(int itemViewId, int actorNumber, string itemTag)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 아이템 획득 (item: {itemViewId}, actor: {actorNumber}, tag: {itemTag})");
+    //     var pv = PhotonView.Find(itemViewId);
+    //     if (pv != null)
+    //         TrollEvents.TriggerItemCollected(itemTag, pv.gameObject);
+    // }
+
+    // ──────────────────────────────────────────────────────────────
+    //  7. 환경 / 몬스터 효과 (마스터 결정 → 전체 동기화)
+    //     RPC 수신부에서 TrollEvents.* 발사 → 기존 클라 코드(트롤 AI, UI, 카메라) 자동 연동
+    //     특정 플레이어 대상 효과(Stun, Siren)는 actorNumber 비교로 본인만 적용
+    // ──────────────────────────────────────────────────────────────
+
+    // // --- 기절 (특정 플레이어 대상/크라켄, 세이렌) ---
+    // public void BroadcastStun(int targetActor, float duration)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient)
+    //     {
+    //         Debug.LogWarning("[NetworkGameManager] Stun broadcast requested by non-master - ignored.");
+    //         return;
+    //     }
+    //     photonView.RPC(nameof(StunRpc), RpcTarget.All, targetActor, duration);
+    // }
+
+    // [PunRPC]
+    // private void StunRpc(int targetActor, float duration)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 기절 수신 (target: {targetActor}, duration: {duration:F1}s)");
+    //     if (PhotonNetwork.LocalPlayer == null || PhotonNetwork.LocalPlayer.ActorNumber != targetActor) return;
+    //     TrollEvents.OnStunEffect?.Invoke(duration);
+    // }
+
+    // // --- 세이렌 매혹 (전체 플레이어 대상, source는 viewId로 전달) ---
+    // public void BroadcastSirenEffect(bool active, int sourceViewId)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient)
+    //     {
+    //         Debug.LogWarning("[NetworkGameManager] Siren broadcast requested by non-master - ignored.");
+    //         return;
+    //     }
+    //     photonView.RPC(nameof(SirenEffectRpc), RpcTarget.All, active, sourceViewId);
+    // }
+
+    // [PunRPC]
+    // private void SirenEffectRpc(bool active, int sourceViewId)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 세이렌 효과 수신 (active: {active}, source: {sourceViewId})");
+
+    //     Transform sourceTransform = null;
+    //     if (sourceViewId > 0)
+    //     {
+    //         var pv = PhotonView.Find(sourceViewId);
+    //         if (pv != null) sourceTransform = pv.transform;
+    //     }
+    //     TrollEvents.OnSirenEffect?.Invoke(active, sourceTransform);
+    // }
+
+    // // --- 웨이브 단계 (전체 공통) ---
+    // public void BroadcastWaveStage(int stage)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient)
+    //     {
+    //         Debug.LogWarning("[NetworkGameManager] WaveStage broadcast requested by non-master - ignored.");
+    //         return;
+    //     }
+    //     photonView.RPC(nameof(WaveStageRpc), RpcTarget.AllBuffered, stage);
+    // }
+
+    // [PunRPC]
+    // private void WaveStageRpc(int stage)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 웨이브 단계 수신 ({stage})");
+    //     TrollEvents.OnWaveStageChanged?.Invoke(stage);
+    // }
+
+    // // --- 환경 효과 레벨(0~3) - Rain / Wind / Lightning ---
+    // public void BroadcastRainLevel(int level)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient) { Debug.LogWarning("[NetworkGameManager] Rain broadcast non-master - ignored."); return; }
+    //     photonView.RPC(nameof(RainLevelRpc), RpcTarget.AllBuffered, level);
+    // }
+
+    // [PunRPC]
+    // private void RainLevelRpc(int level)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 비 레벨 수신 ({level})");
+    //     TrollEvents.OnRainLevelChanged?.Invoke(level);
+    // }
+
+    // public void BroadcastWindLevel(int level)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient) { Debug.LogWarning("[NetworkGameManager] Wind broadcast non-master - ignored."); return; }
+    //     photonView.RPC(nameof(WindLevelRpc), RpcTarget.AllBuffered, level);
+    // }
+
+    // [PunRPC]
+    // private void WindLevelRpc(int level)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 바람 레벨 수신 ({level})");
+    //     TrollEvents.OnWindLevelChanged?.Invoke(level);
+    // }
+
+    // public void BroadcastLightningLevel(int level)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient) { Debug.LogWarning("[NetworkGameManager] Lightning broadcast non-master - ignored."); return; }
+    //     photonView.RPC(nameof(LightningLevelRpc), RpcTarget.AllBuffered, level);
+    // }
+
+    // [PunRPC]
+    // private void LightningLevelRpc(int level)
+    // {
+    //     Debug.Log($"[NetworkGameManager] 번개 레벨 수신 ({level})");
+    //     TrollEvents.OnLightningLevelChanged?.Invoke(level);
+    // }
+
+    // public void BroadcastLightningStrike(int level, int patternIndex)
+    // {
+    //     if (!PhotonNetwork.IsMasterClient)
+    //     {
+    //         Debug.LogWarning("[NetworkGameManager] Lightning strike broadcast requested by non-master - ignored.");
+    //         return;
+    //     }
+
+    //     int clampedLevel = Mathf.Clamp(level, 0, 3);
+    //     int clampedPatternIndex = Mathf.Clamp(patternIndex, 1, 3);
+    //     photonView.RPC(nameof(LightningStrikeRpc), RpcTarget.All, clampedLevel, clampedPatternIndex);
+    // }
+
+    // [PunRPC]
+    // private void LightningStrikeRpc(int level, int patternIndex)
+    // {
+    //     Debug.Log($"[NetworkGameManager] Lightning strike received (level: {level}, pattern: {patternIndex})");
+    //     TrollEvents.OnLightningStrikeRequested?.Invoke(level, patternIndex);
+    // }
 }

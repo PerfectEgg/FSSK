@@ -29,6 +29,86 @@
 4. 아키텍처 (Managers):
    - 시스템을 관리하는 매니저 클래스(예: `BackendManager`, `TitleManager`)는 싱글톤(Singleton) 패턴을 사용하며, 상태 관리는 `public Type Name { get; private set; }` 형태의 프로퍼티를 적극 활용할 것.
 
+# Architecture & Design Patterns
+
+# [아키텍처 기본 원칙 (Managers)]
+시스템을 통제하는 매니저 클래스(예: BackendManager, TitleManager)는 싱글톤(Singleton) 패턴을 기본으로 사용한다.
+
+매니저의 상태 데이터는 외부에서 임의로 조작하지 못하도록 public Type Name { get; private set; } 형태의 프로퍼티를 적극 활용하여 캡슐화한다.
+
+💡 주의: 모든 것을 싱글톤으로 만들려는 함정(과엔지니어링)을 경계하고, 꼭 필요한 전역 관리자에만 제한적으로 도입할 것.
+
+# [이벤트 및 통신 규칙 (Event Architecture)]
+클래스 간의 스파게티 코드(강한 결합)를 방지하기 위해 옵저버(Observer) 패턴을 기반으로 한 이벤트 주도(Event-Driven) 아키텍처를 지향한다.
+
+중앙집중형 이벤트 (Events.cs 권장):
+
+게임 전체, 또는 거대한 시스템을 관통하는 글로벌 이벤트는 반드시 별도의 [SystemName]Events.cs 파일(정적 클래스)로 묶어서 중앙 관리할 것.
+
+예: LobbyEvents.cs (로그인 성공, 매칭 완료 등), InGameEvents.cs (턴 변경, 승패 결정 등)
+
+지역적 이벤트 (Local Events):
+
+오직 하나의 클래스 내부나 부모-자식 객체 사이에서만 쓰이는 1회성/지역적 이벤트라면 굳이 Events.cs로 빼지 않고 해당 클래스 내부에 선언하는 것을 허용한다. ("아니면 말고" 원칙)
+
+이벤트 네이밍:
+
+이벤트(Action/Delegate) 이름은 반드시 On으로 시작할 것.
+
+예: public static Action<int> OnPlayerTurnChanged;
+
+# [권장 디자인 패턴 (Design Patterns Library)]
+Unity 게임 개발 환경에 맞춰 아래의 패턴들을 상황에 맞게 적극 채용한다.
+
+# [생성 패턴 - Creational]
+
+Singleton: 전역 단일 인스턴스 (매니저급 클래스)
+
+Factory: 복잡한 객체(적, 아이템) 생성 로직의 캡슐화
+
+Builder: 매개변수가 많은 복잡한 객체를 단계적으로 조립 (예: 커스텀 캐릭터 스탯 세팅)
+
+Prototype: 기존 객체를 복제하여 새로운 객체 생성 (프리팹 인스턴스화의 근간)
+
+# [구조 패턴 - Structural]
+
+Decorator: 기존 코드 수정 없이 런타임에 기능을 동적으로 추가 (예: 아이템 획득 시 버프 중첩)
+
+Composite: 트리 구조 (예: 복잡한 스킬트리, 다중 파츠 장비 조합)
+
+Flyweight: 동일한 데이터를 공유하여 메모리 절약 (예: 숲의 나무들, 수만 개의 동일한 오목알 데이터)
+
+Facade: 복잡한 서브 시스템들을 묶어 단순한 단일 인터페이스로 제공 (예: NetworkFacade.Connect())
+
+Proxy: 원본 객체에 대한 접근 제어 및 지연 로딩 (메모리가 큰 리소스 로드 대기 시)
+
+# [행동 패턴 - Behavioral]
+
+Observer: 상태 변화를 구독자들에게 브로드캐스트 (UI 업데이트 로직의 핵심)
+
+State: 캐릭터나 AI의 상태(Idle, Attack, Dead)별 행동을 클래스로 분리하여 관리
+
+Strategy: 알고리즘(예: 다양한 무기의 공격 방식, 이동 방식)을 런타임에 교체
+
+Command: 유저의 입력(Input)이나 실행을 객체로 캡슐화 (예: 조작 키 변경, 체스/오목의 무르기(Undo) 기능)
+
+Template Method: 상위 클래스에서 알고리즘의 골격을 정의하고 하위에서 세부 구현
+
+Chain of Responsibility: 요청을 여러 처리 객체(체인)로 순차적으로 넘기며 처리
+
+Mediator: 객체 간의 복잡한 그물망 통신을 중앙 중재자를 통해 단순화
+
+# [게임 특화 패턴 - Game Programming Patterns]
+
+Object Pool: 파괴되고 생성되는 빈도가 높은 객체(총알, 이펙트, 오목알)의 메모리 재사용 (가비지 컬렉터 부하 방지)
+
+Event Queue: 이벤트를 즉시 처리하지 않고 큐에 쌓아두어 프레임/타이밍에 맞춰 순차적(지연) 처리
+
+Type Object: 하드코딩된 상속 대신, 데이터(JSON/DB)를 기반으로 런타임에 유연하게 몬스터/아이템의 타입을 정의
+
+Dirty Flag: 값의 변경이 일어났을 때만 재계산/렌더링하도록 플래그를 세워 최적화 (예: UI 갱신, 물리 연산)
+
+Spatial Partition: 맵을 그리드/쿼드트리로 분할하여 근처에 있는 객체들끼리만 충돌/시야 검사를 수행 (연산량 급감)
 
 # Workflow Guidelines
 - 코드를 수정하거나 제안할 때는 기존의 네이밍 규칙(특히 `_camelCase`와 `PascalCase` 구분)을 엄격하게 지킬 것.
