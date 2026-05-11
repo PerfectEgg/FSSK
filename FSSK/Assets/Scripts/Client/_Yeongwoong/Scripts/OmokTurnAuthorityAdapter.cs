@@ -61,6 +61,11 @@ public class OmokTurnAuthorityAdapter : MonoBehaviour
         return turnSystem != null && turnSystem.TryApplyAuthoritativeBlockedResult(blockedResult);
     }
 
+    public bool TryApplyTurnPass(OmokStoneColor timedOutTurn, OmokStoneColor nextTurn)
+    {
+        return turnSystem != null && turnSystem.TryApplyAuthoritativeTurnPass(timedOutTurn, nextTurn);
+    }
+
     public bool TryApplyRemoval(OmokStoneRemovalResult removalTarget, out OmokStoneRemovalResult removalResult)
     {
         removalResult = default;
@@ -82,6 +87,10 @@ public class OmokTurnAuthorityAdapter : MonoBehaviour
         Debug.LogWarning($"{nameof(OmokTurnAuthorityAdapter)} received a removal confirmation, but no network transport is implemented.", this);
     }
 
+    protected virtual void BroadcastTurnPassFromAuthority(OmokStoneColor timedOutTurn, OmokStoneColor nextTurn)
+    {
+    }
+
     private void Subscribe()
     {
         if (turnSystem == null)
@@ -92,6 +101,7 @@ public class OmokTurnAuthorityAdapter : MonoBehaviour
         turnSystem.OnPlacementRequestSubmittedToAuthority += SendPlacementRequestToAuthority;
         turnSystem.OnRandomRemovalRequestedFromAuthority += SendRandomRemovalRequestToAuthority;
         turnSystem.OnRemovalConfirmationSubmittedToAuthority += SendRemovalConfirmationToAuthority;
+        turnSystem.OnTurnPassAppliedByAuthority += BroadcastTurnPassFromAuthority;
     }
 
     private void Unsubscribe()
@@ -104,5 +114,6 @@ public class OmokTurnAuthorityAdapter : MonoBehaviour
         turnSystem.OnPlacementRequestSubmittedToAuthority -= SendPlacementRequestToAuthority;
         turnSystem.OnRandomRemovalRequestedFromAuthority -= SendRandomRemovalRequestToAuthority;
         turnSystem.OnRemovalConfirmationSubmittedToAuthority -= SendRemovalConfirmationToAuthority;
+        turnSystem.OnTurnPassAppliedByAuthority -= BroadcastTurnPassFromAuthority;
     }
 }

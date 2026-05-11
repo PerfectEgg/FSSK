@@ -233,6 +233,33 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
     /// base 클래스의 후크 override.
     /// TurnSystem 이 RemoteClient 모드일 때 사용자가 입력하면 호출됨.
     /// </summary>
+    protected override void BroadcastTurnPassFromAuthority(OmokStoneColor timedOutTurn, OmokStoneColor nextTurn)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        if (!PhotonNetwork.InRoom) return;
+        if (!EnsurePhotonView()) return;
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] Master timeout pass broadcast: {timedOutTurn} -> {nextTurn}");
+        _photonView.RPC(nameof(RpcApplyTurnPass), RpcTarget.Others, (int)timedOutTurn, (int)nextTurn);
+    }
+
+    [PunRPC]
+    private void RpcApplyTurnPass(int timedOutTurnInt, int nextTurnInt)
+    {
+        if (PhotonNetwork.IsMasterClient) return;
+
+        EnsureCachedReferences();
+
+        OmokStoneColor timedOutTurn = (OmokStoneColor)timedOutTurnInt;
+        OmokStoneColor nextTurn = (OmokStoneColor)nextTurnInt;
+
+        Debug.Log($"[OmokPhotonAuthorityAdapter] Remote timeout pass received: {timedOutTurn} -> {nextTurn}");
+        if (!TryApplyTurnPass(timedOutTurn, nextTurn))
+        {
+            Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote turn pass sync failed: {timedOutTurn} -> {nextTurn}.", this);
+        }
+    }
+
     protected override void SendPlacementRequestToAuthority(OmokStonePlacementRequest request)
     {
         if (!EnsurePhotonView()) return;

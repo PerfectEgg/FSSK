@@ -508,6 +508,54 @@ public class OmokMatchManager : MonoBehaviour
         return TryRegisterBlockedAttempt(blockedResult);
     }
 
+    public bool TryPassTurn(OmokStoneColor expectedTurn)
+    {
+        return TryPassTurn(expectedTurn, out _);
+    }
+
+    public bool TryPassTurn(OmokStoneColor expectedTurn, out OmokStoneColor nextTurn)
+    {
+        nextTurn = OmokStoneColor.None;
+
+        if (_isMatchEnded ||
+            expectedTurn == OmokStoneColor.None ||
+            _currentTurn != expectedTurn)
+        {
+            return false;
+        }
+
+        nextTurn = OmokMatchFlow.GetOppositeColor(expectedTurn);
+        _currentTurn = nextTurn;
+        OnTurnChanged?.Invoke(_currentTurn);
+        return true;
+    }
+
+    public bool TryApplyAuthoritativeTurnPass(OmokStoneColor expectedPreviousTurn, OmokStoneColor authoritativeNextTurn)
+    {
+        if (_isMatchEnded ||
+            authoritativeNextTurn == OmokStoneColor.None)
+        {
+            return false;
+        }
+
+        if (_currentTurn == authoritativeNextTurn)
+        {
+            return true;
+        }
+
+        if (expectedPreviousTurn != OmokStoneColor.None &&
+            _currentTurn != expectedPreviousTurn)
+        {
+            Debug.LogWarning(
+                $"[OmokMatchManager] Applying authoritative turn pass while local turn is {_currentTurn}; expected {expectedPreviousTurn}, next {authoritativeNextTurn}.",
+                this);
+        }
+
+        _currentTurn = authoritativeNextTurn;
+        OnTurnChanged?.Invoke(_currentTurn);
+        return true;
+    }
+
     public bool CanTakeTurn(OmokStoneColor stoneColor)
     {
         return OmokMatchFlow.CanAct(_currentTurn, _isMatchEnded, stoneColor);

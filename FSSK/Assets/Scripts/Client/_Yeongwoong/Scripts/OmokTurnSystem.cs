@@ -29,8 +29,9 @@ public enum OmokTurnGameMode
 
 public enum OmokTurnTimeoutAction
 {
-    None,
-    AutoDropRandomLegalMove
+    PassTurn = 0,
+    None = 1,
+    AutoDropRandomLegalMove = 2
 }
 
 [Serializable]
@@ -93,7 +94,7 @@ public class OmokTurnSystem : MonoBehaviour
     [SerializeField] private bool useTurnTimer = true;
     [SerializeField, Min(0.1f)] private float turnDurationSeconds = 10f;
     [SerializeField, Min(0.1f)] private float minimumTurnDurationSeconds = 3f;
-    [SerializeField] private OmokTurnTimeoutAction timeoutAction = OmokTurnTimeoutAction.None;
+    [SerializeField] private OmokTurnTimeoutAction timeoutAction = OmokTurnTimeoutAction.PassTurn;
 
     [Header("Seat Map")]
     [SerializeField] private OmokTurnSeatStatus goldSeat = new();
@@ -173,6 +174,7 @@ public class OmokTurnSystem : MonoBehaviour
     public event Action OnRandomRemovalRequestedFromAuthority;
     public event Action<OmokStoneRemovalResult> OnRemovalConfirmationSubmittedToAuthority;
     public event Action<OmokStoneColor> OnTurnTimerExpired;
+    public event Action<OmokStoneColor, OmokStoneColor> OnTurnPassAppliedByAuthority;
 
     private void Reset()
     {
@@ -374,7 +376,7 @@ public class OmokTurnSystem : MonoBehaviour
 
     public void SetTimeoutAutoDropEnabled(bool isEnabled)
     {
-        timeoutAction = isEnabled ? OmokTurnTimeoutAction.AutoDropRandomLegalMove : OmokTurnTimeoutAction.None;
+        timeoutAction = isEnabled ? OmokTurnTimeoutAction.AutoDropRandomLegalMove : OmokTurnTimeoutAction.PassTurn;
     }
 
     [ContextMenu("Reset Turn Timer")]
@@ -520,6 +522,11 @@ public class OmokTurnSystem : MonoBehaviour
         return matchManager != null && matchManager.TryApplyBlockedResult(blockedResult);
     }
 
+    public bool TryApplyAuthoritativeTurnPass(OmokStoneColor timedOutTurn, OmokStoneColor nextTurn)
+    {
+        return matchManager != null && matchManager.TryApplyAuthoritativeTurnPass(timedOutTurn, nextTurn);
+    }
+
     public bool TryExecuteAuthoritativePlacementVisual(OmokStonePlacementRequest request)
     {
         return stoneDropper != null && stoneDropper.TryExecutePlacement(request);
@@ -649,12 +656,37 @@ public class OmokTurnSystem : MonoBehaviour
 
     private void HandleTurnTimerExpired(OmokStoneColor timedOutTurn)
     {
-        if (timeoutAction != OmokTurnTimeoutAction.AutoDropRandomLegalMove)
+        switch (timeoutAction)
         {
-            return;
+            case OmokTurnTimeoutAction.PassTurn:
+                TryPassTimedOutTurn(timedOutTurn);
+                return;
+
+            case OmokTurnTimeoutAction.AutoDropRandomLegalMove:
+                if (!TryAutoDropTimedOutTurn(timedOutTurn))
+                {
+                    TryPassTimedOutTurn(timedOutTurn);
+                }
+                return;
+
+            case OmokTurnTimeoutAction.None:
+            default:
+                return;
+        }
+    }
+
+    private bool TryPassTimedOutTurn(OmokStoneColor timedOutTurn)
+    {
+        if (!CanMutateMatchStateLocally ||
+            timedOutTurn == OmokStoneColor.None ||
+            matchManager == null ||
+            !matchManager.TryPassTurn(timedOutTurn, out OmokStoneColor nextTurn))
+        {
+            return false;
         }
 
-        TryAutoDropTimedOutTurn(timedOutTurn);
+        OnTurnPassAppliedByAuthority?.Invoke(timedOutTurn, nextTurn);
+        return true;
     }
 
     private bool TryAutoDropTimedOutTurn(OmokStoneColor timedOutTurn)
