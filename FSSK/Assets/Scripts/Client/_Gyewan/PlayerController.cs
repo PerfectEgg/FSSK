@@ -13,7 +13,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
     [Header("캐릭터 상체 기울임 설정")]
     private Animator _animator; // 🟢 카메라가 캐릭터 뼈대를 찾을 수 있게 연결해주세요!
-    [SerializeField] private float _bodyLeanAngle = 20f;  // 상체가 기울어질 최대 각도
+    [SerializeField] private float _bodyLeanAngle = 45f;  // 상체가 기울어질 최대 각도
     [SerializeField] private Vector3 _leanAxis = new Vector3(0, 1, 0); // 뼈대의 회전 축
 
     private Vector3 _initialLocalPos;
@@ -27,12 +27,14 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     private bool _canLean = false;
 
     private float _stunTimer = 0f;      // 자체 기절 타이머
+    private bool _isGameOver = false;       // 게임 오버 상태 추적 변수
 
     // 이벤트 구독 및 해제
     private void OnEnable()
     {
         TrollEvents.OnExpansionModeChanged += HandleModeChanged;
         TrollEvents.OnStunEffect += HandleStunEffect;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
 
         if (photonView.IsMine) 
         {
@@ -44,6 +46,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     {
         TrollEvents.OnExpansionModeChanged -= HandleModeChanged;
         TrollEvents.OnStunEffect -= HandleStunEffect;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
 
         if (photonView.IsMine) 
         {
@@ -63,6 +66,17 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
             // 1. 기절 시간 갱신
             _stunTimer = Mathf.Max(_stunTimer, stunDuration);
         }
+    }
+
+    private void HandleGameOver()
+    {
+        if (!photonView.IsMine) return;
+
+        _isGameOver = true;
+
+        // 물리 및 속도 초기화
+        _currentBodyLean = 0f;
+        _targetBodyLean = 0f;
     }
 
     // 🟢 크라켄이 호출할 회피 판정 함수
@@ -121,7 +135,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
             // 1. 입력 받기 (A키: -1, D키: 1, 안 누르면 0)
             // 조작 불가능 상태일 때는 h를 0으로 만들어 스무스하게 중앙점(0)으로 복귀시킵니다.
             float h = 0f;
-            if (_canLean && _stunTimer <= 0f)
+            if (_canLean && _stunTimer <= 0f && !_isGameOver)
             {
                 h = Input.GetAxis("Horizontal");
             }
@@ -153,6 +167,29 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
         // Update에서 계산해둔 부드러운 기울기 값을 뼈대에 추가 회전으로 덮어씌웁니다.
         _spineBone.localRotation *= Quaternion.AngleAxis(_currentBodyLean, _leanAxis);
+    }
+
+    // 🟢 상대방의 아이템(ItemTroll)이 나를 맞췄을 때 호출되는 RPC 함수
+    [PunRPC]
+    public void RPC_ApplyItemEffect(int itemTypeIndex)
+    {
+        // 이 코드는 오직 '맞은 사람'의 컴퓨터에서만 실행됩니다!
+        if (!photonView.IsMine) return;
+
+        ItemType hitItem = (ItemType)itemTypeIndex;
+
+        switch (hitItem)
+        {
+            case ItemType.Rum:
+                Debug.Log("😵 [상태 이상] 럼주에 맞았습니다! 시야가 일렁입니다!");
+                TrollEvents.OnHitByRum?.Invoke(); // 로컬 카메라/UI에 이벤트 방송
+                break;
+                
+            case ItemType.Octopus:
+                Debug.Log("🐙 [상태 이상] 문어에 맞았습니다! 시야가 가려집니다!");
+                TrollEvents.OnHitByOctopus?.Invoke(); // 로컬 카메라/UI에 이벤트 방송
+                break;
+        }
     }
 
     // 인터페이스의 규칙에 따라 반드시 구현해야 하는 함수!

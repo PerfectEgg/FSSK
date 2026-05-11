@@ -33,10 +33,27 @@ public class WaveManager : MonoBehaviour
     // 외부에서 현재 단계를 읽을 수 있도록 프로퍼티 개방
     public int currentStage => _currentStage;
 
+    void OnEnable() => GameEvents.OnGameOverTriggered += HandleGameOver;
+    void OnDisable() => GameEvents.OnGameOverTriggered -= HandleGameOver;
+    
+    private void HandleGameOver()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        // 1. 웨이브 진행 및 아이템 스폰 완전 정지
+        _isWaveActive = false;
+    }
+
     void Awake()
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        ItemTroll[] items = FindObjectsByType<ItemTroll>(FindObjectsSortMode.None);
+        foreach(var item in items)
+        {
+            if (item != null) PhotonNetwork.Destroy(item.gameObject);
+        }
     }
 
     void Start()
@@ -69,7 +86,6 @@ public class WaveManager : MonoBehaviour
     {
         // 🟢 방장이 아니면 시간 계산을 아예 하지 않음 (각자 계산하면 싱크가 어긋납니다)
         if (!PhotonNetwork.IsMasterClient) return;
-
         if (!_isWaveActive) return;
 
         _waveTimer += Time.deltaTime;

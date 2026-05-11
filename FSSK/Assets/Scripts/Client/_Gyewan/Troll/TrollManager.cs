@@ -37,6 +37,7 @@ public class TrollManager : MonoBehaviour
         TrollEvents.RequestSafePosition += GetSafeRandomPosition;   // 안전한 랜덤 위치 요청 이벤트 구독
         TrollEvents.OnPositionReleased += ReleasePosition;          // 위치 반납 이벤트 구독
         TrollEvents.OnTrollFinished += HandleTrollFinished;         // 트롤 종료 이벤트 구독
+        GameEvents.OnGameOverTriggered += StopTrollingSystem;
     }
 
     private void OnDisable()
@@ -44,6 +45,7 @@ public class TrollManager : MonoBehaviour
         TrollEvents.RequestSafePosition -= GetSafeRandomPosition;
         TrollEvents.OnPositionReleased -= ReleasePosition;
         TrollEvents.OnTrollFinished -= HandleTrollFinished;
+        GameEvents.OnGameOverTriggered -= StopTrollingSystem;
     }
 
     private List<Vector3> _occupiedPositions = new List<Vector3>();
@@ -87,6 +89,33 @@ public class TrollManager : MonoBehaviour
     private void ReleasePosition(Vector3 pos)
     {
         _occupiedPositions.RemoveAll(p => Vector2.Distance(new Vector2(p.x, p.z), new Vector2(pos.x, pos.z)) < 0.5f);
+    }
+
+    // 게임 종료 시 호출
+    private void StopTrollingSystem()
+    {
+        _isWaiting = false;
+        
+        // 🟢 게임 오버 시 씬에 남은 크라켄, 세이렌, 동물 일괄 파괴 (방장 권한)
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        AnimalTroll[] animalTrolls = FindObjectsByType<AnimalTroll>(FindObjectsSortMode.None);
+        foreach (var troll in animalTrolls)
+        {
+            if (troll != null)
+            {
+                PhotonNetwork.Destroy(troll.gameObject);
+            }
+        }
+
+        MonsterTroll[] monsterTrolls = FindObjectsByType<MonsterTroll>(FindObjectsSortMode.None);
+        foreach (var troll in monsterTrolls)
+        {
+            if (troll != null)
+            {
+                PhotonNetwork.Destroy(troll.gameObject);
+            }
+        }
     }
 
     // 싱클톤 설정
@@ -198,12 +227,7 @@ public class TrollManager : MonoBehaviour
         StartWaitTimer();
     }
 
-    // 게임 종료 시 호출
-    public void StopTrollingSystem()
-    {
-        _isWaiting = false;
-        // 필요하다면 현재 씬에 있는 트롤들을 일괄 파괴하는 로직 추가
-    }
+    
 
     // 🟢 실행 횟수에 따른 타이머 설정
     private void StartWaitTimer()

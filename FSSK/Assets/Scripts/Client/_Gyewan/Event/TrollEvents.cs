@@ -47,6 +47,10 @@ public static class TrollEvents
         return RequestSafePosition != null ? RequestSafePosition.Invoke() : Vector3.zero;
     }
 
+    // 아이템 피격 이벤트 (플레이어가 아이템에 맞았을 때 트롤이 발동하는 효과를 처리하기 위한 이벤트)
+    public static Action OnHitByRum;       // 럼주 피격 이벤트
+    public static Action OnHitByOctopus;   // 문어 피격 이벤트
+
     // 웨이브 및 환경 변화 이벤트
     public static Action<int> OnWaveStageChanged;       // 웨이브 단계 변경 (UI 처리 용)
     public static Action<int> OnRainLevelChanged;       // 비 강도 변경 (0~3)

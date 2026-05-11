@@ -76,6 +76,7 @@ MonoBehaviour:
   - SyncGrabbedStateRPC
   - RequestStateChangeRPC
   - RpcApplyTurnPass
+  - RPC_ApplyItemEffect
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

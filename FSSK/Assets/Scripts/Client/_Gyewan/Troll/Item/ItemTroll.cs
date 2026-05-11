@@ -2,6 +2,8 @@ using UnityEngine;
 using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 using IEnumerator = System.Collections.IEnumerator;
 
+public enum ItemType { Rum, Octopus }
+
 // 아이템의 경우 (마우스로 던질 수 있음)
 public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
 {
@@ -10,9 +12,10 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
     protected bool _isThrown = false;
 
     [Header("Item Settings")]
-    [SerializeField] protected float _throwForce = 100f; // 던지는 힘
+    [SerializeField] protected float _throwForce = 100f;    // 던지는 힘
+    [SerializeField] protected ItemType _itemType;
 
-    protected Vector3 _grabbedScale = Vector3.zero; // 🟢 잡았을 때 원래 크기
+    protected Vector3 _grabbedScale = Vector3.one; // 🟢 잡았을 때 원래 크기
 
     // ✅ SyncGrabItemRPC에서 직접 호출 (로컬 이벤트 의존 제거)
     public void SetGrabbedState(bool isGrabbed)
@@ -69,9 +72,13 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
 
         _isGrabbed = false;
 
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+        }
+
         if (photonView.IsMine)
         {
-            if (rb != null) rb.isKinematic = false;
             Throw(Camera.main.transform.forward);
         }
     }
@@ -90,18 +97,29 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
         // 🟢 [멀티플레이 핵심] "내가 던진 아이템"이 "플레이어"에게 맞았을 때만 판정합니다.
         // 이렇게 해야 중복 데미지나 중복 파괴 에러가 발생하지 않습니다.
         if (!photonView.IsMine) return;
+        // 아직 던져지지 않았으면 무시 (잡은 상태에서 충돌해도 효과 안 나도록)
+        if (_isGrabbed) return;
 
         if (_isThrown && other.CompareTag("Player"))
         {
-            ApplyDebuff(other.gameObject);
+            PhotonView targetPV = other.GetComponentInParent<PhotonView>();
 
-            TrollEvents.TriggerItemCollected(gameObject.tag, gameObject);
-            // 🟢 즉시 파괴 시에도 네트워크 파괴 사용
-            PhotonNetwork.Destroy(gameObject);
+            // 🟢 내가 나를 맞춘 게 아니라면? (상대방 명중!)
+            if (targetPV != null && !targetPV.IsMine)
+            {
+                Debug.Log($"🎯 [명중] 상대방에게 {_itemType}을 맞췄습니다!");
+
+                TrollEvents.TriggerItemCollected(gameObject.tag, gameObject);
+
+                // 🟢 enum을 (int)로 변환해서 안전하게 RPC 송출
+                targetPV.RPC("RPC_ApplyItemEffect", targetPV.Owner, (int)_itemType);
+
+                // 맞췄으니 아이템은 파괴
+                PhotonNetwork.Destroy(gameObject);
+            }
         }
     }
 
-    public abstract void ApplyDebuff(GameObject target);
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {

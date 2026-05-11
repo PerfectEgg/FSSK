@@ -240,6 +240,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: badb92b93b6ddc64d80333e6a70608f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  _focusCam: {fileID: 0}
   _expansionCamera: {fileID: 4851894063924753983}
   _leanDistance: 1.5
   _leanAngle: 20
@@ -262,7 +263,7 @@ MonoBehaviour:
   _interactableLayer:
     serializedVersion: 2
     m_Bits: 1088
-  _holdWeight: 0.4
+  _holdDistance: 7.5
   _ikTransitionSpeed: 5
   _throwDuration: 0.15
   _holdDuration: 0.05

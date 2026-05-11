@@ -14,10 +14,12 @@ public class CameraModeController : MonoBehaviourPun
 
     // 내부 캐싱 및 상태 변수
     private CinemachinePanTilt _panTilt;
-    private bool _isExpansionMode = false;
-
+    
+    private bool _isExpansionMode = false;  // 현재 카메라 모드 추적 변수
     // 세이렌 관련 변수
-    private bool _isSirenSinging = false;
+    private bool _isSirenSinging = false;   // 세이렌이 노래를 부르고 있는지 여부
+    private bool _isGameOver = false;       // 게임 오버 상태 추적 변수
+
     private Transform _sirenTarget;
 
     // 기절 상태 추적 변수
@@ -29,12 +31,14 @@ public class CameraModeController : MonoBehaviourPun
     {
         TrollEvents.OnSirenEffect += HandleSirenEffect;  // 세이렌 이벤트 구독
         TrollEvents.OnStunEffect += HandleStunEffect;   // 기절 이벤트 구독
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnSirenEffect -= HandleSirenEffect;
         TrollEvents.OnStunEffect -= HandleStunEffect;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
     }
 
     private void HandleSirenEffect(bool isSinging, Transform target)
@@ -70,6 +74,17 @@ public class CameraModeController : MonoBehaviourPun
         _stunTimer = Mathf.Max(_stunTimer, stunDuration);
     }
 
+    private void HandleGameOver()
+    {
+        if (!photonView.IsMine) return;
+
+        // 🟢 게임 오버 시, 모든 카메라 모드를 착수 모드로 고정하고, 커서도 해제합니다.
+        _isGameOver = true;
+        _isExpansionMode = false;
+
+        SetCameraMode(false);
+    }
+
     void Awake()
     {
         if (_expansionCam != null)
@@ -90,7 +105,7 @@ public class CameraModeController : MonoBehaviourPun
     void Update()
     {
         // 🟢 가장 중요한 핵심! 내 캐릭터가 아니면 키보드 입력도 받지 말고, 각도 계산도 하지 마!
-        if (!photonView.IsMine) return;
+        if (!photonView.IsMine || _isGameOver) return;
 
         if(_stunTimer > 0)
         {
@@ -127,7 +142,7 @@ public class CameraModeController : MonoBehaviourPun
             if (_isExpansionMode && _panTilt != null)
             {
                 _panTilt.PanAxis.Value = 0f;
-                _panTilt.TiltAxis.Value = 10f;
+                _panTilt.TiltAxis.Value = 45f;
             }
 
             SetCameraMode(_isExpansionMode);

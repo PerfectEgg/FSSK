@@ -23,10 +23,5 @@ public class Octopus : ItemTroll
             _animator.SetTrigger(_dragTrigger);
         }
     }
-
-    public override void ApplyDebuff(GameObject target)
-    {
-        
-    }
 }
 

@@ -35,7 +35,9 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
     private int _grabbedItemViewId = -1; 
     private string _grabbedTag;         
     private bool _canInteract = false;  
-    private float _stunTimer = 0f;      
+    private float _stunTimer = 0f;     
+    private bool _isGameOver = false;       // 게임 오버 상태 추적 변수 
+    private bool _isProcessing = false;     // 현재 처리 중인 상태 추적 변수
 
     void Start()
     {
@@ -46,12 +48,14 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
     { 
         TrollEvents.OnExpansionModeChanged += HandleCameraModeChanged;
         TrollEvents.OnStunEffect += HandleStunEffect;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnExpansionModeChanged -= HandleCameraModeChanged;
         TrollEvents.OnStunEffect -= HandleStunEffect;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
     }
 
     private void HandleCameraModeChanged(bool isExpansion)
@@ -66,6 +70,23 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         if (photonView.IsMine && _stunTimer > 0f && _currentGrabbedObject != null) ReleaseItem();
     }
 
+    private void HandleGameOver()
+    {
+        if (!photonView.IsMine) return;
+
+        // 🟢 게임 오버 시, 모든 카메라 모드를 착수 모드로 고정하고, 커서도 해제합니다.
+        _isGameOver = true;
+
+        // 🟢 만약 게임 종료 순간에 손에 무언가를 들고 있다면 강제로 놓게 만듭니다.
+        if (_currentGrabbedObject != null)
+        {
+            ReleaseItem();
+        }
+        
+        // IK 가중치도 0으로 만들어 팔을 내리게 합니다.
+        _targetWeight = 0f;
+    }
+
     void Update()
     {
         if (_stunTimer > 0f) _stunTimer -= Time.deltaTime;
@@ -73,7 +94,7 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         // 1. [내 캐릭터 전용] 입력 처리 및 조준점 계산
         if (photonView.IsMine)
         {
-            if (!_canInteract || _stunTimer > 0f) 
+            if (!_canInteract || _stunTimer > 0f || _isGameOver || _isProcessing) 
             {
                 _targetWeight = 0f; // 조작 불가능 시 손 내리기
             }
