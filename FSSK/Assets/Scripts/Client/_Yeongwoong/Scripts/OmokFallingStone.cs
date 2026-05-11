@@ -32,7 +32,6 @@ public class OmokFallingStone : MonoBehaviour
     private bool _guideStraightToTarget;
     private bool _hasBlockerAnchor;
     private bool _hasForcedBlockerSnapshot;
-    private bool _forceBoardPlacement;
     private bool _forcedBlockerConsumesTurn;
     private bool _forcedBlockerCountsForStackWin;
     private Transform _forcedBlockerTarget;
@@ -54,7 +53,6 @@ public class OmokFallingStone : MonoBehaviour
     public OmokStoneColor StoneColor { get; private set; }
     public OmokStoneSnapTiming SnapTiming => _snapTiming;
     public bool HasReservedTarget => _hasReservedTarget;
-    public bool ForceBoardPlacement => _forceBoardPlacement;
     public Vector2Int TargetCoordinate => _targetCoordinate;
     public Vector3 TargetWorldPosition => _targetWorldPosition;
     public Vector3 ReleaseWorldPosition => _releaseWorldPosition;
@@ -82,8 +80,7 @@ public class OmokFallingStone : MonoBehaviour
         Vector3 snappedWorldPosition,
         Quaternion snappedWorldRotation,
         float fallGravityScale,
-        bool guideStraight = false,
-        bool forceBoardPlacement = false)
+        bool guideStraight = false)
     {
         _owner = dropper;
         _grid = omokGrid;
@@ -102,7 +99,6 @@ public class OmokFallingStone : MonoBehaviour
         _followBlockerVisualSurface = false;
         _blockerVisualSurfaceBaseOffset = 0f;
         _hasForcedBlockerSnapshot = false;
-        _forceBoardPlacement = forceBoardPlacement;
         _forcedBlockerTarget = null;
         _forcedBlockerLocalPosition = default;
         _forcedBlockerLocalRotation = Quaternion.identity;
@@ -158,11 +154,7 @@ public class OmokFallingStone : MonoBehaviour
             return;
         }
 
-        RefreshForcedBlockerTargetPose();
-
-        if (!_forceBoardPlacement &&
-            !_hasForcedBlockerSnapshot &&
-            TryStickToBlockerAlongMovement())
+        if (TryStickToBlockerAlongMovement())
         {
             return;
         }
@@ -203,7 +195,6 @@ public class OmokFallingStone : MonoBehaviour
 
         if (_guideStraightToTarget)
         {
-            RefreshForcedBlockerTargetPose();
             GuideStraightMotionToTarget();
         }
 
@@ -452,29 +443,6 @@ public class OmokFallingStone : MonoBehaviour
         }
     }
 
-    public void ApplyBlockerAnchorPose(Vector3 localPosition, Quaternion localRotation, bool preserveVisualSurfaceFollow = false)
-    {
-        _blockerAnchorLocalPosition = localPosition;
-        _blockerAnchorLocalRotation = localRotation;
-        _hasBlockerAnchor = true;
-
-        if (!preserveVisualSurfaceFollow)
-        {
-            _blockerVisualSurfaceCollider = null;
-            _followBlockerVisualSurface = false;
-            _blockerVisualSurfaceBaseOffset = 0f;
-        }
-
-        transform.localPosition = localPosition;
-        transform.localRotation = localRotation;
-
-        if (_cachedRigidbody != null)
-        {
-            _cachedRigidbody.position = transform.position;
-            _cachedRigidbody.rotation = transform.rotation;
-        }
-    }
-
     private void ApplyBlockerVisualSurfaceFollow()
     {
         if (!_followBlockerVisualSurface ||
@@ -525,8 +493,6 @@ public class OmokFallingStone : MonoBehaviour
             return;
         }
 
-        RefreshForcedBlockerTargetPose();
-
         if (_hasForcedBlockerSnapshot && _forcedBlockerTarget != null)
         {
             _owner.TryStickStoneToBlockerSnapshot(this);
@@ -539,12 +505,6 @@ public class OmokFallingStone : MonoBehaviour
     private bool TryStickToBlockerAlongMovement()
     {
         if (_owner == null)
-        {
-            _previousBlockerProbePosition = GetBlockerProbePosition();
-            return false;
-        }
-
-        if (_forceBoardPlacement || _hasForcedBlockerSnapshot)
         {
             _previousBlockerProbePosition = GetBlockerProbePosition();
             return false;
@@ -585,12 +545,6 @@ public class OmokFallingStone : MonoBehaviour
 
         if (_owner != null && _owner.IsBlockerHit(collider))
         {
-            if (_forceBoardPlacement || _hasForcedBlockerSnapshot)
-            {
-                IgnoreUnrelatedCollision(collider);
-                return;
-            }
-
             _owner.TryStickStoneToBlocker(this, collider);
             return;
         }
@@ -629,17 +583,6 @@ public class OmokFallingStone : MonoBehaviour
         }
 
         Physics.IgnoreCollision(_cachedCollider, collider, true);
-    }
-
-    private void RefreshForcedBlockerTargetPose()
-    {
-        if (!_hasForcedBlockerSnapshot || _forcedBlockerTarget == null)
-        {
-            return;
-        }
-
-        _targetWorldPosition = _forcedBlockerTarget.TransformPoint(_forcedBlockerLocalPosition);
-        _targetWorldRotation = _forcedBlockerTarget.rotation * _forcedBlockerLocalRotation;
     }
 
     private static void SetLayerRecursively(Transform root, int layer)

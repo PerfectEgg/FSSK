@@ -114,8 +114,7 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
             stoneColor: color,
             targetCoordinate: coordinate,
             releasePosition: ResolveRemoteReleasePosition(coordinate),
-            lockToTargetCoordinate: true,
-            forceBoardPlacement: true);
+            lockToTargetCoordinate: true);
 
         // 1) 시각화 (돌 떨어뜨림 시작)
         if (!TryApplyPlacementVisual(request))
@@ -185,9 +184,17 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
                              _stoneDropper.TryApplyBlockedPlacementVisual(blockedResult);
         if (!visualApplied)
         {
-            Debug.LogWarning(
-                $"[OmokPhotonAuthorityAdapter] Remote blocked visual placement skipped at ({x},{y}) {color}: authoritative blocker snapshot is unavailable.",
-                this);
+            OmokStonePlacementRequest request = new OmokStonePlacementRequest(
+                stoneColor: color,
+                targetCoordinate: coordinate,
+                releasePosition: ResolveRemoteReleasePosition(coordinate),
+                lockToTargetCoordinate: true,
+                allowBlockedCoordinateForBlocker: true);
+
+            if (!TryApplyPlacementVisual(request))
+            {
+                Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote blocked visual placement failed at ({x},{y}) {color}.", this);
+            }
         }
 
         if (!TryApplyBlockedResult(blockedResult))

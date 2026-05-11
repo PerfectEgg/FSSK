@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Photon.Pun;
 using UnityEngine;
 
 public static class OmokWindVisualEvents
@@ -48,8 +47,6 @@ public sealed class WindAimEffectController : MonoBehaviour
 
     [Header("Direction Cycle")]
     [SerializeField] private bool cycleHorizontalDirection = true;
-    [SerializeField] private bool synchronizeDirectionWithNetworkTime = true;
-    [SerializeField] private bool mirrorDirectionForRemoteClient = true;
     [SerializeField, Min(0.1f)] private float directionChangeSeconds = 15f;
     [SerializeField] private bool randomizeInitialDirection = true;
 
@@ -65,10 +62,8 @@ public sealed class WindAimEffectController : MonoBehaviour
 
     private int _currentLevel;
     private int _currentDirectionSign = 1;
-    private int _baseDirectionSign = 1;
     private float _directionTimer;
     private bool _hasAppliedLevel;
-    private bool _hasRoomDirectionSeed;
 
     [System.Serializable]
     private struct WindAimLevelSettings
@@ -111,8 +106,7 @@ public sealed class WindAimEffectController : MonoBehaviour
     private void Start()
     {
         ResolveReferences();
-        _baseDirectionSign = GetInitialDirectionSign();
-        _currentDirectionSign = GetCurrentDirectionSign();
+        _currentDirectionSign = randomizeInitialDirection && Random.value < 0.5f ? -1 : 1;
         _directionTimer = 0f;
 
         if (previewOnStart)
@@ -254,12 +248,6 @@ public sealed class WindAimEffectController : MonoBehaviour
             _directionTimer = 0f;
         }
 
-        if (cycleHorizontalDirection)
-        {
-            RefreshRoomDirectionSeedIfNeeded();
-            _currentDirectionSign = GetCurrentDirectionSign();
-        }
-
         if (clampedLevel == 0 ||
             !TryGetLevelSettings(clampedLevel, out WindAimLevelSettings settings) ||
             !settings.enabled)
@@ -272,7 +260,7 @@ public sealed class WindAimEffectController : MonoBehaviour
         OmokWindAimSettings aimSettings = settings.aimSettings;
         if (cycleHorizontalDirection)
         {
-            aimSettings.direction = new Vector2(_currentDirectionSign * GetLocalPerspectiveSign(), 0f);
+            aimSettings.direction = new Vector2(_currentDirectionSign, 0f);
         }
 
         if (scaleDriftFromLevelTwoPointFive)
@@ -302,20 +290,6 @@ public sealed class WindAimEffectController : MonoBehaviour
             return;
         }
 
-        if (synchronizeDirectionWithNetworkTime)
-        {
-            RefreshRoomDirectionSeedIfNeeded();
-            int synchronizedSign = GetCurrentDirectionSign();
-            if (synchronizedSign == _currentDirectionSign)
-            {
-                return;
-            }
-
-            _currentDirectionSign = synchronizedSign;
-            ApplyWindLevel(_currentLevel, true, true);
-            return;
-        }
-
         _directionTimer += Time.deltaTime;
         if (_directionTimer < directionChangeSeconds)
         {
@@ -325,92 +299,6 @@ public sealed class WindAimEffectController : MonoBehaviour
         _directionTimer %= directionChangeSeconds;
         _currentDirectionSign *= -1;
         ApplyWindLevel(_currentLevel, true, true);
-    }
-
-    private int GetCurrentDirectionSign()
-    {
-        if (!cycleHorizontalDirection || !synchronizeDirectionWithNetworkTime)
-        {
-            return _currentDirectionSign;
-        }
-
-        float synchronizedSeconds = GetSynchronizedSeconds();
-        int step = Mathf.FloorToInt(synchronizedSeconds / Mathf.Max(0.1f, directionChangeSeconds));
-        return step % 2 == 0 ? _baseDirectionSign : -_baseDirectionSign;
-    }
-
-    private int GetInitialDirectionSign()
-    {
-        _hasRoomDirectionSeed = false;
-
-        if (!randomizeInitialDirection)
-        {
-            return 1;
-        }
-
-        if (synchronizeDirectionWithNetworkTime && PhotonNetwork.InRoom && PhotonNetwork.CurrentRoom != null)
-        {
-            _hasRoomDirectionSeed = true;
-            return GetStableHash(PhotonNetwork.CurrentRoom.Name) % 2 == 0 ? 1 : -1;
-        }
-
-        if (synchronizeDirectionWithNetworkTime)
-        {
-            return 1;
-        }
-
-        return Random.value < 0.5f ? -1 : 1;
-    }
-
-    private int GetLocalPerspectiveSign()
-    {
-        if (!mirrorDirectionForRemoteClient || !PhotonNetwork.InRoom)
-        {
-            return 1;
-        }
-
-        return PhotonNetwork.IsMasterClient ? 1 : -1;
-    }
-
-    private void RefreshRoomDirectionSeedIfNeeded()
-    {
-        if (!randomizeInitialDirection ||
-            _hasRoomDirectionSeed ||
-            !PhotonNetwork.InRoom ||
-            PhotonNetwork.CurrentRoom == null)
-        {
-            return;
-        }
-
-        _baseDirectionSign = GetStableHash(PhotonNetwork.CurrentRoom.Name) % 2 == 0 ? 1 : -1;
-        _hasRoomDirectionSeed = true;
-    }
-
-    private static float GetSynchronizedSeconds()
-    {
-        if (PhotonNetwork.InRoom)
-        {
-            return PhotonNetwork.ServerTimestamp * 0.001f;
-        }
-
-        return Time.time;
-    }
-
-    private static int GetStableHash(string value)
-    {
-        unchecked
-        {
-            int hash = 23;
-            if (!string.IsNullOrEmpty(value))
-            {
-                for (int i = 0; i < value.Length; i++)
-                {
-                    hash = hash * 31 + value[i];
-                }
-            }
-
-            return hash == int.MinValue ? int.MaxValue : Mathf.Abs(hash);
-        }
     }
 
     private void PublishRainVelocityX(int level, Vector2 direction)
