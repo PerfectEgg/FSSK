@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
 // 세이렌
 public class Siren : MonsterTroll
@@ -43,7 +43,7 @@ public class Siren : MonsterTroll
     {
         PullCamera(false); 
 
-        Destroy(gameObject);
+        PhotonNetwork.Destroy(gameObject);
     }
     void OnDestroy()
     {

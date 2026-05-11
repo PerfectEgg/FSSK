@@ -4,16 +4,32 @@ using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 // 크라켄
 public class Kraken : MonsterTroll
 {
-    [SerializeField] private float _enterSpeed = 20f;  // 등장 속도
+    [Header("크라켄 연출 설정")]
+    [SerializeField] private float _enterDuration = 2f;     // 등장에 걸리는 시간
+    [SerializeField] private float _attackDelay = 1f;       // 애니메이션 시작 후 타격까지의 대기 시간 (2초~3초 구간)
+    [SerializeField] private float _waitDelay = 1f;         // 애니메이션 시작 후 타격까지의 대기 시간 (2초~3초 구간)
+    [SerializeField] private float _exitDuration = 2f;      // 퇴장에 걸리는 시간
+    [SerializeField] private float _sinkDepth = 20f;        // 아래로 가라앉을 깊이
+    [SerializeField] private float _sinkBack = 40f;         // 뒤로 물러날 거리
 
+    [Header("위치 설정")]
+   // 위치 캐싱용 변수
+    private Vector3 _spawnPos;          // 최종적으로 등장할 위치 (책상 위)
+    private Vector3 _startHidingPos;    // 숨는 연출을 위해 잠시 숨겨질 위치 (아래)
+    private Vector3 _endHidingPos;      // 공격 판정이 발생하는 위치 (책상 위)
+    
     [Header("크라켄 설정")]
+    [SerializeField] private float _enterSpeed = 20f;  // 등장 속도
     [SerializeField] private float _warningTime = 3f; // 경고 및 대기 시간 (3초)
     [SerializeField] private float _penaltyDuration = 3f; // 스턴 및 암전 시간 (3초)
     
 
+    private Animator _animator;
+    private readonly string _enterTrigger = "Enter"; // 애니메이션 트리거 이름
+
     private bool _hasAttacked = false;
 
-    // 연재 착수 모드인지 확인하는 플래그 (기본값은 true라고 가정하거나 초기화 필요)
+    // 언제 착수 모드인지 확인하는 플래그 (기본값은 true라고 가정하거나 초기화 필요)
     private bool _isExpansionMode = false;
 
     // 이벤트 구독 및 해제
@@ -33,43 +49,101 @@ public class Kraken : MonsterTroll
         // TODO: UI 매니저 호출하여 3초 스턴 및 시야 암전 이벤트 발생
         TrollEvents.OnStunEffect?.Invoke(_penaltyDuration);
     }
-    
-    public override void EndTroll()
+
+    protected override void OnStateEnter(MonsterState state)
     {
-        // 연출 종료 후 파괴
-        Destroy(gameObject, 2f);
+        if (PhotonNetwork.IsMasterClient)
+        {
+            if (state == MonsterState.Entering)
+            {
+                _hasAttacked = false; // 공격 여부 초기화
+            }
+        }
+
+        if (state == MonsterState.Action)
+        {
+            _animator.SetTrigger(_enterTrigger); // 등장 애니메이션 트리거
+            Debug.Log("크라켄이 등장합니다! 회피 준비하세요!");
+        }
+    }
+
+    protected override void UpdateState()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        switch(_currentState)
+        {
+            case MonsterState.Entering:
+                float enterProgress = _currentTime / _enterDuration;
+                transform.position = Vector3.Lerp(_startHidingPos, _spawnPos, enterProgress);
+
+                if (_currentTime >= _enterDuration)
+                {
+                    transform.position = _spawnPos; // 정확한 위치 보정
+                    ChangeState(MonsterState.Action);
+                }
+                break;
+            case MonsterState.Action:
+                if (_currentTime >= _attackDelay)
+                {
+                    _hasAttacked = true; // 더 이상 Update에서 실행되지 않도록 잠금
+                    EvaluateDodge();    // 회피 판정 시행
+                }
+                break;
+            case MonsterState.Exiting:
+
+                if (_currentTime >= _waitDelay)
+                {
+                    float exitProgress = (_currentTime - _waitDelay) / _exitDuration;
+                    transform.position = Vector3.Lerp(_spawnPos, _endHidingPos, exitProgress);
+
+                    if (_currentTime >= _waitDelay + _exitDuration)
+                    {
+                        transform.position = _endHidingPos; // 정확한 위치 보정
+                        EndTroll();
+                    }
+                }
+                break;
+        }
     }
 
     void OnDestroy()
     {
-        // 트롤이 제거될 때 매니저에게 종료 알림
-        TrollEvents.TriggerTrollFinished();
+        if (PhotonNetwork.IsMasterClient)
+        {
+            TrollEvents.TriggerTrollFinished();
+        }
     }
 
+    void Awake()
+    {
+        _animator = GetComponent<Animator>();
+    }
 
     void Start()
     {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        _spawnPos = transform.position;     // 초기 위치를 등장 위치로 설정
+
+        // 🟢 [핵심] 소환된 위치에 따른 방향 가중치 계산
+        // 오른쪽에 있으면 1, 왼쪽에 있으면 -1
+        float sideMultiplier = (_spawnPos.x > 0) ? 1f : -1f;
+        float rotationMultiplier = (_spawnPos.x > 0) ? 180f : 0f;
+
+        Vector3 lookDirection = new Vector3(0, rotationMultiplier, 0);
+        transform.rotation = Quaternion.Euler(lookDirection);
+
+        // 🟢 [위치 보정] 숨는 위치를 '보드 바깥쪽'으로 자동 설정
+        // _sinkBack(물러날 거리)에 sideMultiplier를 곱해서 
+        // 오른쪽이면 +, 왼쪽이면 - 방향으로 자연스럽게 멀어지게 함
+        _startHidingPos = _spawnPos + new Vector3(_sinkBack * sideMultiplier, -_sinkDepth, 0);
+        _endHidingPos = _spawnPos + new Vector3(_sinkBack * sideMultiplier * 5f, -_sinkDepth * 20f, 0);
+
+        
+        transform.position = _startHidingPos;    // 시작 위치를 숨겨진 곳으로 강제 이동
+
         Debug.Log("크라켄 등장!! 유의하세요!!");
-    }
-
-    private void Update() {
-        if(transform.position.y <= 0f)
-        {
-            Vector3 targetHeight = new Vector3(transform.position.x, 0f, transform.position.z);
-            transform.position = Vector3.MoveTowards(transform.position, targetHeight, _enterSpeed * Time.deltaTime);
-        }
-
-        if (!_hasAttacked)
-        {
-            _currentTime += Time.deltaTime;
-
-            // 2. 타이머가 3초에 도달하는 순간!
-            if (_currentTime >= _warningTime)
-            {
-                _hasAttacked = true; // 더 이상 Update에서 실행되지 않도록 잠금
-                EvaluateDodge();    // 회피 판정 시행
-            }
-        }
     }
 
     private void EvaluateDodge()
@@ -95,6 +169,6 @@ public class Kraken : MonsterTroll
             ApplyEffect();
         }
 
-        EndTroll(); // 공격 판정 후 트롤 종료
+        ChangeState(MonsterState.Exiting);
     }
 }

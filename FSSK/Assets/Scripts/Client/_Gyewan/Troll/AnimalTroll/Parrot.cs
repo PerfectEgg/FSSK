@@ -33,7 +33,7 @@ public class Parrot : AnimalTroll
         _startPos.y = 0;
         _finalPos = new Vector3(-_startPos.x, _startPos.y, -_startPos.z);
         _finalPos.y = 0;
-        _endPos = new Vector3(-_startPos.x, _startPos.y, Random.Range(-4f, 4f));
+        _endPos = new Vector3(-_startPos.x, _startPos.y, Random.Range(-_startPos.z, _startPos.z));
         _endPos.y = 0;
         _currentStartPos = _startPos;
         _targetPos = _endPos;
@@ -119,7 +119,7 @@ public class Parrot : AnimalTroll
                         _endPos.y = 0;
 
                         _currentStartPos = _endPos;
-                        _startPos.z = Random.Range(-4f, 4f);
+                        _startPos.z = Random.Range(-_startPos.z, _startPos.z);
                         _targetPos = _startPos; // 다음 목적지는 원래 위치로 설정
                         LookAtTarget(_targetPos); // 고개 돌리기
                         
