@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: cac37819b9f914d7cb97d338c0e7daa3
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 221035
+  packageName: Props 3D
+  packageVersion: 1.02
+  assetPath: Assets/Art/_Yeongwoong/Props_3D/Materials/ShaderGraphSand.shadergraph
+  uploadId: 586663
