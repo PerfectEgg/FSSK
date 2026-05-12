@@ -300,9 +300,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 262fd0fef42162b4984d329110d151eb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraRumEffect
-  _rumShaderEffect: {fileID: 0}
+  _glitchMaterial: {fileID: 2100000, guid: a177917b5b2e713499b5866c962f2b1e, type: 2}
   _maxDuration: 8
   _holdSpeedMultiplier: 4
+  _noiseAmount: 2
+  _glitchStrength: 2.5
+  _scanLinesStrength: 1
 --- !u!114 &-4336998492651332753
 MonoBehaviour:
   m_ObjectHideFlags: 0

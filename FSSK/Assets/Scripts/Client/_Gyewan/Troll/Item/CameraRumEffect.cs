@@ -4,15 +4,25 @@ using System.Collections;
 
 public class CameraRumEffect : MonoBehaviourPun
 {
-    [Header("럼주 이펙트 설정")]
-    [Tooltip("화면 일렁임 쉐이더(또는 Post-Processing Volume)가 있는 오브젝트")]
-    [SerializeField] private GameObject _rumShaderEffect;
+    [Header("럼주 이펙트 메테리얼")]
+    [Tooltip("화면 일렁임(Glitch) 효과가 적용된 메테리얼")]
+    [SerializeField] private Material _glitchMaterial;
 
     [Header("디버프 설정")]
     [SerializeField] private float _maxDuration = 8f;         // 기본 지속 시간
     [SerializeField] private float _holdSpeedMultiplier = 4f; // AD 홀드 시 시간이 줄어드는 배속 (4배속)
 
+    [Header("글리치(Glitch) 세부 설정")]
+    [SerializeField] private float _noiseAmount = 2f;
+    [SerializeField] private float _glitchStrength = 2.5f;
+    [SerializeField] private float _scanLinesStrength = 1f;
+    
+    // 코루틴 내부에서 목표로 할 강도
+    private float _targetIntensity = 0f;
+    private float _currentIntensity = 0f;
     private float _currentTimer = 0f;
+
+    void Awake() => SetMaterialProperties(0f);
 
     private void OnEnable()
     {
@@ -23,6 +33,7 @@ public class CameraRumEffect : MonoBehaviourPun
     private void OnDisable()
     {
         TrollEvents.OnHitByRum -= HandleHitByRum;
+        SetMaterialProperties(0f);
     }
 
     private void HandleHitByRum()
@@ -38,6 +49,10 @@ public class CameraRumEffect : MonoBehaviourPun
     private IEnumerator RumDebuffCoroutine()
     {
         _currentTimer = _maxDuration;
+        
+        // 🟢 시작 시 최대 어지러움(2.5f)으로 세팅
+        _currentIntensity = _glitchStrength; 
+        _targetIntensity = _glitchStrength;
 
         Debug.Log($"🥃 [럼 피격] 찰싹! 화면에 럼이 붙었습니다! AD 연타하세요! (8초)");
         // TODO: 럼 철썩 소리 재생
@@ -53,15 +68,20 @@ public class CameraRumEffect : MonoBehaviourPun
 
             if (isHoldingAD)
             {
-                // 홀드 중: 시간이 더 빨리 닳고, 일렁임 쉐이더를 끕니다 (시야 정상화)
+                // 🟢 누르고 있을 때: 시간은 빨리 닳고, 목표 강도는 최소치(1f)로 설정!
                 timeToDecrease *= _holdSpeedMultiplier; 
+                _targetIntensity = 1f; 
+            }
+            else
+            {
+                // 🟢 안 누를 때: 목표 강도를 다시 최대치(2.5f)로 복구!
+                _targetIntensity = _glitchStrength; 
             }
 
-            // 일렁임 쉐이더 켜기
-            if (_rumShaderEffect != null && !_rumShaderEffect.activeSelf)
-            {
-                _rumShaderEffect.SetActive(true);
-            }
+            _currentIntensity = Mathf.Lerp(_currentIntensity, _targetIntensity, Time.deltaTime * 10f);
+
+            // 메테리얼에 값 적용
+            SetMaterialProperties(_currentIntensity);
 
             _currentTimer -= timeToDecrease;
 
@@ -74,15 +94,23 @@ public class CameraRumEffect : MonoBehaviourPun
         ClearEffect();
     }
 
+    // 🟢 쉐이더 속성을 한 번에 관리하는 헬퍼 함수
+    private void SetMaterialProperties(float intensity)
+    {
+        if (_glitchMaterial == null) return;
+
+        _glitchMaterial.SetFloat("_Intensity", intensity);
+        _glitchMaterial.SetFloat("_NoiseAmount", _noiseAmount);
+        _glitchMaterial.SetFloat("_GlitchStrength", _glitchStrength);
+        _glitchMaterial.SetFloat("_ScanLineStrength", _scanLinesStrength);
+    }
+
     private void ClearEffect()
     {
         Debug.Log("✨ [럼주 해제] 술기운이 깼습니다. 시야가 완전히 정상으로 돌아왔습니다.");
 
-        // 쉐이더 이펙트 끄기
-        if (_rumShaderEffect != null)
-        {
-            _rumShaderEffect.SetActive(false);
-        }
+        // 화면 일렁임 효과 완전히 제거
+        SetMaterialProperties(0f);
 
         // 🟢 UI 게이지 바 끄기
     }

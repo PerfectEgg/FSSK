@@ -10,6 +10,11 @@ public class MonsterTroll : TrollBase
     protected MonsterState _currentState = MonsterState.Entering;
     protected float _currentTime = 0f; // Update용 타이머
 
+    protected virtual void Start()
+    {
+        OnStateEnter(MonsterState.Entering);
+    }
+    
     protected virtual void Update()
     {
         // 🟢 [멀티플레이] 초기 스폰 연출 위치 계산은 주인(방장)만 수행합니다.

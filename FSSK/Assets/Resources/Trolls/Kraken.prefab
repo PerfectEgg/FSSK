@@ -629,11 +629,10 @@ MonoBehaviour:
   _attackDelay: 1
   _waitDelay: 1
   _exitDuration: 2
+  _penaltyDuration: 3
   _sinkDepth: 20
   _sinkBack: 40
-  _enterSpeed: 20
-  _warningTime: 3
-  _penaltyDuration: 3
+  _enterSound: {fileID: 8300000, guid: 4d55b5aa9189d8543823103e7572397d, type: 3}
 --- !u!114 &-3562999503163110144
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -68,6 +68,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     protected virtual void Start()
     {
+        OnStateEnter(AnimalState.Entering);
+
         if (!PhotonNetwork.IsMasterClient) return; // ✅ 소유권 없으면 초기화 skip
 
         Vector3 spawnPoint = transform.position;

@@ -130,3 +130,4 @@ MonoBehaviour:
   _stunThreshold: 3
   _stunDuration: 3
   _immunityDuration: 3
+  _enterSound: {fileID: 8300000, guid: b8dac969b68d3a84baf34eb7c85b387a, type: 3}

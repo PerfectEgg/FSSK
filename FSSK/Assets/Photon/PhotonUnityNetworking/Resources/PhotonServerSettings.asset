@@ -80,6 +80,7 @@ MonoBehaviour:
   - RPC_ExecuteDodgeCheck
   - RPC_StartSinging
   - RPC_StopSinging
+  - RPC_EnterSound
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

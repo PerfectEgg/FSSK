@@ -12,6 +12,9 @@ public class Siren : MonsterTroll
     [SerializeField] private float _stunDuration = 3f;  
     [SerializeField] private float _immunityDuration = 3f; 
 
+    [Header("사운드 설정")]
+    [SerializeField] private AudioClip _enterSound;
+
     private float _seductionTimer = 0f;
     private float _immunityTimer = 0f;
     private float _stunTimer = 0f;          
@@ -26,15 +29,20 @@ public class Siren : MonsterTroll
         if (state == MonsterState.Entering)
         {
             Debug.Log("🧜‍♀️ [세이렌 등장] 2초 뒤 매혹적인 노래가 시작됩니다!");
-            // TODO: 페이드인 애니메이션 또는 사운드 실행
+
+            Debug.Log($"🧜‍♀️ [세이렌 등장] 등장 사운드 재생 요청 발사!");
+            photonView.RPC("RPC_EnterSound", RpcTarget.All);
+            
         }
-        else if (state == MonsterState.Action)
+        
+        if (state == MonsterState.Action)
         {
             // 방장이 상태를 Action으로 넘기면, 모두에게 "노래 시작!" 방송
             if (PhotonNetwork.IsMasterClient) 
                 photonView.RPC("RPC_StartSinging", RpcTarget.All);
         }
-        else if (state == MonsterState.Exiting)
+        
+        if (state == MonsterState.Exiting)
         {
             // 방장이 상태를 Exiting으로 넘기면, 모두에게 "노래 끝!" 방송
             if (PhotonNetwork.IsMasterClient) 
@@ -56,7 +64,7 @@ public class Siren : MonsterTroll
             
             case MonsterState.Action:
                 // 페이드인 시간 + 노래 부르는 시간이 지나면 퇴장
-                if (_currentTime >= _fadeInTime + _activeTime) 
+                if (_currentTime >= _activeTime) 
                     ChangeState(MonsterState.Exiting);
                 break;
             
@@ -67,6 +75,20 @@ public class Siren : MonsterTroll
     }
 
     // --- 3. [RPC] 클라이언트 로컬 스위치 ON/OFF ---
+    [PunRPC]
+    private void RPC_EnterSound()
+    {
+        Debug.Log($"🧜‍♀️ [세이렌 등장] 등장 사운드 재생 요청 받음");
+
+        if (_enterSound == null) 
+        {
+            Debug.LogError("🚨 [Siren] _enterSound 클립이 비어있습니다! 인스펙터를 확인하세요.");
+            return;
+        }
+
+        SoundEvents.Play3DSFX_Cut?.Invoke(_enterSound, transform.position, 0.45f, 8f, 2f); // 등장 사운드 재생
+    }
+
     [PunRPC]
     private void RPC_StartSinging()
     {

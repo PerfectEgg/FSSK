@@ -17,6 +17,7 @@ public static class SoundEvents
     // 인게임 3D SFX (GameSoundManager가 수신)
     // 매개변수: 오디오 클립, 발생 위치(Vector3), 볼륨
     public static Action<AudioClip, Vector3, float> Play3DSFX;
+    public static Action<AudioClip, Vector3, float, float, float> Play3DSFX_Cut;
 
     // 환경음 (비, 바람) 웨이브 단계 조절 이벤트
     public static Action<int> UpdateWaveAmbient;

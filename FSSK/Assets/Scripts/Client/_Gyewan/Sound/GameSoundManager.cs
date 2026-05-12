@@ -7,11 +7,11 @@ using UnityEngine;
 public class GameSoundManager: MonoBehaviour
 {
     [Header("3D 사운드 설정")]
-    [SerializeField] private float _minDistance = 5f;  // 이 거리 안에서는 최대 볼륨으로 들림
-    [SerializeField] private float _maxDistance = 50f; // 이 거리 밖으로 나가면 소리가 안 들림
+    [SerializeField] private float _minDistance = 100f;  // 이 거리 안에서는 최대 볼륨으로 들림
+    [SerializeField] private float _maxDistance = 250f; // 이 거리 밖으로 나가면 소리가 안 들림
 
     [Header("풀링 설정")]
-    [SerializeField] private int _initialPoolSize = 10; // 처음에 미리 만들어둘 스피커 개수
+    [SerializeField] private int _initialPoolSize = 5; // 처음에 미리 만들어둘 스피커 개수
 
     private List<int> _rainLevelProgression = new List<int> { 0, 0, 1, 1, 1, 2, 2, 2, 3, 3 };
     private List<int> _windLevelProgression = new List<int> { 0, 1, 1, 1, 2, 2, 2, 3, 3, 3 };
@@ -34,6 +34,7 @@ public class GameSoundManager: MonoBehaviour
     private void OnEnable()
     {
         SoundEvents.Play3DSFX += HandlePlay3DSFX;
+        SoundEvents.Play3DSFX_Cut += HandlePlay3DSFX_Cut;
         SoundEvents.UpdateWaveAmbient += HandleUpdateWaveAmbient;
         SoundEvents.PlayLightning += HandlePlayLightning;
     }
@@ -41,6 +42,7 @@ public class GameSoundManager: MonoBehaviour
     private void OnDisable()
     {
         SoundEvents.Play3DSFX -= HandlePlay3DSFX;
+        SoundEvents.Play3DSFX_Cut -= HandlePlay3DSFX_Cut;
         SoundEvents.UpdateWaveAmbient -= HandleUpdateWaveAmbient;
         SoundEvents.PlayLightning -= HandlePlayLightning;
     }
@@ -137,7 +139,7 @@ public class GameSoundManager: MonoBehaviour
         sfxObj.transform.SetParent(this.transform); // 매니저의 자식으로 정리
 
         AudioSource source = sfxObj.AddComponent<AudioSource>();
-        source.spatialBlend = 1.0f;             
+        source.spatialBlend = 0.5f;             
         source.rolloffMode = AudioRolloffMode.Linear; 
         source.minDistance = _minDistance;
         source.maxDistance = _maxDistance;
@@ -152,6 +154,7 @@ public class GameSoundManager: MonoBehaviour
     private void HandlePlay3DSFX(AudioClip clip, Vector3 position, float volume)
     {
         if (clip == null) return;
+        Debug.Log($"🔊 [3D SFX] '{clip.name}' 재생 요청 받음 (위치: {position}, 볼륨: {volume})");
 
         AudioSource source = null;
 
@@ -178,12 +181,86 @@ public class GameSoundManager: MonoBehaviour
         StartCoroutine(ReturnToPoolCoroutine(source, clip.length));
     }
 
+    private void HandlePlay3DSFX_Cut(AudioClip clip, Vector3 position, float volume, float cutTime, float fadeOutTime)
+    {
+        if (clip == null) return;
+        Debug.Log($"🔊 [3D SFX] '{clip.name}' 재생 요청 받음 (위치: {position}, 볼륨: {volume})");
+
+        AudioSource source = null;
+
+        if (_soundPool.Count > 0)
+        {
+            source = _soundPool.Dequeue();
+        }
+        else
+        {
+            source = CreateNewAudioSource();
+        }
+
+        source.transform.position = position;
+        source.clip = clip;
+        source.volume = 0f;
+        
+        source.gameObject.SetActive(true);
+        source.Play();
+
+        StartCoroutine(FadeAndCutCoroutine(source, volume, cutTime, fadeOutTime));
+    }
+
     private IEnumerator ReturnToPoolCoroutine(AudioSource source, float delay)
     {
+        Debug.Log($"🔊 재생 시작!");
         // 소리 길이만큼 기다림
         yield return new WaitForSeconds(delay);
 
         // 스피커 전원을 끄고 창고에 다시 넣음
+        source.gameObject.SetActive(false);
+        _soundPool.Enqueue(source);
+    }
+
+    // 🟢 [핵심] 자연스러운 볼륨 조절 코루틴
+    private IEnumerator FadeAndCutCoroutine(AudioSource source, float targetVolume, float totalDuration, float fadeDuration)
+    {
+        Debug.Log($"🔊 재생 시작!");
+
+        // 🚨 안전장치: 만약 지정한 재생 시간이 페이드 인+아웃 시간보다 짧다면?
+        // (예: 총 2초 틀건데 페이드를 2초로 잡은 경우) -> 페이드 시간을 총 시간의 절반으로 강제 압축!
+        if (totalDuration < fadeDuration * 2f)
+        {
+            fadeDuration = totalDuration / 2f;
+        }
+
+        float currentTime = 0f;
+
+        // 🎵 1단계: 페이드 인 (점점 크게)
+        while (currentTime < fadeDuration)
+        {
+            currentTime += Time.deltaTime;
+            // Mathf.Lerp를 사용해 0부터 targetVolume까지 부드럽게 값을 올립니다.
+            source.volume = Mathf.Lerp(0f, targetVolume, currentTime / fadeDuration);
+            yield return null; // 다음 프레임까지 대기
+        }
+        source.volume = targetVolume; // 오차 방지를 위해 목표 볼륨으로 확실하게 고정
+
+        // 🎵 2단계: 원래 볼륨으로 재생되는 중간 대기 시간
+        float waitTime = totalDuration - (fadeDuration * 2f);
+        if (waitTime > 0)
+        {
+            yield return new WaitForSeconds(waitTime);
+        }
+
+        // 🎵 3단계: 페이드 아웃 (점점 작게)
+        currentTime = 0f;
+        while (currentTime < fadeDuration)
+        {
+            currentTime += Time.deltaTime;
+            source.volume = Mathf.Lerp(targetVolume, 0f, currentTime / fadeDuration);
+            yield return null;
+        }
+        source.volume = 0f; // 볼륨을 완전히 0으로 끔
+
+        // 🎵 4단계: 스피커 전원 끄고 창고(Pool)에 반납
+        source.Stop();
         source.gameObject.SetActive(false);
         _soundPool.Enqueue(source);
     }

@@ -9,6 +9,7 @@ public class Kraken : MonsterTroll
     [SerializeField] private float _attackDelay = 1f;       // 애니메이션 시작 후 타격까지의 대기 시간 (2초~3초 구간)
     [SerializeField] private float _waitDelay = 1f;         // 애니메이션 시작 후 타격까지의 대기 시간 (2초~3초 구간)
     [SerializeField] private float _exitDuration = 3f;      // 퇴장에 걸리는 시간
+    [SerializeField] private float _penaltyDuration = 3f; // 스턴 및 암전 시간 (3초)
     [SerializeField] private float _sinkDepth = 20f;        // 아래로 가라앉을 깊이
     [SerializeField] private float _sinkBack = 40f;         // 뒤로 물러날 거리
 
@@ -17,17 +18,12 @@ public class Kraken : MonsterTroll
     private Vector3 _spawnPos;          // 최종적으로 등장할 위치 (책상 위)
     private Vector3 _startHidingPos;    // 숨는 연출을 위해 잠시 숨겨질 위치 (아래)
     private Vector3 _endHidingPos;      // 공격 판정이 발생하는 위치 (책상 위)
-    
-    [Header("크라켄 설정")]
-    [SerializeField] private float _enterSpeed = 20f;  // 등장 속도
-    [SerializeField] private float _warningTime = 3f; // 경고 및 대기 시간 (3초)
-    [SerializeField] private float _penaltyDuration = 3f; // 스턴 및 암전 시간 (3초)
-    
+
+    [Header("사운드 설정")]
+    [SerializeField] private AudioClip _enterSound;
 
     private Animator _animator;
     private readonly string _enterTrigger = "Enter"; // 애니메이션 트리거 이름
-
-    private bool _hasAttacked = false;
 
     // 언제 착수 모드인지 확인하는 플래그 (기본값은 true라고 가정하거나 초기화 필요)
     private bool _isExpansionMode = false;
@@ -41,6 +37,39 @@ public class Kraken : MonsterTroll
         _isExpansionMode = expansionModeActive;
     }
 
+    void Awake()
+    {
+        _animator = GetComponent<Animator>();
+    }
+
+    protected override void Start()
+    {
+        base.Start();
+
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        _spawnPos = transform.position;     // 초기 위치를 등장 위치로 설정
+
+        // 🟢 [핵심] 소환된 위치에 따른 방향 가중치 계산
+        // 오른쪽에 있으면 1, 왼쪽에 있으면 -1
+        float sideMultiplier = (_spawnPos.x > 0) ? 1f : -1f;
+        float rotationMultiplier = (_spawnPos.x > 0) ? 180f : 0f;
+
+        Vector3 lookDirection = new Vector3(0, rotationMultiplier, 0);
+        transform.rotation = Quaternion.Euler(lookDirection);
+
+        // 🟢 [위치 보정] 숨는 위치를 '보드 바깥쪽'으로 자동 설정
+        // _sinkBack(물러날 거리)에 sideMultiplier를 곱해서 
+        // 오른쪽이면 +, 왼쪽이면 - 방향으로 자연스럽게 멀어지게 함
+        _startHidingPos = _spawnPos + new Vector3(_sinkBack * sideMultiplier, -_sinkDepth, 0);
+        _endHidingPos = _spawnPos + new Vector3(_sinkBack * sideMultiplier * 5f, -_sinkDepth * 20f, 0);
+
+        
+        transform.position = _startHidingPos;    // 시작 위치를 숨겨진 곳으로 강제 이동
+
+        Debug.Log("크라켄 등장!! 유의하세요!!");
+    }
+
     // --- TrollBase(추상 클래스)의 메서드 구현 ---
     public override void ApplyEffect()
     {
@@ -52,12 +81,10 @@ public class Kraken : MonsterTroll
 
     protected override void OnStateEnter(MonsterState state)
     {
-        if (PhotonNetwork.IsMasterClient)
+        if (state == MonsterState.Entering)
         {
-            if (state == MonsterState.Entering)
-            {
-                _hasAttacked = false; // 공격 여부 초기화
-            }
+            Debug.Log($"<color=cyan>[Kraken]</color> Entering 상태 진입. RPC 발사 시도!");
+            photonView.RPC("RPC_EnterSound", RpcTarget.All);
         }
 
         if (state == MonsterState.Action)
@@ -86,8 +113,6 @@ public class Kraken : MonsterTroll
             case MonsterState.Action:
                 if (_currentTime >= _attackDelay)
                 {
-                    _hasAttacked = true; // 더 이상 Update에서 실행되지 않도록 잠금
-
                     photonView.RPC("RPC_ExecuteDodgeCheck", RpcTarget.All);
 
                     ChangeState(MonsterState.Exiting);
@@ -110,43 +135,26 @@ public class Kraken : MonsterTroll
         }
     }
 
+    [PunRPC]
+    private void RPC_EnterSound()
+    {
+        Debug.Log($"<color=cyan>[Kraken]</color> 등장 사운드 재생 요청 받음");
+
+        if (_enterSound == null) 
+        {
+            Debug.LogError("🚨 [Kraken] _enterSound 클립이 비어있습니다! 인스펙터를 확인하세요.");
+            return;
+        }
+
+        SoundEvents.Play3DSFX?.Invoke(_enterSound, transform.position, 0.45f); // 등장 사운드 재생
+    }
+
     void OnDestroy()
     {
         if (PhotonNetwork.IsMasterClient)
         {
             TrollEvents.TriggerTrollFinished();
         }
-    }
-
-    void Awake()
-    {
-        _animator = GetComponent<Animator>();
-    }
-
-    void Start()
-    {
-        if (!PhotonNetwork.IsMasterClient) return;
-
-        _spawnPos = transform.position;     // 초기 위치를 등장 위치로 설정
-
-        // 🟢 [핵심] 소환된 위치에 따른 방향 가중치 계산
-        // 오른쪽에 있으면 1, 왼쪽에 있으면 -1
-        float sideMultiplier = (_spawnPos.x > 0) ? 1f : -1f;
-        float rotationMultiplier = (_spawnPos.x > 0) ? 180f : 0f;
-
-        Vector3 lookDirection = new Vector3(0, rotationMultiplier, 0);
-        transform.rotation = Quaternion.Euler(lookDirection);
-
-        // 🟢 [위치 보정] 숨는 위치를 '보드 바깥쪽'으로 자동 설정
-        // _sinkBack(물러날 거리)에 sideMultiplier를 곱해서 
-        // 오른쪽이면 +, 왼쪽이면 - 방향으로 자연스럽게 멀어지게 함
-        _startHidingPos = _spawnPos + new Vector3(_sinkBack * sideMultiplier, -_sinkDepth, 0);
-        _endHidingPos = _spawnPos + new Vector3(_sinkBack * sideMultiplier * 5f, -_sinkDepth * 20f, 0);
-
-        
-        transform.position = _startHidingPos;    // 시작 위치를 숨겨진 곳으로 강제 이동
-
-        Debug.Log("크라켄 등장!! 유의하세요!!");
     }
 
     [PunRPC]
