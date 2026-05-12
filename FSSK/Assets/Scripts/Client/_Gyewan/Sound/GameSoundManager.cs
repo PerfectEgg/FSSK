@@ -12,6 +12,9 @@ public class GameSoundManager: MonoBehaviour
 
     [Header("풀링 설정")]
     [SerializeField] private int _initialPoolSize = 10; // 처음에 미리 만들어둘 스피커 개수
+    
+    private List<int> _rainLevelProgression = new List<int> { 0, 0, 1, 1, 1, 2, 2, 2, 3, 3 };
+    private List<int> _windLevelProgression = new List<int> { 0, 1, 1, 1, 2, 2, 2, 3, 3, 3 };
 
     [Header("환경음 설정")]
     [Tooltip("비, 바람처럼 항시 재생되는 2D 루프 사운드 소스 + 번개처럼 특정 상황에서 재생되는 단발성 사운드 소스")]

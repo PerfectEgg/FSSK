@@ -181,7 +181,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Explosion
   glassMat: {fileID: 2100000, guid: 9709dc8403f648748ab3a04467c7f90b, type: 2}
-  cubeSize: 0.1
+  cubeSize: 0.35
   cubesInRow: 5
   explosionRadius: 300
   explosionForce: 20

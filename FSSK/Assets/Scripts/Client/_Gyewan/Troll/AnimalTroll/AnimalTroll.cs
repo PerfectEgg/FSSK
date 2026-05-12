@@ -153,7 +153,6 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         switch(_currentState)
         {
             case AnimalState.Entering:
-                Debug.Log($"테스트 1: {gameObject.name}이(가) Entering 상태에 진입했습니다.");
                 EnterAction();
                 break;
             case AnimalState.Waiting:
@@ -211,8 +210,6 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     protected virtual void EnterAction()
     {
         if (!PhotonNetwork.IsMasterClient) return; // ✅ 방장이 아닐 경우 위치 계산 skip
-
-        Debug.Log($"테스트 2: {gameObject.name}이(가) EnterAction 상태에 진입했습니다.");
 
         // 0.0 ~ 1.0 사이의 진행률 계산
         float progress = _currentTime / _enteringTime;
