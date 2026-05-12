@@ -100,7 +100,7 @@ public class RankingUIManager : MonoBehaviour
                 BindTop3(list);
                 Debug.Log($"[RankingUIManager] Top 3 데이터 삽입 완료");
                 // Top3 이후부터는 스크롤 리스트에 삽입
-                for (int i = 4; i < list.Count; i++)
+                for (int i = 3; i < list.Count; i++)
                 {
                     var row = Instantiate(_rankItemPrefab, _rankListContent);
                     row.Bind(list[i]);
