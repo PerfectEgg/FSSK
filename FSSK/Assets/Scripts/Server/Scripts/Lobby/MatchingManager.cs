@@ -22,6 +22,9 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     [SerializeField] private TextMeshProUGUI _statusText;
     [SerializeField] private TextMeshProUGUI _timerText;
 
+    [Header("사운드 설정")]
+    [SerializeField] private AudioClip _lobbyBGM;
+
     private const string SOLO_BUTTON_NAME = "SoloPlayBtn";
     private const string CANCEL_LABEL = "취소";
 
@@ -34,6 +37,8 @@ public class MatchingManager : MonoBehaviourPunCallbacks
 
     void Start()
     {
+        SoundEvents.PlayBGM?.Invoke(_lobbyBGM, 0.5f);
+
         // 매칭 버튼 텍스트 캐싱 + 기본 라벨 저장 (취소 후 복원용)
         if (_mutiMatchButton != null)
         {

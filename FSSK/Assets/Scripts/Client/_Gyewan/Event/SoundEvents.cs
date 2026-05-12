@@ -7,7 +7,6 @@ public static class SoundEvents
     #region MainSoundManager 이벤트
     // BGM 관련 이벤트 (클립, 볼륨)
     public static Action<AudioClip, float> PlayBGM;
-    public static Action StopBGM;
 
     // 공통 SFX 관련 이벤트 (클립, 볼륨) - 버튼 클릭음, 게임오버 효과음 등
     public static Action<AudioClip, float> PlaySFX;

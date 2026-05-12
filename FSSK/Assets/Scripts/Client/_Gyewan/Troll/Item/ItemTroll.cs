@@ -15,6 +15,7 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
     [SerializeField] protected float _throwForce = 100f;    // 던지는 힘
     [SerializeField] protected ItemType _itemType;
 
+    protected AudioClip _hitSound;   // 적중 사운드 (각 아이템마다 다르게 설정 가능)
     protected Vector3 _grabbedScale = Vector3.one; // 🟢 잡았을 때 원래 크기
 
     // ✅ SyncGrabItemRPC에서 직접 호출 (로컬 이벤트 의존 제거)
@@ -92,7 +93,7 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
     }
 
     // 🟢 상대방(트리거 콜라이더 등)에게 맞았을 때 실행
-    protected virtual void OnTriggerEnter(Collider other)
+    private void OnTriggerEnter(Collider other)
     {
         // 🟢 [멀티플레이 핵심] "내가 던진 아이템"이 "플레이어"에게 맞았을 때만 판정합니다.
         // 이렇게 해야 중복 데미지나 중복 파괴 에러가 발생하지 않습니다.
@@ -114,12 +115,22 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
                 // 🟢 enum을 (int)로 변환해서 안전하게 RPC 송출
                 targetPV.RPC("RPC_ApplyItemEffect", targetPV.Owner, (int)_itemType);
 
+                photonView.RPC("RPC_HitItemSound", RpcTarget.All); // 적중 사운드 재생
+
                 // 맞췄으니 아이템은 파괴
                 PhotonNetwork.Destroy(gameObject);
             }
         }
     }
 
+    [PunRPC]
+    private void RPC_HitItemSound()
+    {
+        if (_hitSound != null)
+        {
+            SoundEvents.Play3DSFX?.Invoke(_hitSound, transform.position, 0.7f);
+        }
+    }
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {

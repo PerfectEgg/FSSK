@@ -17,7 +17,10 @@ public class Parrot : AnimalTroll
     private float _flyTimer = 0f; // 연재 비행 진행 시간
 
     private int _actionCount = 0;        // 액션 카운팅
-    private bool _isReturning = false;   // 초기 대기 이후 �동
+    private bool _isReturning = false;   // 초기 대기 이후 귀환
+
+    [Header("사운드 설정")]
+    [SerializeField] private AudioClip _returnSound;   // 귀환 사운드
 
     protected override void Start()
     {
@@ -56,6 +59,12 @@ public class Parrot : AnimalTroll
             if (state == AnimalState.Hiding) SetHide(); 
         }
 
+        if (state == AnimalState.Waiting && _isReturning)
+        {
+            Debug.Log("앵무새: 노래(Party Parrot)를 시작합니다! (1.5초 대기)");
+            photonView.RPC("RPC_ReturnSound", RpcTarget.All);
+        }
+
         // 2. 🟢 상태에 맞는 애니메이션 트리거 단 한 번 실행
         if (_animator != null)
         {
@@ -73,6 +82,20 @@ public class Parrot : AnimalTroll
                     break;
             }
         }
+    }
+
+    [PunRPC]
+    private void RPC_ReturnSound()
+    {
+        Debug.Log($"<color=cyan>[Kraken]</color> 귀환 사운드 재생 요청 받음");
+
+        if (_returnSound == null) 
+        {
+            Debug.LogError("🚨 [Kraken] _returnSound 클립이 비어있습니다! 인스펙터를 확인하세요.");
+            return;
+        }
+
+        SoundEvents.Play3DSFX?.Invoke(_returnSound, transform.position, 0.4f); // 귀환 사운드 재생
     }
 
     // 목표 지점을 바라보는 함수

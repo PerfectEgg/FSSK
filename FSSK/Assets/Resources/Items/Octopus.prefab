@@ -846,6 +846,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Octopus
   _throwForce: 250
   _itemType: 1
+  _octopusHitSound: {fileID: 8300000, guid: 23c68f01a714a384fae4fe9e3c4ac97f, type: 3}
 --- !u!114 &8954435648478758941
 MonoBehaviour:
   m_ObjectHideFlags: 0

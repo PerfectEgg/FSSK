@@ -51,6 +51,8 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private string _playerPrefabName = "Player/Player"; // Resources 폴더 안의 해적 프리팹 이름
     [SerializeField] private bool _spawnSoloOpponentCharacter = true;
 
+    [Header("사운드 설정")]
+    [SerializeField] private AudioClip _gameBGM;
 
     // ──────────────────────────────────────────────────────────────
     //  상태
@@ -258,8 +260,21 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         GameTimeLeft = _gameDuration;
         IsGameOver = false;
         Debug.Log($"[NetworkGameManager] 게임 시작 (전체 시간: {_gameDuration:F0}s)");
+
+        photonView.RPC("RPC_PlayGameBGM", RpcTarget.AllBuffered);
     }
 
+    [PunRPC]
+    private void RPC_PlayGameBGM()
+    {
+        if (_gameBGM == null) 
+        {
+            Debug.LogError("🚨 [Kraken] _gameBGM 클립이 비어있습니다! 인스펙터를 확인하세요.");
+            return;
+        }
+
+        SoundEvents.PlayBGM?.Invoke(_gameBGM, 0.5f); // 게임 사운드 재생
+    }
     private void TickTimers(float dt)
     {
         GameTimeLeft = Mathf.Max(0f, GameTimeLeft - dt);

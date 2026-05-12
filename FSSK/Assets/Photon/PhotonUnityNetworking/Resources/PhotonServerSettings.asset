@@ -81,6 +81,9 @@ MonoBehaviour:
   - RPC_StartSinging
   - RPC_StopSinging
   - RPC_EnterSound
+  - RPC_ReturnSound
+  - RPC_PlayGameBGM
+  - RPC_HitItemSound
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

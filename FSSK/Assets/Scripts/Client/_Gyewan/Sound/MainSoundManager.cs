@@ -8,10 +8,13 @@ public class MainSoundManager: MonoBehaviour
     public static MainSoundManager Instance { get; private set; }
 
     [Header("오디오 소스")]
-    [SerializeField] private AudioSource _bgmSource; // BGM 재생용
-    [SerializeField] private AudioSource _sfxSource; // SFX 재생용
+    [SerializeField] private AudioSource _bgmSource;    // BGM 재생용
+    [SerializeField] private AudioSource _sfxSource;    // SFX 재생용
 
-    private void Awake() {
+    [Header("사운드 소스")]
+    [SerializeField] private AudioClip _startBGM;       // 시작 BGM
+
+    void Awake() {
         // 싱글톤 및 씬 전환 시 유지 설정
         if (Instance == null)
         {
@@ -25,11 +28,24 @@ public class MainSoundManager: MonoBehaviour
         }
     }
 
+    void Start()
+    {
+        _bgmSource.volume = 0.5f; // BGM 기본 볼륨
+        _sfxSource.volume = 0.6f; // SFX 기본 볼
+
+        _bgmSource.loop = true; // BGM은 무한 반복
+
+        // 게임 시작 시 BGM 재생
+        if (_startBGM != null)
+        {
+            SoundEvents.PlayBGM?.Invoke(_startBGM, _bgmSource.volume);
+        }
+    }
+
     private void OnEnable()
     {
         // 이벤트 구독
         SoundEvents.PlayBGM += HandlePlayBGM;
-        SoundEvents.StopBGM += HandleStopBGM;
         SoundEvents.PlaySFX += HandlePlaySFX;
     }
 
@@ -37,7 +53,6 @@ public class MainSoundManager: MonoBehaviour
     {
         // 이벤트 구독 해제
         SoundEvents.PlayBGM -= HandlePlayBGM;
-        SoundEvents.StopBGM -= HandleStopBGM;
         SoundEvents.PlaySFX -= HandlePlaySFX;
     }
 

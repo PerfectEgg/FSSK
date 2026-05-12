@@ -1701,6 +1701,7 @@ MonoBehaviour:
   _spawnY: 0
   _throwForce: 20
   _flyHeight: 5
+  _returnSound: {fileID: 0}
 --- !u!114 &4927737017595231870
 MonoBehaviour:
   m_ObjectHideFlags: 0
