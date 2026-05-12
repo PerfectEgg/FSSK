@@ -204,6 +204,7 @@ public class OmokMatchManager : MonoBehaviour
 
     private OmokStoneColor[,] _boardState;
     private readonly List<Vector2Int> _winningCoordinates = new();
+    private readonly List<OmokBoardStoneState> _liveBoardStoneBuffer = new();
     private bool _isMatchEnded;
     private OmokStoneColor _winner = OmokStoneColor.None;
     private int _placedStoneCount;
@@ -331,6 +332,9 @@ public class OmokMatchManager : MonoBehaviour
 
     public OmokStoneColor[,] GetBoardSnapshot()
     {
+        SyncBoardStateWithLiveStones();
+        TryEndMatchFromExistingBoard();
+
         if (_boardState == null)
         {
             return null;
@@ -385,7 +389,7 @@ public class OmokMatchManager : MonoBehaviour
     private bool TrySelectRemovalTargetByColor(OmokStoneColor targetColor, out OmokStoneRemovalResult removalTarget)
     {
         removalTarget = default;
-        PruneStaleBoardState();
+        SyncBoardStateWithLiveStones();
 
         if (_boardState == null || _isMatchEnded || targetColor == OmokStoneColor.None)
         {
@@ -568,18 +572,15 @@ public class OmokMatchManager : MonoBehaviour
 
     public bool CanAcceptPlacementRequest(Vector2Int coordinate, OmokStoneColor stoneColor)
     {
-        PruneStaleBoardState();
-
-        return _boardState != null &&
-               stoneColor != OmokStoneColor.None &&
-               CanTakeTurn(stoneColor) &&
-               OmokMatchFlow.IsInsideBoard(BoardSize, coordinate) &&
-               _boardState[coordinate.x, coordinate.y] == OmokStoneColor.None;
+        SyncBoardStateWithLiveStones();
+        TryEndMatchFromExistingBoard();
+        return CanAcceptPlacementRequestCore(coordinate, stoneColor);
     }
 
     public bool CanAcceptPlacementRequest(OmokStonePlacementRequest request)
     {
-        PruneStaleBoardState();
+        SyncBoardStateWithLiveStones();
+        TryEndMatchFromExistingBoard();
 
         if (_boardState == null ||
             request.StoneColor == OmokStoneColor.None ||
@@ -595,7 +596,9 @@ public class OmokMatchManager : MonoBehaviour
 
     public bool TryRegisterPlacedStone(Vector2Int coordinate, OmokStoneColor stoneColor)
     {
-        if (!CanAcceptPlacementRequest(coordinate, stoneColor))
+        SyncBoardStateWithLiveStones(coordinate);
+
+        if (!CanAcceptPlacementRequestCore(coordinate, stoneColor))
         {
             return false;
         }
@@ -623,18 +626,125 @@ public class OmokMatchManager : MonoBehaviour
         return true;
     }
 
-    private void PruneStaleBoardState()
+    private bool CanAcceptPlacementRequestCore(Vector2Int coordinate, OmokStoneColor stoneColor)
+    {
+        return _boardState != null &&
+               stoneColor != OmokStoneColor.None &&
+               CanTakeTurn(stoneColor) &&
+               OmokMatchFlow.IsInsideBoard(BoardSize, coordinate) &&
+               _boardState[coordinate.x, coordinate.y] == OmokStoneColor.None;
+    }
+
+    private void SyncBoardStateWithLiveStones()
+    {
+        SyncBoardStateWithLiveStones(default, false);
+    }
+
+    private void SyncBoardStateWithLiveStones(Vector2Int ignoredCoordinate)
+    {
+        SyncBoardStateWithLiveStones(ignoredCoordinate, true);
+    }
+
+    private void SyncBoardStateWithLiveStones(Vector2Int ignoredCoordinate, bool hasIgnoredCoordinate)
     {
         if (_boardState == null || stoneDropper == null)
         {
             return;
         }
 
-        int liveStoneCount = 0;
-        bool removedStaleStone = false;
-        for (int y = 0; y < BoardSize; y++)
+        int boardSize = BoardSize;
+        if (boardSize <= 0)
         {
-            for (int x = 0; x < BoardSize; x++)
+            return;
+        }
+
+        _liveBoardStoneBuffer.Clear();
+        stoneDropper.CollectLiveBoardStones(_liveBoardStoneBuffer);
+
+        OmokStoneColor[,] syncedBoardState = new OmokStoneColor[boardSize, boardSize];
+        int liveStoneCount = 0;
+        foreach (OmokBoardStoneState boardStone in _liveBoardStoneBuffer)
+        {
+            Vector2Int coordinate = boardStone.Coordinate;
+            if ((hasIgnoredCoordinate && coordinate == ignoredCoordinate) ||
+                boardStone.StoneColor == OmokStoneColor.None ||
+                !OmokMatchFlow.IsInsideBoard(boardSize, coordinate) ||
+                syncedBoardState[coordinate.x, coordinate.y] != OmokStoneColor.None)
+            {
+                continue;
+            }
+
+            syncedBoardState[coordinate.x, coordinate.y] = boardStone.StoneColor;
+            liveStoneCount++;
+        }
+
+        if (!HasBoardStateChanged(syncedBoardState, liveStoneCount))
+        {
+            return;
+        }
+
+        _boardState = syncedBoardState;
+        _placedStoneCount = liveStoneCount;
+        if (!_isMatchEnded)
+        {
+            _winningCoordinates.Clear();
+        }
+    }
+
+    private bool HasBoardStateChanged(OmokStoneColor[,] nextBoardState, int nextPlacedStoneCount)
+    {
+        if (_boardState == null ||
+            nextBoardState == null ||
+            _boardState.GetLength(0) != nextBoardState.GetLength(0) ||
+            _boardState.GetLength(1) != nextBoardState.GetLength(1) ||
+            _placedStoneCount != nextPlacedStoneCount)
+        {
+            return true;
+        }
+
+        for (int y = 0; y < _boardState.GetLength(1); y++)
+        {
+            for (int x = 0; x < _boardState.GetLength(0); x++)
+            {
+                if (_boardState[x, y] != nextBoardState[x, y])
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private void TryEndMatchFromExistingBoard()
+    {
+        if (_isMatchEnded ||
+            _boardState == null ||
+            rules == null ||
+            !TryFindExistingWinningLine(out OmokStoneColor resultWinner, out List<Vector2Int> winningLine))
+        {
+            return;
+        }
+
+        _winningCoordinates.Clear();
+        _winningCoordinates.AddRange(winningLine);
+        EndMatch(resultWinner);
+    }
+
+    private bool TryFindExistingWinningLine(out OmokStoneColor resultWinner, out List<Vector2Int> winningLine)
+    {
+        resultWinner = OmokStoneColor.None;
+        winningLine = null;
+
+        if (_boardState == null)
+        {
+            return false;
+        }
+
+        int boardSize = BoardSize;
+        for (int y = 0; y < boardSize; y++)
+        {
+            for (int x = 0; x < boardSize; x++)
             {
                 OmokStoneColor stoneColor = _boardState[x, y];
                 if (stoneColor == OmokStoneColor.None)
@@ -643,22 +753,18 @@ public class OmokMatchManager : MonoBehaviour
                 }
 
                 Vector2Int coordinate = new(x, y);
-                if (stoneDropper.HasLiveStoneAt(coordinate, stoneColor))
+                if (!OmokMatchFlow.TryFindWinningLine(_boardState, coordinate, stoneColor, rules, out List<Vector2Int> line))
                 {
-                    liveStoneCount++;
                     continue;
                 }
 
-                _boardState[x, y] = OmokStoneColor.None;
-                removedStaleStone = true;
+                resultWinner = stoneColor;
+                winningLine = line;
+                return true;
             }
         }
 
-        _placedStoneCount = liveStoneCount;
-        if (removedStaleStone)
-        {
-            _winningCoordinates.Clear();
-        }
+        return false;
     }
 
     public bool TryRegisterBlockedAttempt(OmokBlockedStoneResult blockedResult)

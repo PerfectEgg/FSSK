@@ -242,6 +242,11 @@ public class OmokAiController : MonoBehaviour
         }
 
         OmokStoneColor[,] snapshot = matchManager.GetBoardSnapshot();
+        if (!CanAiMove())
+        {
+            yield break;
+        }
+
         if (!_selectedAi.TryChooseMove(snapshot, GetAiStoneColor(), out Vector2Int move))
         {
             yield break;

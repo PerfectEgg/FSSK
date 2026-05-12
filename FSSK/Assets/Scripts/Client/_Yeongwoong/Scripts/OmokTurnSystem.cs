@@ -888,6 +888,11 @@ public class OmokTurnSystem : MonoBehaviour
 
         OmokStoneColor aiStoneColor = GetAiStoneColor();
         OmokStoneColor[,] snapshot = matchManager.GetBoardSnapshot();
+        if (!CanAiMove())
+        {
+            yield break;
+        }
+
         if (!_selectedAi.TryChooseMove(snapshot, aiStoneColor, out Vector2Int move))
         {
             yield break;

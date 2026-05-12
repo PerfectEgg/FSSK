@@ -11,6 +11,8 @@ using UnityEngine;
 [RequireComponent(typeof(PhotonView))]
 public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
 {
+    private const int NonPlayerWinnerActorNumber = 0;
+
     [Header("Photon Match Setup")]
     [Tooltip("씬 진입 시 Photon 방 정보로 게임모드/색깔을 자동 설정")]
     [SerializeField] private bool autoConfigureOnEnable = true;
@@ -518,6 +520,10 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
         else if (winnerColor == OmokStoneColor.Gold)
         {
             winnerActor = masterActor;
+        }
+        else if (PhotonNetwork.OfflineMode)
+        {
+            winnerActor = NonPlayerWinnerActorNumber;
         }
         else
         {

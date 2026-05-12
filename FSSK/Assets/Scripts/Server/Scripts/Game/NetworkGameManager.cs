@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Photon.Pun;
 using Photon.Realtime;
@@ -32,6 +33,18 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [Header("Result Panel")]
     [SerializeField] private GameResultPanel _resultPanel;
 
+    [Header("Result Sequence")]
+    [SerializeField] private bool _flashWinningLineBeforeResult = true;
+    [SerializeField, Min(1)] private int _winningLineFlashCount = 2;
+    [SerializeField, Min(0f)] private float _winningLineFlashOnSeconds = 0.45f;
+    [SerializeField, Min(0f)] private float _winningLineFlashOffSeconds = 0.25f;
+
+    [Header("Timeout Result Sequence")]
+    [SerializeField] private bool _fadeScreenBeforeTimeoutResult = true;
+    [SerializeField, Min(0f)] private float _timeoutFadeDuration = 0.85f;
+    [SerializeField, Range(0f, 1f)] private float _timeoutFadeTargetAlpha = 0.72f;
+    [SerializeField] private Color _timeoutFadeColor = Color.black;
+
     // 플레이어 스폰을 위한 변수
     [Header("Player Spawn")]
     [SerializeField] private Transform[] _spawnPoints; // 인스펙터에서 의자 2개 할당
@@ -43,14 +56,20 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     //  상태
     // ──────────────────────────────────────────────────────────────
     public float GameTimeLeft { get; private set; } // 게임 전체 남은 시간
+    public float GameDuration => _gameDuration;
     public bool IsGameOver { get; private set; } // 게임 끝남 여부
 
     private const float TIME_SYNC_INTERVAL = 1f; // RPC 보내는 주기
+    private const int DrawWinnerActorNumber = -1;
+    private const int TimeoutWinnerActorNumber = -2;
+    private const float WinningLineWaitTimeoutSeconds = 0.35f;
     private float _timeSyncAccum; // 동기화 시간 누적기
     private readonly HashSet<int> _claimedItemIds = new(); // 누군가 먹은 아이템(중복 x)
     private bool _spawnedMyPlayer;
     private bool _spawnedSoloOpponentCharacter;
     private bool _returningToLobby;
+    private Coroutine _pendingResultSequence;
+    private Image _timeoutFadeOverlayImage;
 
     // ──────────────────────────────────────────────────────────────
     //  Unity 라이프사이클
@@ -502,8 +521,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
     private void EndGameByTimeout()
     {
-        // -1 = 무승부. 시간 초과 규칙(점수 우위 등)은 추후 정의
-        EndGame(-1);
+        EndGame(TimeoutWinnerActorNumber);
     }
 
     [PunRPC]
@@ -512,14 +530,30 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         if (IsGameOver) return;
         IsGameOver = true;
 
-        bool draw = winnerActorNumber == -1;
-        bool iWon = !draw && winnerActorNumber == PhotonNetwork.LocalPlayer.ActorNumber;
+        bool draw = winnerActorNumber == DrawWinnerActorNumber;
+        bool timeout = winnerActorNumber == TimeoutWinnerActorNumber;
+        if (timeout)
+        {
+            GameTimeLeft = 0f;
+        }
+
+        bool iWon = !draw && !timeout && winnerActorNumber == PhotonNetwork.LocalPlayer.ActorNumber;
         int delta = iWon ? _winScoreDelta : _loseScoreDelta;
-        GameResultType resultType = draw ? GameResultType.Draw : (iWon ? GameResultType.Win : GameResultType.Lose);
+        GameResultType resultType = timeout
+            ? GameResultType.Timeout
+            : draw
+                ? GameResultType.Draw
+                : (iWon ? GameResultType.Win : GameResultType.Lose);
 
         Debug.Log($"[NetworkGameManager] 게임 종료 (winner: {winnerActorNumber}, 결과: {resultType}, delta: {delta:+#;-#;0})");
 
-        if (draw)
+        GameEvents.TriggerGameOver();
+        if (!draw)
+        {
+            GameEvents.TriggerGameOverResult(iWon);
+        }
+
+        if (draw || timeout)
         {
             OmokMatchManager match = FindFirstObjectByType<OmokMatchManager>();
             if (match != null) match.ForceEndMatchAsDraw();
@@ -531,13 +565,178 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         if (_resultPanel != null)
         {
-            _resultPanel.Show(resultType, currentScore, delta);
+            if (ShouldDelayResultForWinningLine(resultType))
+            {
+                _resultPanel.Hide();
+                if (_pendingResultSequence != null)
+                {
+                    StopCoroutine(_pendingResultSequence);
+                }
+                _pendingResultSequence = StartCoroutine(ShowResultAfterWinningLineFlash(resultType, currentScore, delta));
+            }
+            else if (ShouldDelayResultForTimeoutFade(resultType))
+            {
+                _resultPanel.Hide();
+                if (_pendingResultSequence != null)
+                {
+                    StopCoroutine(_pendingResultSequence);
+                }
+                _pendingResultSequence = StartCoroutine(ShowResultAfterTimeoutFade(resultType, currentScore, delta));
+            }
+            else
+            {
+                ShowResultPanel(resultType, currentScore, delta);
+            }
         }
         else
         {
             Debug.LogError("[NetworkGameManager] _resultPanel NullReference.");
         }
         ApplyMatchResult(delta);
+    }
+
+    private bool ShouldDelayResultForWinningLine(GameResultType resultType)
+    {
+        return _flashWinningLineBeforeResult &&
+               (resultType == GameResultType.Win || resultType == GameResultType.Lose);
+    }
+
+    private bool ShouldDelayResultForTimeoutFade(GameResultType resultType)
+    {
+        return _fadeScreenBeforeTimeoutResult && resultType == GameResultType.Timeout;
+    }
+
+    private IEnumerator ShowResultAfterWinningLineFlash(GameResultType resultType, int currentScore, int delta)
+    {
+        float waitUntil = Time.time + WinningLineWaitTimeoutSeconds;
+        OmokMatchManager match = null;
+        OmokStoneDropper dropper = null;
+
+        while (!TryGetWinningLineFlashTargets(out match, out dropper) && Time.time < waitUntil)
+        {
+            yield return null;
+        }
+
+        if (match != null && dropper != null)
+        {
+            yield return dropper.PlayWinningStoneFlash(
+                match.WinningCoordinates,
+                match.Winner,
+                _winningLineFlashCount,
+                _winningLineFlashOnSeconds,
+                _winningLineFlashOffSeconds);
+        }
+
+        ShowResultPanel(resultType, currentScore, delta);
+        _pendingResultSequence = null;
+    }
+
+    private IEnumerator ShowResultAfterTimeoutFade(GameResultType resultType, int currentScore, int delta)
+    {
+        Image overlay = EnsureTimeoutFadeOverlay();
+        if (overlay == null)
+        {
+            ShowResultPanel(resultType, currentScore, delta);
+            _pendingResultSequence = null;
+            yield break;
+        }
+
+        overlay.transform.SetAsFirstSibling();
+        overlay.gameObject.SetActive(true);
+        SetTimeoutFadeOverlayAlpha(overlay, 0f);
+
+        float duration = Mathf.Max(0f, _timeoutFadeDuration);
+        float targetAlpha = Mathf.Clamp01(_timeoutFadeTargetAlpha);
+
+        if (duration <= 0f)
+        {
+            SetTimeoutFadeOverlayAlpha(overlay, targetAlpha);
+        }
+        else
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                SetTimeoutFadeOverlayAlpha(overlay, Mathf.SmoothStep(0f, targetAlpha, t));
+                yield return null;
+            }
+
+            SetTimeoutFadeOverlayAlpha(overlay, targetAlpha);
+        }
+
+        ShowResultPanel(resultType, currentScore, delta);
+        _pendingResultSequence = null;
+    }
+
+    private static bool TryGetWinningLineFlashTargets(out OmokMatchManager match, out OmokStoneDropper dropper)
+    {
+        match = FindFirstObjectByType<OmokMatchManager>();
+        dropper = FindFirstObjectByType<OmokStoneDropper>();
+
+        return match != null &&
+               dropper != null &&
+               match.Winner != OmokStoneColor.None &&
+               match.WinningCoordinates != null &&
+               match.WinningCoordinates.Count > 0;
+    }
+
+    private void ShowResultPanel(GameResultType resultType, int currentScore, int delta)
+    {
+        if (_resultPanel == null)
+        {
+            return;
+        }
+
+        _resultPanel.Show(resultType, currentScore, delta);
+    }
+
+    private Image EnsureTimeoutFadeOverlay()
+    {
+        if (_timeoutFadeOverlayImage != null)
+        {
+            return _timeoutFadeOverlayImage;
+        }
+
+        Canvas targetCanvas = _resultPanel != null
+            ? _resultPanel.GetComponentInParent<Canvas>(true)
+            : null;
+
+        if (targetCanvas == null)
+        {
+            Debug.LogWarning("[NetworkGameManager] Timeout fade overlay skipped: result panel canvas missing.");
+            return null;
+        }
+
+        GameObject overlayObject = new("Timeout Result Fade Overlay", typeof(RectTransform), typeof(Image));
+        overlayObject.transform.SetParent(targetCanvas.transform, false);
+        overlayObject.transform.SetAsFirstSibling();
+
+        RectTransform rectTransform = overlayObject.GetComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+
+        _timeoutFadeOverlayImage = overlayObject.GetComponent<Image>();
+        _timeoutFadeOverlayImage.raycastTarget = true;
+        SetTimeoutFadeOverlayAlpha(_timeoutFadeOverlayImage, 0f);
+        overlayObject.SetActive(false);
+
+        return _timeoutFadeOverlayImage;
+    }
+
+    private void SetTimeoutFadeOverlayAlpha(Image overlay, float alpha)
+    {
+        if (overlay == null)
+        {
+            return;
+        }
+
+        Color color = _timeoutFadeColor;
+        color.a = Mathf.Clamp01(alpha);
+        overlay.color = color;
     }
 
     private void ApplyMatchResult(int delta)
