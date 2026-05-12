@@ -23,13 +23,24 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     [SerializeField] private TextMeshProUGUI _timerText;
 
     private const string SOLO_BUTTON_NAME = "SoloPlayBtn";
+    private const string CANCEL_LABEL = "취소";
 
     private float _matchingTime;
     private bool _isMatching;
     private bool _isStartingSolo;
 
+    private TextMeshProUGUI _matchButtonLabel;
+    private string _defaultMatchLabel;
+
     void Start()
     {
+        // 매칭 버튼 텍스트 캐싱 + 기본 라벨 저장 (취소 후 복원용)
+        if (_mutiMatchButton != null)
+        {
+            _matchButtonLabel = _mutiMatchButton.GetComponentInChildren<TextMeshProUGUI>();
+            _defaultMatchLabel = _matchButtonLabel != null ? _matchButtonLabel.text : "매칭";
+        }
+
         WireSoloButton();
 
         if (PhotonNetwork.OfflineMode)
@@ -38,6 +49,15 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         }
 
         PhotonNetwork.AutomaticallySyncScene = true; // 마스터 씬 이동시 다른 인원도 같이 이동하는 기능
+
+        // 이전 매칭 방에 남아있는 상태로 복귀한 경우 — 방 정리 후 OnLeftRoom 에서 로비 재입장
+        if (PhotonNetwork.InRoom)
+        {
+            _mutiMatchButton.interactable = false;
+            SetStatus("이전 방 정리 중...");
+            PhotonNetwork.LeaveRoom();
+            return;
+        }
 
         // 이미 로비에 있으면 (랭킹 갔다 돌아온 경우) 즉시 활성화
         if (PhotonNetwork.InLobby)
@@ -66,18 +86,24 @@ public class MatchingManager : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
-        if (!_isStartingSolo)
+        if (_isStartingSolo)
         {
+            if (PhotonNetwork.IsConnected)
+            {
+                PhotonNetwork.Disconnect();
+                return;
+            }
+
+            StartOfflineSoloRoom();
             return;
         }
 
-        if (PhotonNetwork.IsConnected)
+        // 매칭 취소 또는 이전 방 정리로 떠난 경우 — 로비 미입장 상태면 다시 입장 시도
+        if (PhotonNetwork.IsConnectedAndReady && !PhotonNetwork.InLobby)
         {
-            PhotonNetwork.Disconnect();
-            return;
+            SetStatus("로비 입장 중...");
+            PhotonNetwork.JoinLobby();
         }
-
-        StartOfflineSoloRoom();
     }
 
     void Update()
@@ -90,20 +116,48 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         _timerText.text = $"{min:00}:{sec:00}";
     }
 
-    // 매칭 버튼 클릭 → 랜덤 매칭 시도 (실패 시 OnJoinRandomFailed 에서 새 방 생성)
+    // 매칭 버튼 클릭 → 매칭 중이면 취소, 아니면 랜덤 매칭 시도
     public void OnClickMatchButton()
     {
+        if (_isMatching)
+        {
+            CancelMatching();
+            return;
+        }
+
         _isStartingSolo = false;
 
         Debug.Log("[MatchingManager] 랜덤 매칭 시작...");
 
-        _mutiMatchButton.interactable = false;
         _isMatching = true;
         _matchingTime = 0f;
         _timerText.text = "00:00";
+        SetMatchButtonLabel(CANCEL_LABEL);
         SetStatus("매칭 중...");
 
         PhotonNetwork.JoinRandomRoom();
+    }
+
+    // 매칭 취소 — InRoom 이면 LeaveRoom, 콜백 대기 중이면 _isMatching=false 가드로 후속 처리 차단
+    private void CancelMatching()
+    {
+        Debug.Log("[MatchingManager] 매칭 취소");
+
+        _isMatching = false;
+        _matchingTime = 0f;
+        if (_timerText != null) _timerText.text = "00:00";
+        SetMatchButtonLabel(_defaultMatchLabel);
+        SetStatus("매칭 취소됨");
+
+        if (PhotonNetwork.InRoom)
+        {
+            PhotonNetwork.LeaveRoom();
+        }
+    }
+
+    private void SetMatchButtonLabel(string label)
+    {
+        if (_matchButtonLabel != null) _matchButtonLabel.text = label;
     }
 
     public void OnClickSoloPlayButton()
@@ -160,6 +214,12 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     // 랜덤 매칭 실패 (입장 가능한 방 없음) → 새 방 생성 (이름 null = Photon 자동 생성)
     public override void OnJoinRandomFailed(short returnCode, string message)
     {
+        if (!_isMatching)
+        {
+            Debug.Log($"[MatchingManager] 취소된 매칭의 OnJoinRandomFailed 수신 — 무시 ({message})");
+            return;
+        }
+
         Debug.Log($"[MatchingManager] 랜덤 매칭 실패 - 새 방 생성: {message}");
 
         RoomOptions options = new()
@@ -200,6 +260,13 @@ public class MatchingManager : MonoBehaviourPunCallbacks
             return;
         }
 
+        if (!_isMatching)
+        {
+            Debug.Log("[MatchingManager] 매칭 취소 후 방 입장 콜백 도착 — 즉시 퇴장");
+            PhotonNetwork.LeaveRoom();
+            return;
+        }
+
         Debug.Log($"[MatchingManager] 플레이어 인원 수 : ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         SetStatus($"대기 중... ({PhotonNetwork.CurrentRoom.PlayerCount}/{_maxPlayers})");
         CheckStartGame();
@@ -226,6 +293,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         Debug.LogWarning($"[MatchingManager] CreateRoom failed (code: {returnCode}): {message}");
         _isMatching = false;
         _mutiMatchButton.interactable = true;
+        SetMatchButtonLabel(_defaultMatchLabel);
         SetStatus("방 생성 실패. 다시 시도해주세요.");
     }
 
@@ -241,6 +309,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
         Debug.LogWarning($"[MatchingManager] Disconnected (cause: {cause}) — reconnecting.");
         _isMatching = false;
         _mutiMatchButton.interactable = false;
+        SetMatchButtonLabel(_defaultMatchLabel);
         SetStatus("연결 끊김. 재연결 중...");
         PhotonNetwork.ConnectUsingSettings();
     }

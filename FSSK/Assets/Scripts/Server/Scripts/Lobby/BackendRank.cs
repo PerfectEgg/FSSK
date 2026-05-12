@@ -17,6 +17,9 @@ public class BackendRank : MonoBehaviour
 
     // 점수 업데이트 시 함께 갱신할 GameData 테이블
     private const string USER_DATA_TABLE = "UserData";
+    private static int ParseInt(string s) => int.TryParse(s, out var v) ? v : 0;
+
+    
 
     void Awake()
     {
@@ -137,8 +140,6 @@ public class BackendRank : MonoBehaviour
             return ParseInt(b.extraData).CompareTo(ParseInt(a.extraData));
         });
     }
-
-    private static int ParseInt(string s) => int.TryParse(s, out var v) ? v : 0;
 
     // ──────────────────────────────────────────────────────────────
     //  내 랭킹만 조회 (UserLeaderboardItem 리스트 — 랭크 미등록 시 빈 리스트)
