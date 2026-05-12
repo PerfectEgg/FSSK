@@ -22,6 +22,6 @@ public static class SoundEvents
     public static Action<int> UpdateWaveAmbient;
 
     // 🟢 번개 재생 이벤트 (원하는 볼륨값 전달)
-    public static Action<float> PlayLightning;
+    public static Action<int> PlayLightning;
     #endregion
 }

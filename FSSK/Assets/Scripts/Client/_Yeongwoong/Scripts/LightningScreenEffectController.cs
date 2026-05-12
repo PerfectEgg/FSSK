@@ -316,6 +316,7 @@ public sealed class LightningScreenEffectController : MonoBehaviour
         }
 
         TriggerLightning(clampedLevel, GetPatternByIndex(patternIndex));
+        SoundEvents.PlayLightning(clampedLevel);
     }
 
     private void SetLightningLevel(int level)

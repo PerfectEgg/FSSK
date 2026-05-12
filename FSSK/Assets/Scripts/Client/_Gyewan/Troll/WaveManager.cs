@@ -80,6 +80,7 @@ public class WaveManager : MonoBehaviour
         SetupNextItemSpawn();
         
         TrollEvents.OnWaveStageChanged?.Invoke(_currentStage); // 0단계 시작 방송
+        SoundEvents.UpdateWaveAmbient?.Invoke(_currentStage); // 0단계 시작 시 환경음 볼륨 업데이트
     }
 
     private void Update()
@@ -110,6 +111,7 @@ public class WaveManager : MonoBehaviour
             if (NetworkGameManager.Instance != null)
             {
                 NetworkGameManager.Instance.BroadcastWaveStage(_currentStage);
+                SoundEvents.UpdateWaveAmbient?.Invoke(_currentStage);
             }
         }
     }

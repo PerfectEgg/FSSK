@@ -1,147 +1,160 @@
 using UnityEngine;
-using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
+using Photon.Pun; 
 
-// 세이렌
 public class Siren : MonsterTroll
 {
     [Header("세이렌 설정")]
-    [SerializeField] private float _fadeInTime = 2f;    // 등장 대기 시간
-    [SerializeField] private float _activeTime = 6f;    // 효과 적용 시간 (총 8초)
+    [SerializeField] private float _fadeInTime = 2f;    
+    [SerializeField] private float _activeTime = 6f;    
 
     [Header("매혹 및 기절 설정")]
-    [SerializeField] private float _stunThreshold = 3f; // 3초 누적 시 스턴
-    [SerializeField] private float _stunDuration = 3f;  // 기절 유지 시간 (3초)
-    [SerializeField] private float _immunityDuration = 3f; // 뺨 때리기 면역 시간
+    [SerializeField] private float _stunThreshold = 3f; 
+    [SerializeField] private float _stunDuration = 3f;  
+    [SerializeField] private float _immunityDuration = 3f; 
 
-    // 내부 상태 변수
     private float _seductionTimer = 0f;
     private float _immunityTimer = 0f;
-
+    private float _stunTimer = 0f;          
+    private bool _isCameraPulled = false;   
     
-    private float _stunTimer = 0f;          // 타이머를 사용하여 기절 반복 구현
-    private bool _isCameraPulled = false;   // 현재 시선이 강탈중인지 추적
+    // 🟢 로컬에서 노래가 들리는 중인지 판별하는 플래그
+    private bool _isSingingLocally = false; 
 
-    private void Start()
+    // --- 1. [방장 & 클라이언트 공통] 상태 진입 시 연출 ---
+    protected override void OnStateEnter(MonsterState state)
     {
-        Debug.Log("🧜‍♀️ [세이렌 등장] 2초 뒤 매혹적인 노래가 시작됩니다!");
-        // TODO: 페이드인 애니메이션 또는 사운드 실행
+        if (state == MonsterState.Entering)
+        {
+            Debug.Log("🧜‍♀️ [세이렌 등장] 2초 뒤 매혹적인 노래가 시작됩니다!");
+            // TODO: 페이드인 애니메이션 또는 사운드 실행
+        }
+        else if (state == MonsterState.Action)
+        {
+            // 방장이 상태를 Action으로 넘기면, 모두에게 "노래 시작!" 방송
+            if (PhotonNetwork.IsMasterClient) 
+                photonView.RPC("RPC_StartSinging", RpcTarget.All);
+        }
+        else if (state == MonsterState.Exiting)
+        {
+            // 방장이 상태를 Exiting으로 넘기면, 모두에게 "노래 끝!" 방송
+            if (PhotonNetwork.IsMasterClient) 
+                photonView.RPC("RPC_StopSinging", RpcTarget.All);
+        }
     }
-    
 
-    // --- TrollBase(추상 클래스)의 메서드 구현 ---
+    // --- 2. [방장 전용] 글로벌 상태 관리 및 생명주기 통제 ---
+    protected override void UpdateState()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        switch(_currentState)
+        {
+            case MonsterState.Entering:
+                if (_currentTime >= _fadeInTime) 
+                    ChangeState(MonsterState.Action);
+                break;
+            
+            case MonsterState.Action:
+                // 페이드인 시간 + 노래 부르는 시간이 지나면 퇴장
+                if (_currentTime >= _fadeInTime + _activeTime) 
+                    ChangeState(MonsterState.Exiting);
+                break;
+            
+            case MonsterState.Exiting:
+                EndTroll(); // 방장만 안전하게 PhotonNetwork.Destroy 실행
+                break;
+        }
+    }
+
+    // --- 3. [RPC] 클라이언트 로컬 스위치 ON/OFF ---
+    [PunRPC]
+    private void RPC_StartSinging()
+    {
+        _isSingingLocally = true;
+        PullCamera(true);
+    }
+
+    [PunRPC]
+    private void RPC_StopSinging()
+    {
+        _isSingingLocally = false;
+        PullCamera(false);
+        Debug.Log("🧜‍♀️ [세이렌 퇴장] 노래가 끝났습니다. 조작이 정상화됩니다.");
+    }
+
+    // --- 4. [클라이언트 로컬] 내 뺨 때리기 및 기절 판정 (독립 루프) ---
+    protected override void Update()
+    {
+        base.Update(); // 🟢 [핵심] 부모의 타이머 로직(_currentTime)과 UpdateState()를 실행시킵니다!
+
+        // 방장의 허락(RPC)이 떨어졌을 때만 판정 시작
+        if (!_isSingingLocally) return;
+
+        // [상태 1] 기절 중
+        if (_stunTimer > 0f)
+        {
+            _stunTimer -= Time.deltaTime;
+            if (_stunTimer <= 0f)
+            {
+                Debug.Log("💫 [기절 종료] 정신을 차렸지만 여전히 노래가 들립니다!");
+                _seductionTimer = 0f; 
+            }
+            return; 
+        }
+
+        // [상태 2] 면역 중
+        if (_immunityTimer > 0f)
+        {
+            _immunityTimer -= Time.deltaTime;
+            if (_immunityTimer <= 0f)
+            {
+                Debug.Log("🧜‍♀️ [면역 종료] 다시 세이렌의 노래에 홀립니다!");
+                PullCamera(true); 
+            }
+            return; 
+        }
+        
+        // [상태 3] 정상 상태 (입력 판정 및 스턴 게이지 누적)
+        if (Input.GetKey(KeyCode.A) && Input.GetKey(KeyCode.D))
+        {
+            SlapCheek();
+        }
+        else
+        {
+            _seductionTimer += Time.deltaTime;
+            if (_seductionTimer >= _stunThreshold)
+            {
+                ApplyEffect();
+            }
+        }
+    }
+
+    // --- 이벤트 연출 메서드 ---
     public override void ApplyEffect()
     {
         Debug.Log("💥 [매혹됨] 세이렌에게 완전히 홀렸습니다! 스턴 및 암전!");
-        
         _stunTimer = _stunDuration;
-        
-        // TODO: UI 매니저 호출하여 3초 스턴 및 시야 암전 이벤트 발생
         TrollEvents.OnStunEffect?.Invoke(_stunDuration);
     }
 
-    public override void EndTroll()
-    {
-        PullCamera(false); 
-
-        PhotonNetwork.Destroy(gameObject);
-    }
-    void OnDestroy()
-    {
-        if (PhotonNetwork.IsMasterClient)
-        {
-            // 트롤이 제거될 때 매니저에게 종료 알림
-            TrollEvents.TriggerTrollFinished();
-        }
-    }
-
-    void Update()
-    {
-        _currentTime += Time.deltaTime;
-
-        // 종료 시점 최우선 판정
-        if(_currentTime > _fadeInTime + _activeTime)
-        {
-            EndSiren();
-            return;
-        }
-
-        // 🟢 2. 효과 적용 구간 (2초 ~ 8초)
-        if (_currentTime >= _fadeInTime)
-        {
-            // [상태 1] 기절(스턴) 중일 때
-            if (_stunTimer > 0f)
-            {
-                _stunTimer -= Time.deltaTime;
-                
-                if (_stunTimer <= 0f)
-                {
-                    Debug.Log("💫 [기절 종료] 정신을 차렸지만 아직 세이렌이 노래하고 있습니다!");
-                    _seductionTimer = 0f; // 스턴이 끝나면 매혹 수치 다시 0부터 누적
-                }
-                return; // 기절 중에는 뺨 때리기(저항) 및 매혹 로직 무시
-            }
-
-            // [상태 2] 면역 상태 타이머 처리
-            if (_immunityTimer > 0f)
-            {
-                _immunityTimer -= Time.deltaTime;
-                
-                if (_immunityTimer <= 0f)
-                {
-                    Debug.Log("🧜‍♀️ [면역 종료] 다시 세이렌의 노래에 홀리기 시작합니다!");
-                    PullCamera(true); // 면역이 끝났으므로 다시 시선 강탈
-                }
-                return; // 면역 중에는 매혹 수치가 오르지 않음
-            }
-
-            // 이 구간에 진입했는데 아직 시선을 안 뺏었다면 뺏기 시작 (최초 1회 실행 보장)
-            if (!_isCameraPulled)
-            {
-                PullCamera(true);
-            }
-            
-            // [핵심] A키와 D키가 동시에 눌려있는지 확인 (정확한 타격을 위해 GetKey 사용)
-            if (Input.GetKey(KeyCode.A) && Input.GetKey(KeyCode.D))
-            {
-                SlapCheek();
-            }
-            else
-            {
-                // 안 누르고 있다면 스턴 게이지 누적
-                _seductionTimer += Time.deltaTime;
-                if (_seductionTimer >= _stunThreshold)
-                {
-                    ApplyEffect();
-                }
-            }
-        }
-    }
-
-    // 스스로 뺨을 때려 정신을 차리는 함수
     private void SlapCheek()
     {
         Debug.Log("👋 [정신 차리기!] 스스로 뺨을 때렸습니다! 3초간 세이렌 면역!");
-        
-        _immunityTimer = _immunityDuration; // 면역 3초 부여
-        _seductionTimer = 0f;               // 누적된 스턴 수치 초기화
-        
-        PullCamera(false); // 면역이므로 시선 강탈 해제 (자유 시점 복구)
+        _immunityTimer = _immunityDuration; 
+        _seductionTimer = 0f;               
+        PullCamera(false); 
     }
 
-    private void EndSiren()
-    {
-        Debug.Log("🧜‍♀️ [세이렌 퇴장] 노래가 끝났습니다. 조작이 정상화됩니다.");
-        
-        EndTroll();
-    }
-
-    // 카메라 강제 이동 이벤트를 켜고 끄는 헬퍼 함수
     private void PullCamera(bool isPulling)
     {
-        // 🟢 중복 호출 방지 (Update에서의 이벤트 스팸 방지)
         if (_isCameraPulled == isPulling) return;
-
         _isCameraPulled = isPulling;
         TrollEvents.OnSirenEffect?.Invoke(isPulling, isPulling ? transform : null);
+    }
+
+    void OnDestroy()
+    {
+        if (PhotonNetwork.IsMasterClient)
+            TrollEvents.TriggerTrollFinished();
     }
 }

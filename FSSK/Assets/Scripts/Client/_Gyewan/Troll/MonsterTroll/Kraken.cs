@@ -87,7 +87,10 @@ public class Kraken : MonsterTroll
                 if (_currentTime >= _attackDelay)
                 {
                     _hasAttacked = true; // 더 이상 Update에서 실행되지 않도록 잠금
-                    EvaluateDodge();    // 회피 판정 시행
+
+                    photonView.RPC("RPC_ExecuteDodgeCheck", RpcTarget.All);
+
+                    ChangeState(MonsterState.Exiting);
                 }
                 break;
             case MonsterState.Exiting:
@@ -146,6 +149,12 @@ public class Kraken : MonsterTroll
         Debug.Log("크라켄 등장!! 유의하세요!!");
     }
 
+    [PunRPC]
+    private void RPC_ExecuteDodgeCheck()
+    {
+        EvaluateDodge();
+    }
+
     private void EvaluateDodge()
     {
         // 1. 내 화면 기준 크라켄 위치 판별 (시점 데칼코마니 해결)
@@ -168,7 +177,5 @@ public class Kraken : MonsterTroll
             Debug.Log("💥 [회피 실패] 공격에 적중당했습니다! 3초 스턴 및 시야 암전!");
             ApplyEffect();
         }
-
-        ChangeState(MonsterState.Exiting);
     }
 }
