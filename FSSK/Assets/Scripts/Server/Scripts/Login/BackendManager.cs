@@ -149,6 +149,7 @@ public class BackendManager : MonoBehaviour
                 loseCount = int.Parse(row["loseCount"].ToString())
             };
             Debug.Log($"[BackendManager] 유저 데이터 로드 (score: {MyUserData.score}, win: {MyUserData.winCount}, lose: {MyUserData.loseCount})");
+            SyncScoreToLeaderboard();
             onSuccess?.Invoke();
             return;
         }
@@ -168,6 +169,7 @@ public class BackendManager : MonoBehaviour
         if (InsertBro.IsSuccess())
         {
             Debug.Log("[BackendManager] 유저 데이터 생성 성공 : " + InsertBro);
+            SyncScoreToLeaderboard();
             onSuccess?.Invoke();
         }
         else
@@ -183,4 +185,22 @@ public class BackendManager : MonoBehaviour
         Debug.Log($"[BackendManager] 로비 씬 이동: '{_matchingSceneName}'");
         SceneManager.LoadScene(_matchingSceneName);
     }
+
+    // ──────────────────────────────────────────────────────────────
+    //  UserData.score 를 리더보드(UserRank)로 미러링
+    //  로그인 직후 1회 호출 — 기존 유저는 본인 점수 재푸시, 신규는 초기값 등록
+    // ──────────────────────────────────────────────────────────────
+    private void SyncScoreToLeaderboard()
+    {
+        if(BackendRank.Instance == null)
+        {
+            Debug.LogWarning("[BackendManager] BackendRank.Instance is null, leaderboard sync skipped.");
+            return;
+        }
+
+        BackendRank.Instance.UpdateMyScore(MyUserData.score,
+            onSuccess: () => Debug.Log($"[BackendManager] 리더보드 동기화 완료 (score: {MyUserData.score})"),
+            onFail: err => Debug.LogError($"[BackendManager] Leaderboard sync failed: {err}"));
+    }
+
 }
