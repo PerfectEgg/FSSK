@@ -1,135 +1,263 @@
 using UnityEngine;
-using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
+using Photon.Pun;
 using IEnumerator = System.Collections.IEnumerator;
 
 public enum ItemType { Rum, Octopus }
 
-// 아이템의 경우 (마우스로 던질 수 있음)
 public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
 {
+    private const float HitDestroyDelaySeconds = 1f;
+
     protected Rigidbody rb;
-    protected bool _isGrabbed = false;   // 드래그 중인지 여부를 체크하는 변수
-    protected bool _isThrown = false;
+    protected bool _isGrabbed;
+    protected bool _isThrown;
 
     [Header("Item Settings")]
-    [SerializeField] protected float _throwForce = 100f;    // 던지는 힘
+    [SerializeField] protected float _throwForce = 100f;
     [SerializeField] protected ItemType _itemType;
+    [SerializeField] protected AudioClip _hitSound;
 
-    [SerializeField] protected AudioClip _hitSound; // 🟢 적중 사운드
-    protected Vector3 _grabbedScale = Vector3.one; // 🟢 잡았을 때 원래 크기
+    protected Vector3 _grabbedScale = Vector3.one;
 
-    // ✅ SyncGrabItemRPC에서 직접 호출 (로컬 이벤트 의존 제거)
-    public void SetGrabbedState(bool isGrabbed)
+    private int _throwerActorNumber = -1;
+    private int _originalLayer = -1;
+    private bool _hasProcessedHit;
+
+    private void Awake()
     {
-        if (isGrabbed) OnDragStart();
-        else OnDragEnd();
+        rb = GetComponent<Rigidbody>();
     }
 
-    private void Awake() => rb = GetComponent<Rigidbody>();
+    public override void ApplyEffect() { }
 
-    // --- TrollBase(추상 클래스)의 메서드 구현 ---
-    public override void ApplyEffect() {  }
-    public override void EndTroll() 
-    { 
-        // 🟢 [멀티플레이 핵심] 주인(방금 던진 사람)의 컴퓨터에서만 네트워크 파괴를 실행합니다.
+    public override void EndTroll()
+    {
         if (photonView.IsMine)
         {
             StartCoroutine(DelayedNetworkDestroy(3f));
         }
     }
 
-    // 🟢 [멀티플레이 추가] 지연된 네트워크 파괴를 위한 코루틴
     private IEnumerator DelayedNetworkDestroy(float delay)
     {
         yield return new WaitForSeconds(delay);
-        PhotonNetwork.Destroy(gameObject);
+
+        if (gameObject == null)
+        {
+            yield break;
+        }
+
+        if (photonView.IsMine || PhotonNetwork.IsMasterClient)
+        {
+            PhotonNetwork.Destroy(gameObject);
+        }
     }
 
-    // --- IDraggable(인터페이스)의 메서드 구현 ---
+    public void SetGrabbedState(bool isGrabbed)
+    {
+        SetGrabbedState(isGrabbed, GetDefaultThrowDirection(), transform.position, GetLocalActorNumber());
+    }
+
+    public void SetGrabbedState(bool isGrabbed, Vector3 releaseDirection)
+    {
+        SetGrabbedState(isGrabbed, releaseDirection, transform.position, GetLocalActorNumber());
+    }
+
+    public void SetGrabbedState(bool isGrabbed, Vector3 releaseDirection, int actorNumber)
+    {
+        SetGrabbedState(isGrabbed, releaseDirection, transform.position, actorNumber);
+    }
+
+    public void SetGrabbedState(bool isGrabbed, Vector3 releaseDirection, Vector3 itemPosition, int actorNumber)
+    {
+        if (isGrabbed)
+        {
+            OnDragStart(actorNumber);
+        }
+        else
+        {
+            OnDragEnd(releaseDirection, itemPosition, actorNumber);
+        }
+    }
+
     public virtual void OnDragStart()
     {
-        // 🟢 [중복 집기 방지] 이미 잡혀있다면 무시
+        OnDragStart(GetLocalActorNumber());
+    }
+
+    protected virtual void OnDragStart(int actorNumber)
+    {
+        if (TrollEvents.IsGameplayEventBlocked) return;
         if (_isGrabbed) return;
 
         _isGrabbed = true;
+        _isThrown = false;
+        _hasProcessedHit = false;
+        _throwerActorNumber = actorNumber;
+        _originalLayer = gameObject.layer;
 
-        // 🟢 [물리 안정화] 들고 있는 동안 중력이나 다른 물리 충돌에 영향받지 않게 고정
-        if (rb != null) rb.isKinematic = true;
-        
-        // 🟢 [스케일 조절] 손에 쥐는 순간 크기를 정상으로 축소
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+        }
+
         transform.localScale = _grabbedScale;
-
-        // 🟢 [레이어 변경] 마우스 레이캐스트에 다시 걸리지 않도록 무시 레이어로 덮어씌움
         gameObject.layer = LayerMask.NameToLayer("Ignore");
-
         transform.position += Vector3.up * 1f;
-        
     }
 
     public void OnDragEnd()
     {
-        // 이미 놨거나 안 잡은 상태면 무시
+        OnDragEnd(GetDefaultThrowDirection(), transform.position, GetLocalActorNumber());
+    }
+
+    private void OnDragEnd(Vector3 releaseDirection, Vector3 releasePosition, int actorNumber)
+    {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            _isGrabbed = false;
+            RestoreOriginalLayer();
+            return;
+        }
+
         if (!_isGrabbed) return;
 
         _isGrabbed = false;
+        _throwerActorNumber = actorNumber;
+        RestoreOriginalLayer();
+        transform.position = releasePosition;
 
         if (rb != null)
         {
+            rb.position = releasePosition;
             rb.isKinematic = false;
         }
 
-        if (photonView.IsMine)
+        if (releaseDirection.sqrMagnitude <= 0.0001f)
         {
-            Throw(Camera.main.transform.forward);
+            releaseDirection = GetDefaultThrowDirection();
         }
+
+        Throw(releaseDirection.normalized);
     }
 
     private void Throw(Vector3 direction)
     {
         _isThrown = true;
-        rb.AddForce(direction * _throwForce, ForceMode.Impulse);
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.WakeUp();
+            rb.AddForce(direction * _throwForce, ForceMode.Impulse);
+        }
 
         EndTroll();
     }
 
-    // 🟢 상대방(트리거 콜라이더 등)에게 맞았을 때 실행
     private void OnTriggerEnter(Collider other)
     {
-        // 🟢 [멀티플레이 핵심] "내가 던진 아이템"이 "플레이어"에게 맞았을 때만 판정합니다.
-        // 이렇게 해야 중복 데미지나 중복 파괴 에러가 발생하지 않습니다.
-        if (!photonView.IsMine) return;
-        // 아직 던져지지 않았으면 무시 (잡은 상태에서 충돌해도 효과 안 나도록)
-        if (_isGrabbed) return;
+        if (TrollEvents.IsGameplayEventBlocked) return;
+        if (!CanProcessHitOnThisClient()) return;
+        if (_hasProcessedHit || _isGrabbed || !_isThrown) return;
+        if (!other.CompareTag("Player")) return;
 
-        if (_isThrown && other.CompareTag("Player"))
+        PhotonView targetPV = other.GetComponentInParent<PhotonView>();
+        if (targetPV == null) return;
+
+        int targetActorNumber = targetPV.OwnerActorNr;
+        if (targetActorNumber == _throwerActorNumber) return;
+
+        _hasProcessedHit = true;
+        Debug.Log($"[Item Hit] {_itemType} hit actor {targetActorNumber}.");
+
+        TrollEvents.TriggerItemCollected(gameObject.tag, gameObject);
+        targetPV.RPC("RPC_ApplyItemEffect", targetPV.Owner, (int)_itemType);
+
+        PlayHitItemSound();
+        photonView.RPC(
+            nameof(RPC_HitItemSound),
+            RpcTarget.Others,
+            _throwerActorNumber,
+            targetActorNumber);
+        photonView.RPC(nameof(RPC_MarkHitProcessed), RpcTarget.Others);
+
+        RequestNetworkDestroy(HitDestroyDelaySeconds);
+    }
+
+    private bool CanProcessHitOnThisClient()
+    {
+        int localActorNumber = GetLocalActorNumber();
+        if (_throwerActorNumber > 0)
         {
-            PhotonView targetPV = other.GetComponentInParent<PhotonView>();
+            return localActorNumber == _throwerActorNumber;
+        }
 
-            // 🟢 내가 나를 맞춘 게 아니라면? (상대방 명중!)
-            if (targetPV != null && !targetPV.IsMine)
-            {
-                Debug.Log($"🎯 [명중] 상대방에게 {_itemType}을 맞췄습니다!");
+        return photonView.IsMine;
+    }
 
-                TrollEvents.TriggerItemCollected(gameObject.tag, gameObject);
+    [PunRPC]
+    public void RPC_HitItemSound(int throwerActorNumber, int targetActorNumber)
+    {
+        if (TrollEvents.IsGameplayEventBlocked) return;
 
-                // 🟢 enum을 (int)로 변환해서 안전하게 RPC 송출
-                targetPV.RPC("RPC_ApplyItemEffect", targetPV.Owner, (int)_itemType);
-
-                photonView.RPC("RPC_HitItemSound", RpcTarget.All); // 적중 사운드 재생
-
-                StartCoroutine(DelayedNetworkDestroy(0.1f));
-            }
+        int localActorNumber = GetLocalActorNumber();
+        if (localActorNumber == throwerActorNumber || localActorNumber == targetActorNumber)
+        {
+            PlayHitItemSound();
         }
     }
 
     [PunRPC]
-    private void RPC_HitItemSound()
+    public void RPC_MarkHitProcessed()
     {
-        if (_hitSound != null)
+        _hasProcessedHit = true;
+    }
+
+    [PunRPC]
+    public void RPC_DestroyOnMaster(float delay)
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        StartCoroutine(DelayedNetworkDestroy(delay));
+    }
+
+    private void PlayHitItemSound()
+    {
+        if (_hitSound == null) return;
+
+        Debug.Log($"[Item Hit] Playing {_itemType} hit sound.");
+        SoundEvents.Play3DSFX?.Invoke(_hitSound, transform.position, 0.45f);
+    }
+
+    private void RequestNetworkDestroy(float delay)
+    {
+        if (photonView.IsMine || PhotonNetwork.IsMasterClient)
         {
-            Debug.Log($"🎯 [아이템 명중] {_itemType}가 플레이어에게 명중했습니다! 적중 사운드를 재생합니다.");
-            SoundEvents.Play3DSFX?.Invoke(_hitSound, transform.position, 0.45f);
+            StartCoroutine(DelayedNetworkDestroy(delay));
+            return;
         }
+
+        photonView.RPC(nameof(RPC_DestroyOnMaster), RpcTarget.MasterClient, delay);
+    }
+
+    private Vector3 GetDefaultThrowDirection()
+    {
+        return Camera.main != null ? Camera.main.transform.forward : transform.forward;
+    }
+
+    private int GetLocalActorNumber()
+    {
+        return PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : -1;
+    }
+
+    private void RestoreOriginalLayer()
+    {
+        if (_originalLayer < 0) return;
+
+        gameObject.layer = _originalLayer;
+        _originalLayer = -1;
     }
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
@@ -138,12 +266,13 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
         {
             stream.SendNext(_isGrabbed);
             stream.SendNext(_isThrown);
+            stream.SendNext(_throwerActorNumber);
         }
         else
         {
             _isGrabbed = (bool)stream.ReceiveNext();
             _isThrown = (bool)stream.ReceiveNext();
+            _throwerActorNumber = (int)stream.ReceiveNext();
         }
     }
 }
-

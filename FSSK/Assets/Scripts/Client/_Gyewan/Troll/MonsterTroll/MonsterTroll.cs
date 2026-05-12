@@ -12,6 +12,8 @@ public class MonsterTroll : TrollBase
 
     protected virtual void Start()
     {
+        if (GameEvents.IsGameOver) return;
+
         OnStateEnter(MonsterState.Entering);
     }
     
@@ -19,6 +21,7 @@ public class MonsterTroll : TrollBase
     {
         // 🟢 [멀티플레이] 초기 스폰 연출 위치 계산은 주인(방장)만 수행합니다.
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.IsGameOver) return;
 
         // 타이머 작동 (잡혀있지 않을 때만 시간이 흐름)
         _currentTime += Time.deltaTime;
@@ -36,6 +39,8 @@ public class MonsterTroll : TrollBase
     // 🟢 [핵심 2] 상태 변경은 오직 주인(방장)만 지시하고, 결과를 모두에게 RPC로 뿌립니다!
     protected void ChangeState(MonsterState newState)
     {
+        if (GameEvents.IsGameOver) return;
+
         if (PhotonNetwork.IsMasterClient) // ✅ 방장(주인)만 상태 변경 권한
         {
             // AllBuffered를 사용하면 늦게 들어온 클라이언트도 상태를 올바르게 동기화합니다.
@@ -48,6 +53,8 @@ public class MonsterTroll : TrollBase
     [PunRPC]
     protected void ChangeStateRPC(int stateIndex)
     {
+        if (GameEvents.IsGameOver) return;
+
         _currentState = (MonsterState)stateIndex;
         _currentTime = 0f;
         OnStateEnter(_currentState); 

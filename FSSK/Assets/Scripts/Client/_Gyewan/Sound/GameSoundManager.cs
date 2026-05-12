@@ -37,6 +37,8 @@ public class GameSoundManager: MonoBehaviour
         SoundEvents.Play3DSFX_Cut += HandlePlay3DSFX_Cut;
         SoundEvents.UpdateWaveAmbient += HandleUpdateWaveAmbient;
         SoundEvents.PlayLightning += HandlePlayLightning;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
+        GameEvents.OnTimeoutEndingSequenceFinished += HandleTimeoutEndingSequenceFinished;
     }
 
     private void OnDisable()
@@ -45,6 +47,8 @@ public class GameSoundManager: MonoBehaviour
         SoundEvents.Play3DSFX_Cut -= HandlePlay3DSFX_Cut;
         SoundEvents.UpdateWaveAmbient -= HandleUpdateWaveAmbient;
         SoundEvents.PlayLightning -= HandlePlayLightning;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
+        GameEvents.OnTimeoutEndingSequenceFinished -= HandleTimeoutEndingSequenceFinished;
     }
 
     void Awake()
@@ -87,6 +91,12 @@ public class GameSoundManager: MonoBehaviour
     // 🟢 웨이브 단계에 따른 볼륨 조절 로직
     private void HandleUpdateWaveAmbient(int stage)
     {
+        if (TrollEvents.IsWaveStageEventBlocked)
+        {
+            StopAmbientSources();
+            return;
+        }
+
         float rainTargetVolume = 0f;
         float windTargetVolume = 0f;
 
@@ -103,13 +113,90 @@ public class GameSoundManager: MonoBehaviour
         }
 
         // 볼륨 즉시 적용 (만약 서서히 커지게 하고 싶다면 이 부분에 DOTween이나 Coroutine을 사용하면 좋습니다)
-        if (_rainSource != null) _rainSource.volume = rainTargetVolume;
-        if (_windSource != null) _windSource.volume = windTargetVolume;
+        SetAmbientVolume(rainTargetVolume, windTargetVolume);
+    }
+
+    private void SetAmbientVolume(float rainVolume, float windVolume)
+    {
+        ApplyAmbientVolume(_rainSource, rainVolume);
+        ApplyAmbientVolume(_windSource, windVolume);
+    }
+
+    private void ApplyAmbientVolume(AudioSource source, float volume)
+    {
+        if (source == null) return;
+
+        source.volume = volume;
+        if (volume > 0f && !source.isPlaying)
+        {
+            source.Play();
+        }
+        else if (volume <= 0f && source.isPlaying)
+        {
+            source.Stop();
+        }
+    }
+
+    private void HandleGameOver()
+    {
+        if (GameEvents.AllowsTimeoutWaveEvents) return;
+
+        StopGameplaySounds();
+    }
+
+    private void HandleTimeoutEndingSequenceFinished()
+    {
+        StopGameplaySounds();
+    }
+
+    private void StopGameplaySounds()
+    {
+        StopAllCoroutines();
+        StopAmbientSources();
+
+        if (_lightningSource != null)
+        {
+            _lightningSource.Stop();
+        }
+
+        _soundPool.Clear();
+        AudioSource[] sources = GetComponentsInChildren<AudioSource>(true);
+        foreach (AudioSource source in sources)
+        {
+            if (source == null ||
+                source == _rainSource ||
+                source == _windSource ||
+                source == _lightningSource)
+            {
+                continue;
+            }
+
+            source.Stop();
+            source.clip = null;
+            source.gameObject.SetActive(false);
+            _soundPool.Enqueue(source);
+        }
+    }
+
+    private void StopAmbientSources()
+    {
+        StopAmbientSource(_rainSource);
+        StopAmbientSource(_windSource);
+    }
+
+    private void StopAmbientSource(AudioSource source)
+    {
+        if (source == null) return;
+
+        source.volume = 0f;
+        source.Stop();
     }
 
     // 🟢 번개 단발성 재생 로직
     private void HandlePlayLightning(int stage)
     {
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         if (_lightningSource != null && _lightningSource.clip != null)
         {
             float targetVolume = 0f; // 기본 볼륨
@@ -133,7 +220,7 @@ public class GameSoundManager: MonoBehaviour
     // =================================
 
     // 🟢 스피커를 생성하고 세팅하는 전용 함수
-    private AudioSource CreateNewAudioSource()
+    private AudioSource CreateNewAudioSource(bool addToPool = true)
     {
         GameObject sfxObj = new GameObject("3DSpeaker_Worker");
         sfxObj.transform.SetParent(this.transform); // 매니저의 자식으로 정리
@@ -146,13 +233,17 @@ public class GameSoundManager: MonoBehaviour
         source.playOnAwake = false;
 
         sfxObj.SetActive(false); // 일단 꺼둠
-        _soundPool.Enqueue(source); // 창고에 보관
+        if (addToPool)
+        {
+            _soundPool.Enqueue(source); // 창고에 보관
+        }
 
         return source;
     }
 
     private void HandlePlay3DSFX(AudioClip clip, Vector3 position, float volume)
     {
+        if (TrollEvents.IsGameplayEventBlocked) return;
         if (clip == null) return;
         Debug.Log($"🔊 [3D SFX] '{clip.name}' 재생 요청 받음 (위치: {position}, 볼륨: {volume})");
 
@@ -165,7 +256,7 @@ public class GameSoundManager: MonoBehaviour
         }
         else
         {
-            source = CreateNewAudioSource();
+            source = CreateNewAudioSource(false);
             // (주의) 큐에서 뺐기 때문에 여기서 Enqueue는 하지 않습니다.
         }
 
@@ -183,6 +274,7 @@ public class GameSoundManager: MonoBehaviour
 
     private void HandlePlay3DSFX_Cut(AudioClip clip, Vector3 position, float volume, float cutTime, float fadeOutTime)
     {
+        if (TrollEvents.IsGameplayEventBlocked) return;
         if (clip == null) return;
         Debug.Log($"🔊 [3D SFX] '{clip.name}' 재생 요청 받음 (위치: {position}, 볼륨: {volume})");
 
@@ -194,7 +286,7 @@ public class GameSoundManager: MonoBehaviour
         }
         else
         {
-            source = CreateNewAudioSource();
+            source = CreateNewAudioSource(false);
         }
 
         source.transform.position = position;

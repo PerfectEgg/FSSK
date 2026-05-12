@@ -6,6 +6,7 @@ public class Explosion : MonoBehaviour
 
     public float cubeSize = 0.2f;
     public int cubesInRow = 5;
+    private bool _hasExploded;
 
     //피벗 계산에 사용할 변수
     float cubesPivotDistance;
@@ -40,6 +41,12 @@ public class Explosion : MonoBehaviour
 
     public void explode()
     {
+        if (_hasExploded)
+        {
+            return;
+        }
+
+        _hasExploded = true;
         
         //125개 조각 생성
         for (int x = 0; x < cubesInRow; x++)
@@ -69,8 +76,28 @@ public class Explosion : MonoBehaviour
             }
         }
 
-        //오브젝트 숨기기
-        gameObject.SetActive(false);
+        // Keep the root active so Photon RPCs on this object can still arrive.
+        Invoke(nameof(HideOriginalObject), 0f);
+    }
+
+    private void HideOriginalObject()
+    {
+        foreach (Renderer targetRenderer in GetComponentsInChildren<Renderer>())
+        {
+            targetRenderer.enabled = false;
+        }
+
+        foreach (Collider targetCollider in GetComponentsInChildren<Collider>())
+        {
+            targetCollider.enabled = false;
+        }
+
+        if (TryGetComponent(out Rigidbody rb))
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true;
+        }
     }
 
     void createPiece(int x, int y, int z)

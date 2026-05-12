@@ -28,11 +28,13 @@ public class CameraRumEffect : MonoBehaviourPun
     {
         // 🟢 플레이어의 RPC 수신 스크립트가 터뜨리는 이벤트를 구독
         TrollEvents.OnHitByRum += HandleHitByRum;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnHitByRum -= HandleHitByRum;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
         SetMaterialProperties(0f);
     }
 
@@ -44,6 +46,14 @@ public class CameraRumEffect : MonoBehaviourPun
         StopAllCoroutines(); // 이전 타이머가 돌고 있다면 중단 (중첩 방지)
         
         StartCoroutine(RumDebuffCoroutine());
+    }
+
+    private void HandleGameOver()
+    {
+        if (!photonView.IsMine) return;
+
+        StopAllCoroutines();
+        ClearEffect();
     }
 
     private IEnumerator RumDebuffCoroutine()

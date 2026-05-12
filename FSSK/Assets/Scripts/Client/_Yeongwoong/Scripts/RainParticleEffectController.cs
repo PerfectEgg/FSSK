@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public sealed class RainParticleEffectController : MonoBehaviour
 {
     private const string RainParticlesObjectName = "rain particles";
+    private const string BoardLayerName = "Board";
     private const int ScreenRainTextureSize = 512;
     private const int ScreenRainRandomSeed = 2137;
     private const float ScreenRainLevel1Alpha = 0.13f;
@@ -23,7 +24,6 @@ public sealed class RainParticleEffectController : MonoBehaviour
     private const float ScreenRainFarTiling = 2.55f;
     private const float ScreenRainSlant = -0.07f;
     private const float ScreenRainWindReferenceVelocityX = 15f;
-    private const float ScreenRainWindAngleAtReference = 6f;
     private const float ScreenRainWindHorizontalScrollScale = 0.025f;
     private const float ScreenRainWindSpeedBoost = 0.1f;
     private const float ScreenRainLayerOverscanPixels = 320f;
@@ -65,6 +65,9 @@ public sealed class RainParticleEffectController : MonoBehaviour
     [SerializeField, Min(0f)] private float rainLevel2RateOverTime = 500f;
     [SerializeField, Min(0f)] private float rainLevel3RateOverTime = 750f;
 
+    [Header("Rain Collision")]
+    [SerializeField] private bool ignoreBoardLayerForCollision = true;
+
     [Header("Wind Velocity Transition")]
     [SerializeField, Min(0f)] private float windVelocityTransitionSeconds = 1.5f;
 
@@ -73,6 +76,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
     [SerializeField] private Color screenRainColor = new(0.72f, 0.84f, 1f, 1f);
     [SerializeField, Range(0.25f, 1.25f)] private float screenRainAmountMultiplier = 1f;
     [SerializeField] private bool enableScreenRainWindTilt = true;
+    [SerializeField, Range(0f, 20f)] private float screenRainWindAngleAtReference = 8f;
     [SerializeField, Range(0f, 3f)] private float screenRainWindFollowStrength = 1.6f;
 
     private readonly List<ParticleSystem> _allParticleSystems = new();
@@ -105,6 +109,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;
         TrollEvents.OnRainLevelChanged += HandleRainLevelChanged;
         OmokWindVisualEvents.OnVelocityXChanged += HandleWindVisualVelocityXChanged;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
@@ -112,6 +117,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
         TrollEvents.OnWaveStageChanged -= HandleWaveStageChanged;
         TrollEvents.OnRainLevelChanged -= HandleRainLevelChanged;
         OmokWindVisualEvents.OnVelocityXChanged -= HandleWindVisualVelocityXChanged;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
 
         StopRainParticles(true);
         HideScreenRainOverlay();
@@ -147,11 +153,13 @@ public sealed class RainParticleEffectController : MonoBehaviour
         emitterLookAheadDistance = Mathf.Max(0f, emitterLookAheadDistance);
         targetRefreshInterval = Mathf.Max(0.05f, targetRefreshInterval);
         screenRainAmountMultiplier = Mathf.Clamp(screenRainAmountMultiplier, 0.25f, 1.25f);
+        screenRainWindAngleAtReference = Mathf.Clamp(screenRainWindAngleAtReference, 0f, 20f);
         screenRainWindFollowStrength = Mathf.Clamp(screenRainWindFollowStrength, 0f, 3f);
 
         if (Application.isPlaying && isActiveAndEnabled)
         {
             InvalidateScreenRainTexture();
+            ApplyRainCollisionMask();
             ApplyRainLevel(_currentRainLevel, true, false);
             SetWindVelocityTarget(OmokWindVisualEvents.CurrentVelocityX);
         }
@@ -193,6 +201,11 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void HandleWaveStageChanged(int stage)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (useWaveStageEvent)
         {
             ApplyRainLevel(GetLevelForStage(stage, rainLevelProgression), false, true);
@@ -201,6 +214,11 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void HandleRainLevelChanged(int level)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (useRainLevelEvent)
         {
             ApplyRainLevel(level, false, true);
@@ -209,10 +227,22 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void HandleWindVisualVelocityXChanged(float velocityX)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (useWindVisualVelocityEvent)
         {
             SetWindVelocityTarget(velocityX);
         }
+    }
+
+    private void HandleGameOver()
+    {
+        ApplyRainLevel(0, true, false);
+        StopRainParticles(true);
+        HideScreenRainOverlay();
     }
 
     private void ApplyRainLevel(int level, bool force, bool allowLog)
@@ -272,6 +302,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
         CaptureParticleSystems();
         CaptureInitialEmitterHeight();
         ApplySimulationSpace();
+        ApplyRainCollisionMask();
         ApplyWindVelocityX(_currentWindVelocityX);
         return true;
     }
@@ -419,6 +450,40 @@ public sealed class RainParticleEffectController : MonoBehaviour
     {
         return particleSystem != null &&
                particleSystem.gameObject.name.ToLowerInvariant().Contains("rain");
+    }
+
+    private void ApplyRainCollisionMask()
+    {
+        if (!ignoreBoardLayerForCollision)
+        {
+            return;
+        }
+
+        int boardLayer = LayerMask.NameToLayer(BoardLayerName);
+        if (boardLayer < 0)
+        {
+            return;
+        }
+
+        int boardLayerMask = 1 << boardLayer;
+        for (int i = 0; i < _rainParticleSystems.Count; i++)
+        {
+            ParticleSystem particleSystem = _rainParticleSystems[i];
+            if (particleSystem == null)
+            {
+                continue;
+            }
+
+            ParticleSystem.CollisionModule collision = particleSystem.collision;
+            if (!collision.enabled)
+            {
+                continue;
+            }
+
+            LayerMask collidesWith = collision.collidesWith;
+            collidesWith.value &= ~boardLayerMask;
+            collision.collidesWith = collidesWith;
+        }
     }
 
     private void ApplyRainRate(float rateOverTime)
@@ -595,12 +660,14 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void PlayRainParticles()
     {
-        for (int i = 0; i < _allParticleSystems.Count; i++)
+        ApplyRainCollisionMask();
+
+        for (int i = 0; i < _rainParticleSystems.Count; i++)
         {
-            ParticleSystem particleSystem = _allParticleSystems[i];
+            ParticleSystem particleSystem = _rainParticleSystems[i];
             if (particleSystem != null && !particleSystem.isPlaying)
             {
-                particleSystem.Play(true);
+                particleSystem.Play(false);
             }
         }
     }
@@ -801,7 +868,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
     private void ApplyScreenRainWindTransform(float normalizedWind)
     {
         float angle = ShouldSyncScreenRainWithWind()
-            ? -normalizedWind * ScreenRainWindAngleAtReference * screenRainWindFollowStrength
+            ? -normalizedWind * screenRainWindAngleAtReference * screenRainWindFollowStrength
             : 0f;
 
         ApplyScreenRainLayerTransform(_screenRainFarLayer, angle * 0.72f);
@@ -932,6 +999,11 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void HandleKeyboardTesting()
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (!allowKeyboardTesting)
         {
             return;

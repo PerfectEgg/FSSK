@@ -34,8 +34,17 @@ public class LightningController : MonoBehaviourPun
     private int _currentLevel = 0;  // 현재 레벨
     private Coroutine _lightningCoroutine;
 
-    private void OnEnable() => TrollEvents.OnWaveStageChanged += HandleWaveStage;
-    private void OnDisable() => TrollEvents.OnWaveStageChanged -= HandleWaveStage;
+    private void OnEnable()
+    {
+        TrollEvents.OnWaveStageChanged += HandleWaveStage;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
+    }
+
+    private void OnDisable()
+    {
+        TrollEvents.OnWaveStageChanged -= HandleWaveStage;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
+    }
 
     void Start()
     {
@@ -52,6 +61,8 @@ public class LightningController : MonoBehaviourPun
         if (!PhotonNetwork.IsMasterClient) return;
 
         // 🟢 1. List 범위를 초과하는 무한 웨이브 방지용 안전장치 (최대 단계 유지)
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         int targetIndex = Mathf.Min(stage, _levelProgression.Count - 1);
         
         // 🟢 2. 조건문 없이 인덱스로 값을 바로 뽑아냅니다! (O(1) 성능)
@@ -80,6 +91,11 @@ public class LightningController : MonoBehaviourPun
 
         Debug.Log($"[번개] {level}단계 번개 코루틴을 시작합니다!");
         _lightningCoroutine = StartCoroutine(LightningRoutine(level));
+    }
+
+    private void HandleGameOver()
+    {
+        ApplyLightningEffect(0);
     }
 
     private IEnumerator LightningRoutine(int level)
@@ -115,6 +131,8 @@ public class LightningController : MonoBehaviourPun
     [PunRPC]
     private void PlayLightningStrikeRPC(int patternIndex)
     {
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         // 진행 중이던 암전 연출이 있다면 강제 초기화
         if (_blackoutPanel != null) _blackoutPanel.DOKill(); 
         

@@ -14,6 +14,8 @@ public class RainController : MonoBehaviour
     private void HandleWaveStage(int stage)
     {
         // 🟢 1. List 범위를 초과하는 무한 웨이브 방지용 안전장치 (최대 단계 유지)
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         int targetIndex = Mathf.Min(stage, _levelProgression.Count - 1);
         
         // 🟢 2. 조건문 없이 인덱스로 값을 바로 뽑아냅니다! (O(1) 성능)

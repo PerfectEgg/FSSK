@@ -44,6 +44,7 @@ public class OmokTrollInputBridge : MonoBehaviour
         TrollEvents.OnStunEffect += HandleStunEffect;
         TrollEvents.OnRequestStoneToSteal += HandleStoneStealRequested;
         TrollEvents.OnExecuteSteal += HandleExecuteSteal;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
         ApplyInputState();
     }
 
@@ -53,6 +54,7 @@ public class OmokTrollInputBridge : MonoBehaviour
         TrollEvents.OnStunEffect -= HandleStunEffect;
         TrollEvents.OnRequestStoneToSteal -= HandleStoneStealRequested;
         TrollEvents.OnExecuteSteal -= HandleExecuteSteal;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
     }
 
     private void Update()
@@ -485,11 +487,20 @@ public class OmokTrollInputBridge : MonoBehaviour
         TryConfirmPendingRemoval();
     }
 
+    private void HandleGameOver()
+    {
+        _timedLockRemaining = 0f;
+        _hasPendingRemovalTarget = false;
+        ClearWindAim();
+        ApplyInputState();
+    }
+
     private void ApplyInputState()
     {
         ResolveReferences();
 
-        bool shouldEnable = startWithOmokInputEnabled &&
+        bool shouldEnable = !TrollEvents.IsGameplayEventBlocked &&
+                            startWithOmokInputEnabled &&
                             !_isExternallyLocked &&
                             _timedLockRemaining <= 0f &&
                             (allowOmokInputInExpansionMode || !_isExpansionMode);

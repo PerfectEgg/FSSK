@@ -54,6 +54,8 @@ public sealed class WindAimEffectController : MonoBehaviour
     [SerializeField] private bool randomizeInitialDirection = true;
 
     [Header("Rain Visual Velocity X")]
+    [SerializeField] private bool correctRainVisualForRemotePerspective = true;
+    [SerializeField, Min(0f)] private float rainVisualBendMultiplier = 1.3f;
     [SerializeField, Min(0f)] private float rainVelocityLevel1X = 5f;
     [SerializeField, Min(0f)] private float rainVelocityLevel2X = 10f;
     [SerializeField, Min(0f)] private float rainVelocityLevel3X = 15f;
@@ -95,12 +97,14 @@ public sealed class WindAimEffectController : MonoBehaviour
     {
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;
         TrollEvents.OnWindLevelChanged += HandleWindLevelChanged;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnWaveStageChanged -= HandleWaveStageChanged;
         TrollEvents.OnWindLevelChanged -= HandleWindLevelChanged;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
 
         if (clearWindAimOnDisable && Application.isPlaying)
         {
@@ -129,6 +133,11 @@ public sealed class WindAimEffectController : MonoBehaviour
 
     private void HandleKeyboardTesting()
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (!allowKeyboardTesting || !allowLevelHotkeys)
         {
             return;
@@ -156,6 +165,7 @@ public sealed class WindAimEffectController : MonoBehaviour
     {
         levelTwoPointFiveDriftCellsPerSecond = Mathf.Max(0f, levelTwoPointFiveDriftCellsPerSecond);
         directionChangeSeconds = Mathf.Max(0.1f, directionChangeSeconds);
+        rainVisualBendMultiplier = Mathf.Max(0f, rainVisualBendMultiplier);
         rainVelocityLevel1X = Mathf.Max(0f, rainVelocityLevel1X);
         rainVelocityLevel2X = Mathf.Max(0f, rainVelocityLevel2X);
         rainVelocityLevel3X = Mathf.Max(0f, rainVelocityLevel3X);
@@ -220,6 +230,11 @@ public sealed class WindAimEffectController : MonoBehaviour
 
     private void HandleWaveStageChanged(int stage)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (!useWaveStageEvent)
         {
             return;
@@ -230,12 +245,22 @@ public sealed class WindAimEffectController : MonoBehaviour
 
     private void HandleWindLevelChanged(int level)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (!useWindLevelEvent)
         {
             return;
         }
 
         ApplyWindLevel(level, false, true);
+    }
+
+    private void HandleGameOver()
+    {
+        ApplyWindLevel(0, true, false);
     }
 
     private void ApplyWindLevel(int level, bool force, bool allowLog)
@@ -270,9 +295,11 @@ public sealed class WindAimEffectController : MonoBehaviour
         }
 
         OmokWindAimSettings aimSettings = settings.aimSettings;
+        Vector2 worldDirection = aimSettings.direction;
         if (cycleHorizontalDirection)
         {
-            aimSettings.direction = new Vector2(_currentDirectionSign * GetLocalPerspectiveSign(), 0f);
+            worldDirection = new Vector2(_currentDirectionSign, 0f);
+            aimSettings.direction = new Vector2(worldDirection.x * GetLocalPerspectiveSign(), 0f);
         }
 
         if (scaleDriftFromLevelTwoPointFive)
@@ -287,7 +314,7 @@ public sealed class WindAimEffectController : MonoBehaviour
         }
 
         OmokWindAimEvents.Publish(true, aimSettings.direction, aimSettings.driftCellsPerSecond);
-        PublishRainVelocityX(clampedLevel, aimSettings.direction);
+        PublishRainVelocityX(clampedLevel, GetRainVisualDirection(worldDirection, aimSettings.direction));
 
         if (showWindLog && allowLog)
         {
@@ -372,6 +399,18 @@ public sealed class WindAimEffectController : MonoBehaviour
         return PhotonNetwork.IsMasterClient ? 1 : -1;
     }
 
+    private Vector2 GetRainVisualDirection(Vector2 worldDirection, Vector2 localAimDirection)
+    {
+        if (!correctRainVisualForRemotePerspective ||
+            !mirrorDirectionForRemoteClient ||
+            !PhotonNetwork.InRoom)
+        {
+            return localAimDirection;
+        }
+
+        return worldDirection;
+    }
+
     private void RefreshRoomDirectionSeedIfNeeded()
     {
         if (!randomizeInitialDirection ||
@@ -415,7 +454,7 @@ public sealed class WindAimEffectController : MonoBehaviour
 
     private void PublishRainVelocityX(int level, Vector2 direction)
     {
-        float velocityMagnitude = GetRainVelocityXForLevel(level);
+        float velocityMagnitude = GetRainVelocityXForLevel(level) * rainVisualBendMultiplier;
         float directionSign = Mathf.Abs(direction.x) > 0.0001f
             ? Mathf.Sign(direction.x)
             : 0f;

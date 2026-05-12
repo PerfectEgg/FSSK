@@ -46,6 +46,15 @@ public class CameraModeController : MonoBehaviourPun
         // 🟢 남의 캐릭터는 이 이벤트에 반응해서 내 화면 카메라를 돌리면 안 됩니다!
         if (!photonView.IsMine) return;
 
+        if (_isGameOver)
+        {
+            _isSirenSinging = false;
+            _sirenTarget = null;
+            _isExpansionMode = false;
+            SetCameraMode(false);
+            return;
+        }
+
         _isSirenSinging = isSinging;
         _sirenTarget = target;
 
@@ -64,6 +73,8 @@ public class CameraModeController : MonoBehaviourPun
         if (!photonView.IsMine) return;
 
         // 🟢 방금 막 기절에 걸린 순간이라면, 현재 시네머신의 각도를 자물쇠 변수에 박제합니다!
+        if (_isGameOver) return;
+
         if (_stunTimer <= 0f && _panTilt != null)
         {
             _lockedPan = _panTilt.PanAxis.Value;
@@ -81,6 +92,9 @@ public class CameraModeController : MonoBehaviourPun
         // 🟢 게임 오버 시, 모든 카메라 모드를 착수 모드로 고정하고, 커서도 해제합니다.
         _isGameOver = true;
         _isExpansionMode = false;
+        _isSirenSinging = false;
+        _sirenTarget = null;
+        _stunTimer = 0f;
 
         SetCameraMode(false);
     }
@@ -151,11 +165,17 @@ public class CameraModeController : MonoBehaviourPun
 
     private void SetCameraMode(bool expansion)
     {
+        if (_isGameOver)
+        {
+            expansion = false;
+        }
+
         if (expansion)
         {
             _focusCam.Priority = 10;
             _expansionCam.Priority = 20;
             Cursor.lockState = CursorLockMode.Locked; 
+            Cursor.visible = false;
         }
         else
         {
@@ -163,6 +183,7 @@ public class CameraModeController : MonoBehaviourPun
             _focusCam.Priority = 20;
             _expansionCam.Priority = 10;
             Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         // UI나 다른 스크립트에도 현재 상태 방송

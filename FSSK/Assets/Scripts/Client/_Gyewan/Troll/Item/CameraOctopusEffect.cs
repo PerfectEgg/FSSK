@@ -35,11 +35,13 @@ public class CameraOctopusEffect : MonoBehaviourPun
     {
         // 🟢 플레이어의 RPC 수신 스크립트가 터뜨리는 이벤트를 구독
         TrollEvents.OnHitByOctopus += HandleHitByOctopus;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnHitByOctopus -= HandleHitByOctopus;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
         
         // 스크립트가 꺼질 때 문어가 남아있다면 정리
         if (_currentOctopus != null) Destroy(_currentOctopus);
@@ -53,6 +55,14 @@ public class CameraOctopusEffect : MonoBehaviourPun
         StopAllCoroutines(); // 이전 타이머가 돌고 있다면 중단 (중첩 방지)
         
         StartCoroutine(OctopusDebuffCoroutine());
+    }
+
+    private void HandleGameOver()
+    {
+        if (!photonView.IsMine) return;
+
+        StopAllCoroutines();
+        ClearEffect();
     }
 
     private IEnumerator OctopusDebuffCoroutine()

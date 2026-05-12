@@ -14,9 +14,9 @@ public class Octopus : ItemTroll
         _grabbedScale = new Vector3(2f, 2f, 2f); // 🟢 잡았을 때 원래 크기
     }
 
-    public override void OnDragStart()
+    protected override void OnDragStart(int actorNumber)
     {
-        base.OnDragStart();
+        base.OnDragStart(actorNumber);
 
         if (_animator != null)
         {

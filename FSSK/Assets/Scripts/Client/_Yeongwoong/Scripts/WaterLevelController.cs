@@ -132,6 +132,8 @@ public sealed class WaterLevelController : MonoBehaviour
     private void OnEnable()
     {
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
+        GameEvents.OnTimeoutEndingSequenceFinished += HandleTimeoutEndingSequenceFinished;
         HideWater();
 
         int stage = WaveManager.Instance != null ? WaveManager.Instance.currentStage : 0;
@@ -141,6 +143,8 @@ public sealed class WaterLevelController : MonoBehaviour
     private void OnDisable()
     {
         TrollEvents.OnWaveStageChanged -= HandleWaveStageChanged;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
+        GameEvents.OnTimeoutEndingSequenceFinished -= HandleTimeoutEndingSequenceFinished;
         water?.ApplyWaveScale(defaultWaveScale);
         _hasStage = false;
     }
@@ -171,7 +175,33 @@ public sealed class WaterLevelController : MonoBehaviour
 
     private void HandleWaveStageChanged(int stage)
     {
+        if (TrollEvents.IsGameplayEventBlocked && !GameEvents.AllowsTimeoutWaveEvents)
+        {
+            return;
+        }
+
         SetStage(stage, false);
+    }
+
+    private void HandleGameOver()
+    {
+        if (GameEvents.AllowsTimeoutWaveEvents)
+        {
+            return;
+        }
+
+        StopStageUpdates();
+    }
+
+    private void HandleTimeoutEndingSequenceFinished()
+    {
+        StopStageUpdates();
+    }
+
+    private void StopStageUpdates()
+    {
+        _hasStage = false;
+        water?.ApplyWaveScale(defaultWaveScale);
     }
 
     private void SetStage(int stage, bool force)

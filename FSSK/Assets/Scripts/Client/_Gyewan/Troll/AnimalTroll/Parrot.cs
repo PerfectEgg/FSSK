@@ -87,6 +87,8 @@ public class Parrot : AnimalTroll
     [PunRPC]
     private void RPC_ReturnSound()
     {
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         if (_returnSound != null) 
         {
             SoundEvents.Play3DSFX?.Invoke(_returnSound, transform.position, 0.45f); // 귀환 사운드 재생

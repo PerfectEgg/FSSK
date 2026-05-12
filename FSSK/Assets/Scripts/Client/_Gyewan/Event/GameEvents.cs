@@ -1,19 +1,54 @@
 using System;
-using UnityEngine;
 
-// 게임 진행 관련 이벤트
 public static class GameEvents
 {
-    // 게임 오버 트리거 (모든 기믹 정지, 입력 제한용)
-    public static Action OnGameOverTriggered;
+    public static bool IsGameOver { get; private set; }
+    public static GameResultType LastResultType { get; private set; } = GameResultType.Draw;
+    public static bool IsTimeoutGameOver => IsGameOver && LastResultType == GameResultType.Timeout;
+    public static bool IsTimeoutEndingSequenceActive { get; private set; }
+    public static bool AllowsTimeoutWaveEvents => IsTimeoutGameOver && IsTimeoutEndingSequenceActive;
 
-    // 게임 결과 전달 (개인 클라이언트 승패 여부 UI 표시용)
-    // 매개변수 bool isWin: 내가 이겼으면 true, 졌으면 false
+    public static Action OnGameOverTriggered;
     public static Action<bool> OnGameOverResult;
+    public static Action OnTimeoutEndingSequenceFinished;
+
+    public static void ResetGameOverState()
+    {
+        IsGameOver = false;
+        LastResultType = GameResultType.Draw;
+        IsTimeoutEndingSequenceActive = false;
+    }
 
     public static void TriggerGameOver()
     {
+        TriggerGameOver(GameResultType.Draw);
+    }
+
+    public static void TriggerGameOver(
+        GameResultType resultType,
+        bool keepTimeoutEndingSequenceActive = false)
+    {
+        if (IsGameOver)
+        {
+            return;
+        }
+
+        IsGameOver = true;
+        LastResultType = resultType;
+        IsTimeoutEndingSequenceActive =
+            resultType == GameResultType.Timeout && keepTimeoutEndingSequenceActive;
         OnGameOverTriggered?.Invoke();
+    }
+
+    public static void FinishTimeoutEndingSequence()
+    {
+        if (!IsTimeoutEndingSequenceActive)
+        {
+            return;
+        }
+
+        IsTimeoutEndingSequenceActive = false;
+        OnTimeoutEndingSequenceFinished?.Invoke();
     }
 
     public static void TriggerGameOverResult(bool isWin)

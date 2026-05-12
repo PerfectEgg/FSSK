@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Photon.Pun;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -205,6 +206,11 @@ public class OmokMatchManager : MonoBehaviour
     private OmokStoneColor[,] _boardState;
     private readonly List<Vector2Int> _winningCoordinates = new();
     private readonly List<OmokBoardStoneState> _liveBoardStoneBuffer = new();
+    private bool _hasWinningBlockerStack;
+    private Vector2Int _winningBlockerCoordinate;
+    private Transform _winningBlockerTarget;
+    private int _winningBlockerViewId;
+    private int _winningBlockerStackCount;
     private bool _isMatchEnded;
     private OmokStoneColor _winner = OmokStoneColor.None;
     private int _placedStoneCount;
@@ -214,6 +220,11 @@ public class OmokMatchManager : MonoBehaviour
     public bool IsMatchEnded => _isMatchEnded;
     public OmokStoneColor Winner => _winner;
     public IReadOnlyList<Vector2Int> WinningCoordinates => _winningCoordinates;
+    public bool HasWinningBlockerStack => _hasWinningBlockerStack;
+    public Vector2Int WinningBlockerCoordinate => _winningBlockerCoordinate;
+    public Transform WinningBlockerTarget => _winningBlockerTarget;
+    public int WinningBlockerViewId => _winningBlockerViewId;
+    public int WinningBlockerStackCount => _winningBlockerStackCount;
     public OmokStoneColor CurrentTurn => _currentTurn;
     public int BoardSize => grid != null ? grid.BoardSize : _boardState != null ? _boardState.GetLength(0) : 0;
     public OmokMatchRules Rules => rules;
@@ -280,6 +291,7 @@ public class OmokMatchManager : MonoBehaviour
         }
 
         _winningCoordinates.Clear();
+        ClearWinningBlockerStack();
         _isMatchEnded = false;
         _winner = OmokStoneColor.None;
         _placedStoneCount = 0;
@@ -444,6 +456,7 @@ public class OmokMatchManager : MonoBehaviour
         _boardState[coordinate.x, coordinate.y] = OmokStoneColor.None;
         _placedStoneCount = Mathf.Max(0, _placedStoneCount - 1);
         _winningCoordinates.Clear();
+        ClearWinningBlockerStack();
         removalResult = new OmokStoneRemovalResult(coordinate, removedColor);
         OnStoneRemoved?.Invoke(removalResult);
         return true;
@@ -610,6 +623,7 @@ public class OmokMatchManager : MonoBehaviour
         {
             _winningCoordinates.Clear();
             _winningCoordinates.AddRange(line);
+            ClearWinningBlockerStack();
             EndMatch(stoneColor);
             return true;
         }
@@ -617,6 +631,7 @@ public class OmokMatchManager : MonoBehaviour
         if (_placedStoneCount >= BoardSize * BoardSize)
         {
             _winningCoordinates.Clear();
+            ClearWinningBlockerStack();
             EndMatch(OmokStoneColor.None);
             return true;
         }
@@ -688,6 +703,7 @@ public class OmokMatchManager : MonoBehaviour
         if (!_isMatchEnded)
         {
             _winningCoordinates.Clear();
+            ClearWinningBlockerStack();
         }
     }
 
@@ -728,6 +744,7 @@ public class OmokMatchManager : MonoBehaviour
 
         _winningCoordinates.Clear();
         _winningCoordinates.AddRange(winningLine);
+        ClearWinningBlockerStack();
         EndMatch(resultWinner);
     }
 
@@ -779,6 +796,7 @@ public class OmokMatchManager : MonoBehaviour
         if (rules.IsWinningBlockerStackLength(blockedResult.ConsecutiveSameColorStackCount))
         {
             _winningCoordinates.Clear();
+            CaptureWinningBlockerStack(blockedResult);
             EndMatch(blockedResult.StoneColor);
             return true;
         }
@@ -809,13 +827,55 @@ public class OmokMatchManager : MonoBehaviour
             stoneDropper.enabled = false;
         }
 
-        if (resultOverlayRoot != null)
+        if (ShouldShowResultOverlayOnMatchEnd())
         {
             resultOverlayRoot.SetActive(true);
         }
 
         OnMatchEnded?.Invoke(resultWinner);
         onMatchEnded?.Invoke();
+    }
+
+    private bool ShouldShowResultOverlayOnMatchEnd()
+    {
+        if (resultOverlayRoot == null)
+        {
+            return false;
+        }
+
+        NetworkGameManager networkGameManager = NetworkGameManager.Instance;
+        return networkGameManager == null || !networkGameManager.HandlesMatchResultPresentation;
+    }
+
+    private void CaptureWinningBlockerStack(OmokBlockedStoneResult blockedResult)
+    {
+        _hasWinningBlockerStack = true;
+        _winningBlockerCoordinate = blockedResult.TargetCoordinate;
+        _winningBlockerTarget = blockedResult.BlockerTarget;
+        _winningBlockerViewId = ResolveBlockerViewId(blockedResult);
+        _winningBlockerStackCount = Mathf.Max(1, blockedResult.ConsecutiveSameColorStackCount);
+    }
+
+    private void ClearWinningBlockerStack()
+    {
+        _hasWinningBlockerStack = false;
+        _winningBlockerCoordinate = default;
+        _winningBlockerTarget = null;
+        _winningBlockerViewId = 0;
+        _winningBlockerStackCount = 0;
+    }
+
+    private static int ResolveBlockerViewId(OmokBlockedStoneResult blockedResult)
+    {
+        if (blockedResult.HasBlockerSnapshot && blockedResult.BlockerViewId > 0)
+        {
+            return blockedResult.BlockerViewId;
+        }
+
+        PhotonView blockerView = blockedResult.BlockerTarget != null
+            ? blockedResult.BlockerTarget.GetComponentInParent<PhotonView>()
+            : null;
+        return blockerView != null ? blockerView.ViewID : 0;
     }
 
     private static OmokStoneColor NormalizeRemovalColor(OmokStoneColor stoneColor)

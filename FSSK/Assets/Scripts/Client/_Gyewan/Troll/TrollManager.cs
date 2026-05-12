@@ -81,6 +81,7 @@ public class TrollManager : MonoBehaviour
     private void HandleTrollFinished()
     {
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.IsGameOver) return;
 
         StartWaitTimer();
     }
@@ -95,6 +96,7 @@ public class TrollManager : MonoBehaviour
     private void StopTrollingSystem()
     {
         _isWaiting = false;
+        _occupiedPositions.Clear();
         
         // 🟢 게임 오버 시 씬에 남은 크라켄, 세이렌, 동물 일괄 파괴 (방장 권한)
         if (!PhotonNetwork.IsMasterClient) return;
@@ -134,6 +136,7 @@ public class TrollManager : MonoBehaviour
     {
         // 방장이 아니면 타이머 로직을 아예 실행하지 않음
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.IsGameOver) return;
 
         if (!_isWaiting) return;
 
@@ -151,6 +154,7 @@ public class TrollManager : MonoBehaviour
     {
         // 다시 한 번 방장 권한 체크 (안전장치)
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.IsGameOver) return;
 
         TrollData selectedTroll = GetRandomTroll();
         _lastTroll = selectedTroll.trollType;
@@ -220,6 +224,7 @@ public class TrollManager : MonoBehaviour
     {
         // 🟢 시스템 시작 자체를 방장만 통제
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.IsGameOver) return;
 
         _executionCount = 0;
         _lastTroll = TrollType.None;
@@ -232,6 +237,8 @@ public class TrollManager : MonoBehaviour
     // 🟢 실행 횟수에 따른 타이머 설정
     private void StartWaitTimer()
     {
+        if (GameEvents.IsGameOver) return;
+
         float waitTime = CalculateWaitTime(_executionCount + 1); // 다음 실행될 회차 기준
         _currentWaitTimer = waitTime;
         _isWaiting = true;

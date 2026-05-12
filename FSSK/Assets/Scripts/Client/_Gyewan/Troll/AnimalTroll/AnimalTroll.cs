@@ -116,6 +116,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         if (!PhotonNetwork.IsMasterClient) return;
 
         // 잡힌 순간 타이머 작동 X
+        if (GameEvents.IsGameOver) return;
         if (_isGrabbed) return;
 
         // 타이머 작동 (잡혀있지 않을 때만 시간이 흐름)
@@ -127,6 +128,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     // 🟢 [핵심 2] 상태 변경은 오직 주인(방장)만 지시하고, 결과를 모두에게 RPC로 뿌립니다!
     protected void ChangeState(AnimalState newState)
     {
+        if (GameEvents.IsGameOver) return;
+
         if (PhotonNetwork.IsMasterClient) // ✅ 방장(주인)만 상태 변경 권한
         {
             // AllBuffered를 사용하면 늦게 들어온 클라이언트도 상태를 올바르게 동기화합니다.
@@ -139,6 +142,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [PunRPC]
     protected void ChangeStateRPC(int stateIndex)
     {
+        if (GameEvents.IsGameOver) return;
+
         _currentState = (AnimalState)stateIndex;
         _currentTime = 0f;
         OnStateEnter(_currentState); 
@@ -259,6 +264,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     public void OnDragStart()
     {
         // 상호작용 불가능 상태면 리턴
+        if (TrollEvents.IsGameplayEventBlocked) return;
         if(!_isInteractable) return;
         // 🟢 [중복 집기 방지] 이미 잡혀있다면 무시
         if (_isGrabbed) return;
@@ -276,6 +282,12 @@ public abstract class AnimalTroll : TrollBase, IDraggable
 
     public void OnDragEnd()
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            _isGrabbed = false;
+            return;
+        }
+
         _isGrabbed = false;
 
         if (photonView.IsMine)
@@ -323,6 +335,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [PunRPC]
     public void RequestStateChangeRPC(int stateIndex)
     {
+        if (GameEvents.IsGameOver) return;
+
         if (PhotonNetwork.IsMasterClient)
         {
             ChangeState((AnimalState)stateIndex);
@@ -333,6 +347,8 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [PunRPC]
     public void RestoreToTableRPC(Vector3 origPos)
     {
+        if (GameEvents.IsGameOver) return;
+
         if (PhotonNetwork.IsMasterClient)
         {
             // 방장이 물리적 권한과 AI 권한을 모두 온전히 회수

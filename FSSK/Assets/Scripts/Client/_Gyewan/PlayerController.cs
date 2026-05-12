@@ -175,6 +175,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     {
         // 이 코드는 오직 '맞은 사람'의 컴퓨터에서만 실행됩니다!
         if (!photonView.IsMine) return;
+        if (TrollEvents.IsGameplayEventBlocked) return;
 
         ItemType hitItem = (ItemType)itemTypeIndex;
 
@@ -182,12 +183,12 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         {
             case ItemType.Rum:
                 Debug.Log("😵 [상태 이상] 럼주에 맞았습니다! 시야가 일렁입니다!");
-                TrollEvents.OnHitByRum?.Invoke(); // 로컬 카메라/UI에 이벤트 방송
+                TrollEvents.TriggerHitByRum(); // 로컬 카메라/UI에 이벤트 방송
                 break;
                 
             case ItemType.Octopus:
                 Debug.Log("🐙 [상태 이상] 문어에 맞았습니다! 시야가 가려집니다!");
-                TrollEvents.OnHitByOctopus?.Invoke(); // 로컬 카메라/UI에 이벤트 방송
+                TrollEvents.TriggerHitByOctopus(); // 로컬 카메라/UI에 이벤트 방송
                 break;
         }
     }

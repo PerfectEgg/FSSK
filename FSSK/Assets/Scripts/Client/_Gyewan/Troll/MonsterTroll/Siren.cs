@@ -96,6 +96,8 @@ public class Siren : MonsterTroll
     {
         Debug.Log($"🧜‍♀️ [세이렌 등장] 등장 사운드 재생 요청 받음");
 
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         if (_enterSound == null) 
         {
             Debug.LogError("🚨 [Siren] _enterSound 클립이 비어있습니다! 인스펙터를 확인하세요.");
@@ -108,6 +110,13 @@ public class Siren : MonsterTroll
     [PunRPC]
     private void RPC_StartSinging()
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            _isSingingLocally = false;
+            _isCameraPulled = false;
+            return;
+        }
+
         _isSingingLocally = true;
         PullCamera(true);
     }
@@ -127,6 +136,12 @@ public class Siren : MonsterTroll
 
         // 방장의 허락(RPC)이 떨어졌을 때만 판정 시작
         if (!_isSingingLocally) return;
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            _isSingingLocally = false;
+            _isCameraPulled = false;
+            return;
+        }
 
         // [상태 1] 기절 중
         if (_stunTimer > 0f)
@@ -172,7 +187,7 @@ public class Siren : MonsterTroll
     {
         Debug.Log("💥 [매혹됨] 세이렌에게 완전히 홀렸습니다! 스턴 및 암전!");
         _stunTimer = _stunDuration;
-        TrollEvents.OnStunEffect?.Invoke(_stunDuration);
+        TrollEvents.TriggerStunEffect(_stunDuration);
     }
 
     private void SlapCheek()
@@ -185,9 +200,10 @@ public class Siren : MonsterTroll
 
     private void PullCamera(bool isPulling)
     {
+        if (TrollEvents.IsGameplayEventBlocked && isPulling) return;
         if (_isCameraPulled == isPulling) return;
         _isCameraPulled = isPulling;
-        TrollEvents.OnSirenEffect?.Invoke(isPulling, isPulling ? transform : null);
+        TrollEvents.TriggerSirenEffect(isPulling, isPulling ? transform : null);
     }
 
     void OnDestroy()

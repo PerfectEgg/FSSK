@@ -769,6 +769,31 @@ public class OmokStoneDropper : MonoBehaviour
                MatchesExpectedColor(stone, expectedColor);
     }
 
+    public bool HasBlockedStoneAt(Vector2Int coordinate, OmokStoneColor expectedColor)
+    {
+        if (!IsInsideBoard(coordinate))
+        {
+            return false;
+        }
+
+        OmokFallingStone[] stones = FindObjectsByType<OmokFallingStone>(FindObjectsSortMode.None);
+        foreach (OmokFallingStone stone in stones)
+        {
+            if (stone == null ||
+                !stone.IsBlockedByBlocker ||
+                stone.IsRemoved ||
+                stone.Coordinate != coordinate ||
+                !MatchesExpectedColor(stone, expectedColor))
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
     public void CollectLiveBoardStones(List<OmokBoardStoneState> results)
     {
         if (results == null)
@@ -824,6 +849,78 @@ public class OmokStoneDropper : MonoBehaviour
         }
 
         RestoreWinningStoneFlashTargets(targets);
+    }
+
+    public IEnumerator PlayWinningBlockerStackFlash(
+        int blockerViewId,
+        Transform blockerTarget,
+        Vector2Int coordinate,
+        int stackCount,
+        OmokStoneColor stoneColor,
+        int flashCount,
+        float flashOnSeconds,
+        float flashOffSeconds)
+    {
+        List<WinningStoneFlashTarget> targets = CollectWinningBlockerStackFlashTargets(
+            blockerViewId,
+            blockerTarget,
+            coordinate,
+            stackCount,
+            stoneColor);
+        if (targets.Count == 0)
+        {
+            yield break;
+        }
+
+        int safeFlashCount = Mathf.Max(1, flashCount);
+        float safeFlashOnSeconds = Mathf.Max(0f, flashOnSeconds);
+        float safeFlashOffSeconds = Mathf.Max(0f, flashOffSeconds);
+        Color flashColor = GetWinningStoneFlashColor(stoneColor);
+
+        for (int i = 0; i < safeFlashCount; i++)
+        {
+            SetWinningStoneFlash(targets, flashColor, true);
+            yield return safeFlashOnSeconds > 0f ? new WaitForSeconds(safeFlashOnSeconds) : null;
+
+            SetWinningStoneFlash(targets, flashColor, false);
+            yield return safeFlashOffSeconds > 0f ? new WaitForSeconds(safeFlashOffSeconds) : null;
+        }
+
+        RestoreWinningStoneFlashTargets(targets);
+    }
+
+    public bool HasWinningStoneFlashTargets(IReadOnlyList<Vector2Int> coordinates, OmokStoneColor stoneColor)
+    {
+        if (coordinates == null || coordinates.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (Vector2Int coordinate in coordinates)
+        {
+            OmokFallingStone stone = GetStoneAtCoordinate(coordinate);
+            if (IsValidBoardWinningStone(stone, stoneColor))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool HasWinningBlockerStackFlashTargets(
+        int blockerViewId,
+        Transform blockerTarget,
+        Vector2Int coordinate,
+        int stackCount,
+        OmokStoneColor stoneColor)
+    {
+        return CollectWinningBlockerStackFlashTargets(
+            blockerViewId,
+            blockerTarget,
+            coordinate,
+            stackCount,
+            stoneColor).Count > 0;
     }
 
     public void SetWindAimEnabled(bool isEnabled)
@@ -1877,37 +1974,134 @@ public class OmokStoneDropper : MonoBehaviour
         foreach (Vector2Int coordinate in coordinates)
         {
             OmokFallingStone stone = GetStoneAtCoordinate(coordinate);
-            if (stone == null ||
-                !stone.IsSnapped ||
-                stone.IsRemoved ||
-                stone.IsBlockedByBlocker ||
-                !MatchesExpectedColor(stone, stoneColor) ||
-                stone.transform == null ||
+            if (!IsValidBoardWinningStone(stone, stoneColor) ||
                 !seenTransforms.Add(stone.transform))
             {
                 continue;
             }
 
-            Transform stoneTransform = stone.transform;
-            Renderer[] renderers = stoneTransform.GetComponentsInChildren<Renderer>(true);
-            MaterialPropertyBlock[] originalBlocks = new MaterialPropertyBlock[renderers.Length];
-            for (int i = 0; i < renderers.Length; i++)
-            {
-                originalBlocks[i] = new MaterialPropertyBlock();
-                if (renderers[i] != null)
-                {
-                    renderers[i].GetPropertyBlock(originalBlocks[i]);
-                }
-            }
-
-            targets.Add(new WinningStoneFlashTarget(
-                stoneTransform,
-                stoneTransform.localScale,
-                renderers,
-                originalBlocks));
+            AddWinningStoneFlashTarget(targets, stone.transform);
         }
 
         return targets;
+    }
+
+    private List<WinningStoneFlashTarget> CollectWinningBlockerStackFlashTargets(
+        int blockerViewId,
+        Transform blockerTarget,
+        Vector2Int coordinate,
+        int stackCount,
+        OmokStoneColor stoneColor)
+    {
+        List<WinningStoneFlashTarget> targets = new();
+        HashSet<Transform> seenTransforms = new();
+        int safeStackCount = Mathf.Max(1, stackCount);
+        Transform resolvedBlockerTarget = ResolveBlockerFlashTarget(blockerViewId, blockerTarget);
+
+        if (resolvedBlockerTarget != null &&
+            _blockerStoneStacks.TryGetValue(resolvedBlockerTarget, out List<OmokFallingStone> stack))
+        {
+            for (int i = stack.Count - 1; i >= 0 && targets.Count < safeStackCount; i--)
+            {
+                OmokFallingStone stone = stack[i];
+                if (!IsValidBlockerWinningStone(stone, stoneColor, resolvedBlockerTarget) ||
+                    !seenTransforms.Add(stone.transform))
+                {
+                    continue;
+                }
+
+                AddWinningStoneFlashTarget(targets, stone.transform);
+            }
+
+            if (targets.Count > 0)
+            {
+                return targets;
+            }
+        }
+
+        OmokFallingStone[] stones = FindObjectsByType<OmokFallingStone>(FindObjectsSortMode.None);
+        foreach (OmokFallingStone stone in stones)
+        {
+            if (targets.Count >= safeStackCount)
+            {
+                break;
+            }
+
+            if (!IsValidBlockerWinningStone(stone, stoneColor, resolvedBlockerTarget) ||
+                stone.Coordinate != coordinate ||
+                !seenTransforms.Add(stone.transform))
+            {
+                continue;
+            }
+
+            AddWinningStoneFlashTarget(targets, stone.transform);
+        }
+
+        return targets;
+    }
+
+    private static bool IsValidBoardWinningStone(OmokFallingStone stone, OmokStoneColor stoneColor)
+    {
+        return stone != null &&
+               stone.IsSnapped &&
+               !stone.IsRemoved &&
+               !stone.IsBlockedByBlocker &&
+               MatchesExpectedColor(stone, stoneColor) &&
+               stone.transform != null;
+    }
+
+    private static bool IsValidBlockerWinningStone(
+        OmokFallingStone stone,
+        OmokStoneColor stoneColor,
+        Transform blockerTarget)
+    {
+        return stone != null &&
+               stone.IsBlockedByBlocker &&
+               !stone.IsRemoved &&
+               MatchesExpectedColor(stone, stoneColor) &&
+               stone.transform != null &&
+               (blockerTarget == null || stone.BlockerTarget == blockerTarget);
+    }
+
+    private static Transform ResolveBlockerFlashTarget(int blockerViewId, Transform fallback)
+    {
+        if (fallback != null)
+        {
+            return fallback;
+        }
+
+        if (blockerViewId <= 0)
+        {
+            return null;
+        }
+
+        PhotonView blockerView = PhotonView.Find(blockerViewId);
+        return blockerView != null ? blockerView.transform : null;
+    }
+
+    private static void AddWinningStoneFlashTarget(List<WinningStoneFlashTarget> targets, Transform stoneTransform)
+    {
+        if (targets == null || stoneTransform == null)
+        {
+            return;
+        }
+
+        Renderer[] renderers = stoneTransform.GetComponentsInChildren<Renderer>(true);
+        MaterialPropertyBlock[] originalBlocks = new MaterialPropertyBlock[renderers.Length];
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            originalBlocks[i] = new MaterialPropertyBlock();
+            if (renderers[i] != null)
+            {
+                renderers[i].GetPropertyBlock(originalBlocks[i]);
+            }
+        }
+
+        targets.Add(new WinningStoneFlashTarget(
+            stoneTransform,
+            stoneTransform.localScale,
+            renderers,
+            originalBlocks));
     }
 
     private static void SetWinningStoneFlash(

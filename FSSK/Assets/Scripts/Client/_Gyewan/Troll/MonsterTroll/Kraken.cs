@@ -76,7 +76,7 @@ public class Kraken : MonsterTroll
         Debug.Log("💥 [기절] 크라켄에게 한 대 맞았습니다!! 스턴 및 어지러움!");
         
         // TODO: UI 매니저 호출하여 3초 스턴 및 시야 암전 이벤트 발생
-        TrollEvents.OnStunEffect?.Invoke(_penaltyDuration);
+        TrollEvents.TriggerStunEffect(_penaltyDuration);
     }
 
     protected override void OnStateEnter(MonsterState state)
@@ -140,6 +140,8 @@ public class Kraken : MonsterTroll
     {
         Debug.Log($"<color=cyan>[Kraken]</color> 등장 사운드 재생 요청 받음");
 
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         if (_enterSound == null) 
         {
             Debug.LogError("🚨 [Kraken] _enterSound 클립이 비어있습니다! 인스펙터를 확인하세요.");
@@ -166,6 +168,8 @@ public class Kraken : MonsterTroll
     private void EvaluateDodge()
     {
         // 1. 내 화면 기준 크라켄 위치 판별 (시점 데칼코마니 해결)
+        if (TrollEvents.IsGameplayEventBlocked) return;
+
         bool isKrakenOnMyRight = PhotonNetwork.IsMasterClient ? transform.position.x > 0 : transform.position.x < 0;
 
         // 2. 🟢 이벤트를 통해 내 캐릭터에게 물리적 회피 성공 여부를 물어봅니다.

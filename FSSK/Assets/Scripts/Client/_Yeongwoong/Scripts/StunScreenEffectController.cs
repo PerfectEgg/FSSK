@@ -34,11 +34,13 @@ public sealed class StunScreenEffectController : MonoBehaviour
     private void OnEnable()
     {
         TrollEvents.OnStunEffect += HandleStunEffect;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnStunEffect -= HandleStunEffect;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
 
         if (_routine != null)
         {
@@ -60,6 +62,17 @@ public sealed class StunScreenEffectController : MonoBehaviour
     {
         float duration = useStunDuration ? stunDuration : visibleSeconds;
         Play(duration);
+    }
+
+    private void HandleGameOver()
+    {
+        if (_routine != null)
+        {
+            StopCoroutine(_routine);
+            _routine = null;
+        }
+
+        HideImmediate();
     }
 
     public void Play(float duration)

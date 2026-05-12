@@ -1,6 +1,7 @@
 using UnityEngine;
 using DG.Tweening;
 using Photon.Pun;
+using IEnumerator = System.Collections.IEnumerator;
 
 public class PlayerInteraction : MonoBehaviourPun, IPunObservable
 {
@@ -10,6 +11,8 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
 
     [Header("그랩 세팅")]
     [SerializeField] private float _holdDistance = 7.5f;
+    [SerializeField] private float _throwAimAssistRadius = 3f;
+    [SerializeField] private float _minThrowDirectionY = -0.05f;
 
     [Header("IK 세팅 (살짝 쥐기)")]
     [SerializeField] private float _ikTransitionSpeed = 5f;            
@@ -36,8 +39,9 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
     private string _grabbedTag;         
     private bool _canInteract = false;  
     private float _stunTimer = 0f;     
-    private bool _isGameOver = false;       // 게임 오버 상태 추적 변수 
+    private bool _isGameOver = false;       // 게임 오버 상태 추적 변수
     private bool _isProcessing = false;     // 현재 처리 중인 상태 추적 변수
+    private Coroutine _pendingGrabCoroutine;
 
     void Start()
     {
@@ -56,6 +60,8 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         TrollEvents.OnExpansionModeChanged -= HandleCameraModeChanged;
         TrollEvents.OnStunEffect -= HandleStunEffect;
         GameEvents.OnGameOverTriggered -= HandleGameOver;
+
+        CancelPendingGrab();
     }
 
     private void HandleCameraModeChanged(bool isExpansion)
@@ -76,6 +82,7 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
 
         // 🟢 게임 오버 시, 모든 카메라 모드를 착수 모드로 고정하고, 커서도 해제합니다.
         _isGameOver = true;
+        CancelPendingGrab();
 
         // 🟢 만약 게임 종료 순간에 손에 무언가를 들고 있다면 강제로 놓게 만듭니다.
         if (_currentGrabbedObject != null)
@@ -85,6 +92,15 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         
         // IK 가중치도 0으로 만들어 팔을 내리게 합니다.
         _targetWeight = 0f;
+    }
+
+    private void CancelPendingGrab()
+    {
+        if (_pendingGrabCoroutine == null) return;
+
+        StopCoroutine(_pendingGrabCoroutine);
+        _pendingGrabCoroutine = null;
+        _isProcessing = false;
     }
 
     void Update()
@@ -139,7 +155,7 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         
         if (Physics.Raycast(ray, out RaycastHit hit, _reachDistance, _interactableLayer))
         {
-            PhotonView itemPV = hit.collider.GetComponent<PhotonView>();
+            PhotonView itemPV = hit.collider.GetComponentInParent<PhotonView>();
             if (itemPV != null)
             {
                 // 동물 트롤일 경우, 현재 상태가 상호작용 불가능한 상태(예: 쥐가 달리는 중)라면 잡기를 취소합니다.
@@ -147,16 +163,53 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
                 // _isInteractable이 false라면(예: 쥐가 달리는 중) 여기서 잡기를 취소합니다.
                 if (animalTroll != null && !animalTroll.IsInteractable) return;
 
-                // 소유권 요청 (이제 이 아이템은 내가 통제한다)
-                itemPV.RequestOwnership(); 
-
-                _grabbedItemViewId = itemPV.ViewID; 
-                _grabbedTag = hit.collider.tag;
-
-                // 🟢 [수정 3] 로컬 이벤트 발송 삭제! (모든 클라이언트가 알 수 있도록 RPC로 옮겼습니다)
-                photonView.RPC("SyncGrabItemRPC", RpcTarget.All, _grabbedItemViewId, true);
+                CancelPendingGrab();
+                _pendingGrabCoroutine = StartCoroutine(GrabItemWhenOwned(itemPV, hit.collider.tag));
             }
         }
+    }
+
+    private IEnumerator GrabItemWhenOwned(PhotonView itemPV, string grabbedTag)
+    {
+        _isProcessing = true;
+
+        int actorNumber = PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : -1;
+        if (itemPV.OwnershipTransfer == OwnershipOption.Takeover && actorNumber > 0)
+        {
+            itemPV.TransferOwnership(actorNumber);
+        }
+        else
+        {
+            itemPV.RequestOwnership();
+        }
+
+        const float ownershipWaitSeconds = 0.35f;
+        float elapsed = 0f;
+        while (itemPV != null && !itemPV.IsMine && elapsed < ownershipWaitSeconds)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        _isProcessing = false;
+        _pendingGrabCoroutine = null;
+
+        if (itemPV == null || !itemPV.IsMine || !_canInteract || _stunTimer > 0f || _isGameOver)
+        {
+            yield break;
+        }
+
+        _grabbedItemViewId = itemPV.ViewID;
+        _grabbedTag = grabbedTag;
+
+        photonView.RPC(
+            nameof(SyncGrabItemRPC),
+            RpcTarget.All,
+            _grabbedItemViewId,
+            true,
+            Vector3.zero,
+            itemPV.transform.position,
+            actorNumber);
     }
 
     private void ReleaseItem()
@@ -164,7 +217,17 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         if (_grabbedItemViewId != -1)
         {
             // 🟢 로컬 이벤트 발송 삭제! (아래 RPC 함수에서 처리합니다)
-            photonView.RPC("SyncGrabItemRPC", RpcTarget.All, _grabbedItemViewId, false);
+            Vector3 releaseDirection = GetReleaseDirection();
+            Vector3 releasePosition = _grabbedTransform != null ? _grabbedTransform.position : transform.position;
+            int actorNumber = PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : -1;
+            photonView.RPC(
+                nameof(SyncGrabItemRPC),
+                RpcTarget.All,
+                _grabbedItemViewId,
+                false,
+                releaseDirection,
+                releasePosition,
+                actorNumber);
             _grabbedItemViewId = -1;
         }
 
@@ -176,9 +239,82 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         _grabbedTransform = null;
     }
 
+    private Vector3 GetReleaseDirection()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return transform.forward;
+        }
+
+        Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
+        Vector3 origin = _grabbedTransform != null ? _grabbedTransform.position : ray.origin;
+
+        if (TryGetPlayerAimPoint(ray, out Vector3 aimPoint))
+        {
+            Vector3 targetDirection = aimPoint - origin;
+            if (targetDirection.sqrMagnitude > 0.0001f)
+            {
+                return targetDirection.normalized;
+            }
+        }
+
+        Vector3 direction = ray.direction;
+        if (direction.y < _minThrowDirectionY)
+        {
+            direction.y = _minThrowDirectionY;
+        }
+
+        return direction.normalized;
+    }
+
+    private bool TryGetPlayerAimPoint(Ray ray, out Vector3 aimPoint)
+    {
+        aimPoint = default;
+
+        RaycastHit[] hits = Physics.SphereCastAll(
+            ray,
+            Mathf.Max(0.01f, _throwAimAssistRadius),
+            _reachDistance,
+            ~0,
+            QueryTriggerInteraction.Ignore);
+
+        if (hits == null || hits.Length == 0)
+        {
+            return false;
+        }
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        int localActorNumber = PhotonNetwork.LocalPlayer != null ? PhotonNetwork.LocalPlayer.ActorNumber : -1;
+        foreach (RaycastHit hit in hits)
+        {
+            PhotonView targetPV = hit.collider.GetComponentInParent<PhotonView>();
+            if (targetPV == null || targetPV.OwnerActorNr == localActorNumber)
+            {
+                continue;
+            }
+
+            if (!hit.collider.CompareTag("Player") && targetPV.GetComponentInChildren<PlayerController>() == null)
+            {
+                continue;
+            }
+
+            aimPoint = hit.collider.bounds.center;
+            return true;
+        }
+
+        return false;
+    }
+
     // 🟢 [추가됨] 아이템 잡기/놓기 상태를 모든 유저의 화면에서 동기화하는 함수
     [PunRPC]
-    private void SyncGrabItemRPC(int itemViewId, bool isGrabbed)
+    private void SyncGrabItemRPC(
+        int itemViewId,
+        bool isGrabbed,
+        Vector3 releaseDirection,
+        Vector3 itemPosition,
+        int actorNumber)
     {
         PhotonView itemPV = PhotonView.Find(itemViewId);
         if (itemPV == null) return;
@@ -187,7 +323,7 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         if (animalTroll != null) animalTroll.SetGrabbedState(isGrabbed);
 
         ItemTroll itemTroll = itemPV.GetComponent<ItemTroll>();
-        if (itemTroll != null) itemTroll.SetGrabbedState(isGrabbed);
+        if (itemTroll != null) itemTroll.SetGrabbedState(isGrabbed, releaseDirection, itemPosition, actorNumber);
 
         if (isGrabbed)
         {

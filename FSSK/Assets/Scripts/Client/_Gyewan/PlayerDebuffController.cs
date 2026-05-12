@@ -15,12 +15,14 @@ public class PlayerDebuffController : MonoBehaviourPun
     {
         TrollEvents.OnHitByRum += HandleHitByRum;
         TrollEvents.OnHitByOctopus += HandleHitByOctopus;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
     {
         TrollEvents.OnHitByRum -= HandleHitByRum;
         TrollEvents.OnHitByOctopus -= HandleHitByOctopus;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
     }
 
     private void HandleHitByRum()
@@ -35,6 +37,15 @@ public class PlayerDebuffController : MonoBehaviourPun
         if (!photonView.IsMine) return; // 내 화면에서만 걸림
         ApplyDebuff(DebuffType.Octopus);
         // TODO: 문어 철썩 소리 재생
+    }
+
+    private void HandleGameOver()
+    {
+        if (!photonView.IsMine) return;
+
+        currentDebuff = DebuffType.None;
+        _debuffTimer = 0f;
+        UIEvents.OnDebuffEnded?.Invoke();
     }
 
     private void ApplyDebuff(DebuffType type)

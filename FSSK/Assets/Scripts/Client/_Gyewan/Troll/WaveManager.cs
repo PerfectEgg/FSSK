@@ -33,15 +33,32 @@ public class WaveManager : MonoBehaviour
     // 외부에서 현재 단계를 읽을 수 있도록 프로퍼티 개방
     public int currentStage => _currentStage;
 
-    void OnEnable() => GameEvents.OnGameOverTriggered += HandleGameOver;
-    void OnDisable() => GameEvents.OnGameOverTriggered -= HandleGameOver;
+    void OnEnable()
+    {
+        GameEvents.OnGameOverTriggered += HandleGameOver;
+        GameEvents.OnTimeoutEndingSequenceFinished += HandleTimeoutEndingSequenceFinished;
+    }
+
+    void OnDisable()
+    {
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
+        GameEvents.OnTimeoutEndingSequenceFinished -= HandleTimeoutEndingSequenceFinished;
+    }
     
     private void HandleGameOver()
     {
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.AllowsTimeoutWaveEvents) return;
 
         // 1. 웨이브 진행 및 아이템 스폰 완전 정지
-        _isWaveActive = false;
+        StopWaveSystem();
+    }
+
+    private void HandleTimeoutEndingSequenceFinished()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        StopWaveSystem();
     }
 
     void Awake()
@@ -69,6 +86,7 @@ public class WaveManager : MonoBehaviour
     {
         // 🟢 안전장치: 방장이 아니면 실행 불가
         if (!PhotonNetwork.IsMasterClient) return;
+        if (GameEvents.IsGameOver) return;
 
         _currentStage = 0;
         _waveTimer = 0f;
@@ -79,7 +97,7 @@ public class WaveManager : MonoBehaviour
 
         SetupNextItemSpawn();
         
-        TrollEvents.OnWaveStageChanged?.Invoke(_currentStage); // 0단계 시작 방송
+        TrollEvents.TriggerWaveStageChanged(_currentStage); // 0단계 시작 방송
         SoundEvents.UpdateWaveAmbient?.Invoke(_currentStage); // 0단계 시작 시 환경음 볼륨 업데이트
     }
 
@@ -88,6 +106,11 @@ public class WaveManager : MonoBehaviour
         // 🟢 방장이 아니면 시간 계산을 아예 하지 않음 (각자 계산하면 싱크가 어긋납니다)
         if (!PhotonNetwork.IsMasterClient) return;
         if (!_isWaveActive) return;
+        if (GameEvents.IsGameOver && !GameEvents.AllowsTimeoutWaveEvents)
+        {
+            StopWaveSystem();
+            return;
+        }
 
         _waveTimer += Time.deltaTime;
 
@@ -111,7 +134,10 @@ public class WaveManager : MonoBehaviour
             if (NetworkGameManager.Instance != null)
             {
                 NetworkGameManager.Instance.BroadcastWaveStage(_currentStage);
-                SoundEvents.UpdateWaveAmbient?.Invoke(_currentStage);
+                if (!TrollEvents.IsGameplayEventBlocked)
+                {
+                    SoundEvents.UpdateWaveAmbient?.Invoke(_currentStage);
+                }
             }
         }
     }
@@ -128,6 +154,11 @@ public class WaveManager : MonoBehaviour
     {
         // 다시 한 번 방장 체크 (이중 안전장치)
         if (!PhotonNetwork.IsMasterClient) return;
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            _hasSpawnedItemInCurrentWave = true;
+            return;
+        }
 
         _hasSpawnedItemInCurrentWave = true; // 중복 생성 방지
 
@@ -167,6 +198,26 @@ public class WaveManager : MonoBehaviour
            // 🟢 Instantiate 대신 서버 매니저의 네트워크 소환 로직 사용!
             string prefabName = prefabPathToSpawn;
             NetworkGameManager.Instance.SpawnNetworkObject(prefabName, spawnPoint.position, spawnPoint.rotation);
+        }
+    }
+
+    private void StopWaveSystem(bool destroyItems = true)
+    {
+        _isWaveActive = false;
+        _hasSpawnedItemInCurrentWave = true;
+
+        if (!destroyItems || !PhotonNetwork.IsMasterClient)
+        {
+            return;
+        }
+
+        ItemTroll[] items = FindObjectsByType<ItemTroll>(FindObjectsSortMode.None);
+        foreach (ItemTroll item in items)
+        {
+            if (item != null)
+            {
+                PhotonNetwork.Destroy(item.gameObject);
+            }
         }
     }
 }

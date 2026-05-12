@@ -18,6 +18,7 @@ using UnityEngine.UI;
 public class NetworkGameManager : MonoBehaviourPunCallbacks
 {
     public static NetworkGameManager Instance { get; private set; }
+    public bool HandlesMatchResultPresentation => _resultPanel != null;
 
     // ──────────────────────────────────────────────────────────────
     //  공통 설정
@@ -38,6 +39,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [SerializeField, Min(1)] private int _winningLineFlashCount = 2;
     [SerializeField, Min(0f)] private float _winningLineFlashOnSeconds = 0.45f;
     [SerializeField, Min(0f)] private float _winningLineFlashOffSeconds = 0.25f;
+    [SerializeField, Min(0f)] private float _winningLinePreFlashDelaySeconds = 1f;
 
     [Header("Timeout Result Sequence")]
     [SerializeField] private bool _fadeScreenBeforeTimeoutResult = true;
@@ -64,7 +66,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private const float TIME_SYNC_INTERVAL = 1f; // RPC 보내는 주기
     private const int DrawWinnerActorNumber = -1;
     private const int TimeoutWinnerActorNumber = -2;
-    private const float WinningLineWaitTimeoutSeconds = 0.35f;
+    private const float WinningLineWaitTimeoutSeconds = 3f;
     private float _timeSyncAccum; // 동기화 시간 누적기
     private readonly HashSet<int> _claimedItemIds = new(); // 누군가 먹은 아이템(중복 x)
     private bool _spawnedMyPlayer;
@@ -85,6 +87,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             return;
         }
         Instance = this;
+        GameEvents.ResetGameOverState();
     }
 
     void Start()
@@ -259,6 +262,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         GameTimeLeft = _gameDuration;
         IsGameOver = false;
+        GameEvents.ResetGameOverState();
         Debug.Log($"[NetworkGameManager] 게임 시작 (전체 시간: {_gameDuration:F0}s)");
 
         photonView.RPC("RPC_PlayGameBGM", RpcTarget.AllBuffered);
@@ -310,6 +314,13 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             Debug.LogWarning("[NetworkGameManager] Spawn requested by non-master - ignored.");
             return;
         }
+
+        if (IsGameOver || GameEvents.IsGameOver)
+        {
+            Debug.LogWarning($"[NetworkGameManager] Spawn '{prefabName}' ignored after game over.");
+            return;
+        }
+
         var obj = PhotonNetwork.Instantiate(prefabName, pos, rot);
         var pv = obj.GetComponent<PhotonView>();
         Debug.Log($"[NetworkGameManager] 스폰 '{prefabName}' (viewId: {(pv != null ? pv.ViewID : -1)})");
@@ -418,7 +429,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     {
         Debug.Log($"[NetworkGameManager] 기절 수신 (target: {targetActor}, duration: {duration:F1}s)");
         if (PhotonNetwork.LocalPlayer == null || PhotonNetwork.LocalPlayer.ActorNumber != targetActor) return;
-        TrollEvents.OnStunEffect?.Invoke(duration);
+        TrollEvents.TriggerStunEffect(duration);
     }
 
     // --- 세이렌 매혹 (전체 플레이어 대상, source는 viewId로 전달) ---
@@ -443,7 +454,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             var pv = PhotonView.Find(sourceViewId);
             if (pv != null) sourceTransform = pv.transform;
         }
-        TrollEvents.OnSirenEffect?.Invoke(active, sourceTransform);
+        TrollEvents.TriggerSirenEffect(active, sourceTransform);
     }
 
     // --- 웨이브 단계 (전체 공통) ---
@@ -461,7 +472,11 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private void WaveStageRpc(int stage)
     {
         Debug.Log($"[NetworkGameManager] 웨이브 단계 수신 ({stage})");
-        TrollEvents.OnWaveStageChanged?.Invoke(stage);
+        TrollEvents.TriggerWaveStageChanged(stage);
+        if (!TrollEvents.IsWaveStageEventBlocked)
+        {
+            SoundEvents.UpdateWaveAmbient?.Invoke(stage);
+        }
     }
 
     // --- 환경 효과 레벨(0~3) - Rain / Wind / Lightning ---
@@ -475,7 +490,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private void RainLevelRpc(int level)
     {
         Debug.Log($"[NetworkGameManager] 비 레벨 수신 ({level})");
-        TrollEvents.OnRainLevelChanged?.Invoke(level);
+        TrollEvents.TriggerRainLevelChanged(level);
     }
 
     public void BroadcastWindLevel(int level)
@@ -488,7 +503,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private void WindLevelRpc(int level)
     {
         Debug.Log($"[NetworkGameManager] 바람 레벨 수신 ({level})");
-        TrollEvents.OnWindLevelChanged?.Invoke(level);
+        TrollEvents.TriggerWindLevelChanged(level);
     }
 
     public void BroadcastLightningLevel(int level)
@@ -501,7 +516,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private void LightningLevelRpc(int level)
     {
         Debug.Log($"[NetworkGameManager] 번개 레벨 수신 ({level})");
-        TrollEvents.OnLightningLevelChanged?.Invoke(level);
+        TrollEvents.TriggerLightningLevelChanged(level);
     }
 
     public void BroadcastLightningStrike(int level, int patternIndex)
@@ -521,7 +536,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     private void LightningStrikeRpc(int level, int patternIndex)
     {
         Debug.Log($"[NetworkGameManager] Lightning strike received (level: {level}, pattern: {patternIndex})");
-        TrollEvents.OnLightningStrikeRequested?.Invoke(level, patternIndex);
+        TrollEvents.TriggerLightningStrikeRequested(level, patternIndex);
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -559,10 +574,12 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             : draw
                 ? GameResultType.Draw
                 : (iWon ? GameResultType.Win : GameResultType.Lose);
+        bool keepTimeoutEndingSequenceActive =
+            _resultPanel != null && ShouldDelayResultForTimeoutFade(resultType);
 
         Debug.Log($"[NetworkGameManager] 게임 종료 (winner: {winnerActorNumber}, 결과: {resultType}, delta: {delta:+#;-#;0})");
 
-        GameEvents.TriggerGameOver();
+        GameEvents.TriggerGameOver(resultType, keepTimeoutEndingSequenceActive);
         if (!draw)
         {
             GameEvents.TriggerGameOverResult(iWon);
@@ -589,7 +606,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
                 }
                 _pendingResultSequence = StartCoroutine(ShowResultAfterWinningLineFlash(resultType, currentScore, delta));
             }
-            else if (ShouldDelayResultForTimeoutFade(resultType))
+            else if (keepTimeoutEndingSequenceActive)
             {
                 _resultPanel.Hide();
                 if (_pendingResultSequence != null)
@@ -634,16 +651,48 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
         if (match != null && dropper != null)
         {
+            if (_winningLinePreFlashDelaySeconds > 0f)
+            {
+                yield return new WaitForSeconds(_winningLinePreFlashDelaySeconds);
+            }
+
+            yield return PlayWinningFlash(match, dropper);
+        }
+
+        ShowResultPanel(resultType, currentScore, delta);
+        _pendingResultSequence = null;
+    }
+
+    private IEnumerator PlayWinningFlash(OmokMatchManager match, OmokStoneDropper dropper)
+    {
+        if (match == null || dropper == null)
+        {
+            yield break;
+        }
+
+        if (match.WinningCoordinates != null && match.WinningCoordinates.Count > 0)
+        {
             yield return dropper.PlayWinningStoneFlash(
                 match.WinningCoordinates,
                 match.Winner,
                 _winningLineFlashCount,
                 _winningLineFlashOnSeconds,
                 _winningLineFlashOffSeconds);
+            yield break;
         }
 
-        ShowResultPanel(resultType, currentScore, delta);
-        _pendingResultSequence = null;
+        if (match.HasWinningBlockerStack)
+        {
+            yield return dropper.PlayWinningBlockerStackFlash(
+                match.WinningBlockerViewId,
+                match.WinningBlockerTarget,
+                match.WinningBlockerCoordinate,
+                match.WinningBlockerStackCount,
+                match.Winner,
+                _winningLineFlashCount,
+                _winningLineFlashOnSeconds,
+                _winningLineFlashOffSeconds);
+        }
     }
 
     private IEnumerator ShowResultAfterTimeoutFade(GameResultType resultType, int currentScore, int delta)
@@ -651,6 +700,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         Image overlay = EnsureTimeoutFadeOverlay();
         if (overlay == null)
         {
+            GameEvents.FinishTimeoutEndingSequence();
             ShowResultPanel(resultType, currentScore, delta);
             _pendingResultSequence = null;
             yield break;
@@ -681,6 +731,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             SetTimeoutFadeOverlayAlpha(overlay, targetAlpha);
         }
 
+        GameEvents.FinishTimeoutEndingSequence();
         ShowResultPanel(resultType, currentScore, delta);
         _pendingResultSequence = null;
     }
@@ -690,11 +741,25 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         match = FindFirstObjectByType<OmokMatchManager>();
         dropper = FindFirstObjectByType<OmokStoneDropper>();
 
-        return match != null &&
-               dropper != null &&
-               match.Winner != OmokStoneColor.None &&
-               match.WinningCoordinates != null &&
-               match.WinningCoordinates.Count > 0;
+        if (match == null || dropper == null || match.Winner == OmokStoneColor.None)
+        {
+            return false;
+        }
+
+        if (match.WinningCoordinates != null &&
+            match.WinningCoordinates.Count > 0 &&
+            dropper.HasWinningStoneFlashTargets(match.WinningCoordinates, match.Winner))
+        {
+            return true;
+        }
+
+        return match.HasWinningBlockerStack &&
+               dropper.HasWinningBlockerStackFlashTargets(
+                   match.WinningBlockerViewId,
+                   match.WinningBlockerTarget,
+                   match.WinningBlockerCoordinate,
+                   match.WinningBlockerStackCount,
+                   match.Winner);
     }
 
     private void ShowResultPanel(GameResultType resultType, int currentScore, int delta)
@@ -826,6 +891,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
         Debug.LogWarning($"[NetworkGameManager] Disconnected (cause: {cause})");
         if (IsGameOver) return;
         IsGameOver = true;
+        GameEvents.TriggerGameOver(GameResultType.Lose);
 
         // 본인 끊김 - 패배 점수만 반영하고 로비 복귀 (RPC는 이미 못 보냄)
         if (BackendRank.Instance != null && BackendManager.Instance != null && BackendManager.Instance.MyUserData != null)

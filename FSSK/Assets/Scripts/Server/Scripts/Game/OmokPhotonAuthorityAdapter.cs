@@ -1,4 +1,5 @@
 using Photon.Pun;
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -120,15 +121,46 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
             forceBoardPlacement: true);
 
         // 1) 시각화 (돌 떨어뜨림 시작)
-        if (!TryApplyPlacementVisual(request))
+        bool visualApplied = TryApplyPlacementVisual(request);
+        if (!visualApplied)
         {
             Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote visual placement failed at ({x},{y}) {color}.", this);
         }
 
-        // 2) 보드 상태/턴/승패 즉시 동기화 (시각 착지를 기다리지 않음)
+        // 2) 보드 상태/턴/승패는 리모트 비주얼 착지 이후 적용한다.
+        if (visualApplied)
+        {
+            StartCoroutine(ApplyPlacementResultAfterVisualSettles(coordinate, color));
+            return;
+        }
+
         if (!TryApplyPlacementResult(coordinate, color))
         {
             Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote result registration failed at ({x},{y}) {color}.", this);
+        }
+    }
+
+    private IEnumerator ApplyPlacementResultAfterVisualSettles(Vector2Int coordinate, OmokStoneColor color)
+    {
+        const float maxWaitSeconds = 2f;
+        float elapsed = 0f;
+
+        while (elapsed < maxWaitSeconds)
+        {
+            if (_stoneDropper != null && _stoneDropper.HasLiveStoneAt(coordinate, color))
+            {
+                break;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (!TryApplyPlacementResult(coordinate, color))
+        {
+            Debug.LogWarning(
+                $"[OmokPhotonAuthorityAdapter] Remote delayed result registration failed at ({coordinate.x},{coordinate.y}) {color}.",
+                this);
         }
     }
 
@@ -192,9 +224,40 @@ public class OmokPhotonAuthorityAdapter : OmokTurnAuthorityAdapter
                 this);
         }
 
+        if (visualApplied)
+        {
+            StartCoroutine(ApplyBlockedResultAfterVisualSettles(blockedResult));
+            return;
+        }
+
         if (!TryApplyBlockedResult(blockedResult))
         {
             Debug.LogWarning($"[OmokPhotonAuthorityAdapter] Remote blocked result registration failed at ({x},{y}) {color}.", this);
+        }
+    }
+
+    private IEnumerator ApplyBlockedResultAfterVisualSettles(OmokBlockedStoneResult blockedResult)
+    {
+        const float maxWaitSeconds = 2f;
+        float elapsed = 0f;
+
+        while (elapsed < maxWaitSeconds)
+        {
+            if (_stoneDropper != null &&
+                _stoneDropper.HasBlockedStoneAt(blockedResult.TargetCoordinate, blockedResult.StoneColor))
+            {
+                break;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (!TryApplyBlockedResult(blockedResult))
+        {
+            Debug.LogWarning(
+                $"[OmokPhotonAuthorityAdapter] Remote delayed blocked result registration failed at ({blockedResult.TargetCoordinate.x},{blockedResult.TargetCoordinate.y}) {blockedResult.StoneColor}.",
+                this);
         }
     }
 

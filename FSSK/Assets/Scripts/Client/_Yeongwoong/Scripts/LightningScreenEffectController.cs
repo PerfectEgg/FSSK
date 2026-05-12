@@ -174,6 +174,7 @@ public sealed class LightningScreenEffectController : MonoBehaviour
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;
         TrollEvents.OnLightningLevelChanged += HandleLightningLevelChanged;
         TrollEvents.OnLightningStrikeRequested += HandleLightningStrikeRequested;
+        GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
     private void OnDisable()
@@ -181,6 +182,7 @@ public sealed class LightningScreenEffectController : MonoBehaviour
         TrollEvents.OnWaveStageChanged -= HandleWaveStageChanged;
         TrollEvents.OnLightningLevelChanged -= HandleLightningLevelChanged;
         TrollEvents.OnLightningStrikeRequested -= HandleLightningStrikeRequested;
+        GameEvents.OnGameOverTriggered -= HandleGameOver;
 
         StopWaveLightningRoutine();
     }
@@ -253,11 +255,21 @@ public sealed class LightningScreenEffectController : MonoBehaviour
     [ContextMenu("TEMP/Trigger Lightning Screen Effect")]
     public void TriggerLightning()
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         TriggerLightning(GetRandomPattern(_lightningLevel));
     }
 
     private void TriggerLightning(LightningPattern pattern)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         EnsureOverlay();
 
         if (_lightningLevel <= 0)
@@ -276,6 +288,11 @@ public sealed class LightningScreenEffectController : MonoBehaviour
 
     public void TriggerLightning(int level)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         SetLightningLevel(level);
         TriggerLightning(GetRandomPattern(_lightningLevel));
     }
@@ -288,6 +305,11 @@ public sealed class LightningScreenEffectController : MonoBehaviour
 
     private void HandleWaveStageChanged(int stage)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (!useWaveStageEvent)
         {
             return;
@@ -298,6 +320,11 @@ public sealed class LightningScreenEffectController : MonoBehaviour
 
     private void HandleLightningLevelChanged(int level)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         if (useWaveStageEvent)
         {
             ApplyWaveLightningLevel(level);
@@ -309,6 +336,11 @@ public sealed class LightningScreenEffectController : MonoBehaviour
 
     private void HandleLightningStrikeRequested(int level, int patternIndex)
     {
+        if (TrollEvents.IsGameplayEventBlocked)
+        {
+            return;
+        }
+
         int clampedLevel = Mathf.Clamp(level, 0, 3);
         if (clampedLevel <= 0)
         {
@@ -317,6 +349,12 @@ public sealed class LightningScreenEffectController : MonoBehaviour
 
         TriggerLightning(clampedLevel, GetPatternByIndex(patternIndex));
         SoundEvents.PlayLightning(clampedLevel);
+    }
+
+    private void HandleGameOver()
+    {
+        ApplyWaveLightningLevel(0);
+        ResetEffectState(true);
     }
 
     private void SetLightningLevel(int level)
