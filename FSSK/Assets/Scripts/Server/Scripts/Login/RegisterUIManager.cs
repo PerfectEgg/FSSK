@@ -37,7 +37,7 @@ public class RegisterUIManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Tab))
             FocusNextInput();
         if (Input.GetKeyDown(KeyCode.Return))
-            OnRegisterClick();
+            _registerBtn.onClick.Invoke();
     }
 
     // Tab 키로 다음 입력창으로 포커스 이동
