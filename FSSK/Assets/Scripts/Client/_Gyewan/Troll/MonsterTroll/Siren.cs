@@ -23,6 +23,22 @@ public class Siren : MonsterTroll
     // 🟢 로컬에서 노래가 들리는 중인지 판별하는 플래그
     private bool _isSingingLocally = false; 
 
+    protected override void Start()
+    {
+        base.Start();
+
+        if (!PhotonNetwork.IsMasterClient) return;
+
+        // 🟢 [핵심] 소환된 위치에 따른 방향 가중치 계산
+        // 오른쪽에 있으면 1, 왼쪽에 있으면 -1
+        float rotationMultiplier = (transform.position.x > 0) ? 180f : 0f;
+
+        Vector3 lookDirection = new Vector3(0, rotationMultiplier, 0);
+        transform.rotation = Quaternion.Euler(lookDirection);
+
+        Debug.Log("세이렌! 등장!! 유의하세요!!");
+    }
+
     // --- 1. [방장 & 클라이언트 공통] 상태 진입 시 연출 ---
     protected override void OnStateEnter(MonsterState state)
     {

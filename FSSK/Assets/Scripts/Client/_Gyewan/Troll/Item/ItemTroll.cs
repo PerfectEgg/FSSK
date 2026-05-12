@@ -15,7 +15,7 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
     [SerializeField] protected float _throwForce = 100f;    // 던지는 힘
     [SerializeField] protected ItemType _itemType;
 
-    protected AudioClip _hitSound;   // 적중 사운드 (각 아이템마다 다르게 설정 가능)
+    [SerializeField] protected AudioClip _hitSound; // 🟢 적중 사운드
     protected Vector3 _grabbedScale = Vector3.one; // 🟢 잡았을 때 원래 크기
 
     // ✅ SyncGrabItemRPC에서 직접 호출 (로컬 이벤트 의존 제거)
@@ -117,8 +117,7 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
 
                 photonView.RPC("RPC_HitItemSound", RpcTarget.All); // 적중 사운드 재생
 
-                // 맞췄으니 아이템은 파괴
-                PhotonNetwork.Destroy(gameObject);
+                StartCoroutine(DelayedNetworkDestroy(0.1f));
             }
         }
     }
@@ -128,7 +127,8 @@ public abstract class ItemTroll : TrollBase, IDraggable, IPunObservable
     {
         if (_hitSound != null)
         {
-            SoundEvents.Play3DSFX?.Invoke(_hitSound, transform.position, 0.7f);
+            Debug.Log($"🎯 [아이템 명중] {_itemType}가 플레이어에게 명중했습니다! 적중 사운드를 재생합니다.");
+            SoundEvents.Play3DSFX?.Invoke(_hitSound, transform.position, 0.45f);
         }
     }
 

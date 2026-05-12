@@ -75,10 +75,10 @@ public class Rat : AnimalTroll
 
     protected override void OnStateEnter(AnimalState state)
     {
-        if(state == AnimalState.Entering || state == AnimalState.Action || state == AnimalState.Action2 || state == AnimalState.Exiting)
-            _isInteractable = false;
-        else
+        if(state == AnimalState.Waiting)
             _isInteractable = true;
+        else
+            _isInteractable = false;
 
 
         // 🟢 [수정 4] 방장만 수행해야 하는 '데이터' 관련 로직

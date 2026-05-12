@@ -35,6 +35,9 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     protected bool _isOnTable = true;    // 현재 판(책상) 위에 있는지 여부를 체크하는 변수
     protected bool _isInteractable = false;  // 드래그 가능 여부
 
+    //IsInteractable 프로퍼티 (외부에서 읽기 전용으로 접근)
+    public bool IsInteractable => _isInteractable;
+
     // 상태에 관한 변수들
     protected AnimalState _currentState = AnimalState.Entering;
     protected float _currentTime = 0f;   // 총합 행동 시간
@@ -144,7 +147,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     // 상태에 막 진입했을 때 할 일 (무적 판정, 애니메이션 재생 등)
     protected virtual void OnStateEnter(AnimalState state)
     {
-        if (state == AnimalState.Entering || state == AnimalState.Exiting)
+        if (state == AnimalState.Entering || state == AnimalState.Hiding || state == AnimalState.Exiting)
             _isInteractable = false;
         else
             _isInteractable = true;

@@ -200,7 +200,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Rum
   _throwForce: 250
   _itemType: 0
-  _rumHitSound: {fileID: 8300000, guid: b9e5d1d4888b9fd479dd47ecd822fdae, type: 3}
+  _hitSound: {fileID: 8300000, guid: b9e5d1d4888b9fd479dd47ecd822fdae, type: 3}
 --- !u!114 &1509573766165560274
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -87,15 +87,10 @@ public class Parrot : AnimalTroll
     [PunRPC]
     private void RPC_ReturnSound()
     {
-        Debug.Log($"<color=cyan>[Kraken]</color> 귀환 사운드 재생 요청 받음");
-
-        if (_returnSound == null) 
+        if (_returnSound != null) 
         {
-            Debug.LogError("🚨 [Kraken] _returnSound 클립이 비어있습니다! 인스펙터를 확인하세요.");
-            return;
+            SoundEvents.Play3DSFX?.Invoke(_returnSound, transform.position, 0.45f); // 귀환 사운드 재생
         }
-
-        SoundEvents.Play3DSFX?.Invoke(_returnSound, transform.position, 0.4f); // 귀환 사운드 재생
     }
 
     // 목표 지점을 바라보는 함수

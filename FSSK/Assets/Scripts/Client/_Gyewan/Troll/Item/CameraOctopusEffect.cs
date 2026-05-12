@@ -15,6 +15,9 @@ public class CameraOctopusEffect : MonoBehaviourPun
     [SerializeField] private float _maxDuration = 8f;         // 기본 지속 시간
     [SerializeField] private float _mashReduction = 0.5f;     // AD 연타 1회당 단축 시간 (초)
 
+    [Header("사운드 설정")]
+    [SerializeField] private AudioClip _octopusHitSound;   // 적중 사운드
+
     private GameObject _currentOctopus; // 현재 화면에 붙은 문어 인스턴스
     private float _currentTimer = 0f;
     private Transform _mainCameraTransform; // 메인 카메라 위치 정보
@@ -57,7 +60,6 @@ public class CameraOctopusEffect : MonoBehaviourPun
         _currentTimer = _maxDuration;
 
         Debug.Log($"🐙 [문어 피격] 찰싹! 화면에 문어가 붙었습니다! AD 연타하세요! (8초)");
-        // TODO: 문어 철썩 소리 재생
 
         // 1. 이미 문어가 있다면 삭제 (지속 시간 갱신)
         if (_currentOctopus != null) Destroy(_currentOctopus);

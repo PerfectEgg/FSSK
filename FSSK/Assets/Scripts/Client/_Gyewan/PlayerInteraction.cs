@@ -142,6 +142,11 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
             PhotonView itemPV = hit.collider.GetComponent<PhotonView>();
             if (itemPV != null)
             {
+                // 동물 트롤일 경우, 현재 상태가 상호작용 불가능한 상태(예: 쥐가 달리는 중)라면 잡기를 취소합니다.
+                AnimalTroll animalTroll = itemPV.GetComponent<AnimalTroll>();
+                // _isInteractable이 false라면(예: 쥐가 달리는 중) 여기서 잡기를 취소합니다.
+                if (animalTroll != null && !animalTroll.IsInteractable) return;
+
                 // 소유권 요청 (이제 이 아이템은 내가 통제한다)
                 itemPV.RequestOwnership(); 
 
@@ -197,6 +202,8 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         }
         else
         {
+            if (itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
+
             // 🟢 [핵심 수정] 놓을 때도 내 캐릭터만 비워줍니다.
             if (photonView.IsMine) 
             {

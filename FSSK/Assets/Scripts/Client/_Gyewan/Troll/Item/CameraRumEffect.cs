@@ -16,7 +16,7 @@ public class CameraRumEffect : MonoBehaviourPun
     [SerializeField] private float _noiseAmount = 2f;
     [SerializeField] private float _glitchStrength = 2.5f;
     [SerializeField] private float _scanLinesStrength = 1f;
-    
+
     // 코루틴 내부에서 목표로 할 강도
     private float _targetIntensity = 0f;
     private float _currentIntensity = 0f;
@@ -55,7 +55,6 @@ public class CameraRumEffect : MonoBehaviourPun
         _targetIntensity = _glitchStrength;
 
         Debug.Log($"🥃 [럼 피격] 찰싹! 화면에 럼이 붙었습니다! AD 연타하세요! (8초)");
-        // TODO: 럼 철썩 소리 재생
 
         // 1. 디버프 타이머 및 해제 루프 시작
         while (_currentTimer > 0f)
