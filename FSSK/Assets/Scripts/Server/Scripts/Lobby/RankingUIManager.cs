@@ -99,11 +99,11 @@ public class RankingUIManager : MonoBehaviour
 
                 BindTop3(list);
                 Debug.Log($"[RankingUIManager] Top 3 데이터 삽입 완료");
-                // Top3 이후부터는 스크롤 리스트에 삽입
+                // Top3 이후(4위 = 인덱스 3)부터 스크롤 리스트에 삽입 — displayRank는 정렬된 표시 순서 기준
                 for (int i = 3; i < list.Count; i++)
                 {
                     var row = Instantiate(_rankItemPrefab, _rankListContent);
-                    row.Bind(list[i]);
+                    row.Bind(i + 1, list[i]);
                 }
 
                 Debug.Log($"[RankingUIManager] 랭킹 리스트 표시 완료 ({list.Count}건)");

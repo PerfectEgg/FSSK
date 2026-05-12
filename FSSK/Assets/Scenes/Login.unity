@@ -1804,7 +1804,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 532e7e1f264736444bf16b049c67d90a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BackendRank
-  _userRankUuid: 019ded1e-efea-7ae4-9c0c-5c5d3ca4d72f
+  _userRankUuid: 019e1a0b-8d47-7a68-a270-0bc2fc7b58d4
 --- !u!1 &1158625019
 GameObject:
   m_ObjectHideFlags: 0

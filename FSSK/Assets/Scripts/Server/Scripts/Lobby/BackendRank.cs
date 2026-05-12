@@ -95,7 +95,7 @@ public class BackendRank : MonoBehaviour
     //  랭킹 리스트 조회 (offset+1위부터 limit개)
     //  ex) limit=50, offset=0  → 1~50위
     //      limit=50, offset=50 → 51~100위
-    //  raw UserLeaderboardItem 리스트를 그대로 콜백에 전달 (호출자에서 표시)
+    //  score 동률 시 winCount(extraData) 내림차순으로 보조 정렬 후 콜백에 전달
     // ──────────────────────────────────────────────────────────────
     public void GetRankList(int limit, int offset,
                             Action<List<UserLeaderboardItem>> onSuccess,
@@ -119,10 +119,26 @@ public class BackendRank : MonoBehaviour
                 }
 
                 var list = callback.GetUserLeaderboardList();
+                SortByScoreThenWinCount(list);
                 Debug.Log($"[BackendRank] 랭킹 조회 성공 (총 등록자 {callback.GetTotalCount()}명, 받은 {list.Count}건)");
                 onSuccess?.Invoke(list);
             });
     }
+    // ──────────────────────────────────────────────────────────────
+    // 보조 정렬: score 내림차순 → 동률이면 extraData(winCount) 내림차순
+    // UserLeaderboardItem.score / extraData 는 string 이라 int 파싱 후 비교
+    // ──────────────────────────────────────────────────────────────
+    private static void SortByScoreThenWinCount(List<UserLeaderboardItem> list)
+    {
+        list.Sort((a, b) =>
+        {
+            int s = ParseInt(b.score).CompareTo(ParseInt(a.score));
+            if (s != 0) return s; // 점수가 동률이 아닐 경우 바로 리턴
+            return ParseInt(b.extraData).CompareTo(ParseInt(a.extraData));
+        });
+    }
+
+    private static int ParseInt(string s) => int.TryParse(s, out var v) ? v : 0;
 
     // ──────────────────────────────────────────────────────────────
     //  내 랭킹만 조회 (UserLeaderboardItem 리스트 — 랭크 미등록 시 빈 리스트)
