@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 using Photon.Pun;
 using System.Collections;
 
@@ -6,6 +7,7 @@ public class CameraOctopusEffect : MonoBehaviourPun
 {
     [Header("프리팹 설정 (Layer: LocalEffect 필수)")]
     [SerializeField] private GameObject _screenOctopusPrefab; // 1단계에서 만든 프리팹 등록
+    
 
     [Header("문어 배치 설정")]
     [SerializeField] private Vector3 _spawnOffset = new Vector3(0f, -0.5f, 1.5f); // 카메라 기준 스폰 위치
@@ -14,9 +16,6 @@ public class CameraOctopusEffect : MonoBehaviourPun
     [Header("디버프 설정")]
     [SerializeField] private float _maxDuration = 8f;         // 기본 지속 시간
     [SerializeField] private float _mashReduction = 0.5f;     // AD 연타 1회당 단축 시간 (초)
-
-    [Header("사운드 설정")]
-    [SerializeField] private AudioClip _octopusHitSound;   // 적중 사운드
 
     private GameObject _currentOctopus; // 현재 화면에 붙은 문어 인스턴스
     private float _currentTimer = 0f;
@@ -102,8 +101,9 @@ public class CameraOctopusEffect : MonoBehaviourPun
                 Debug.Log($"👊 [연타!] 남은 시간: {_currentTimer:F1}초");
                 // TODO: UI Hit! 연출, 문어 움찔거리는 애니메이션 재생
             }
-
-            // 🟢 UI 게이지 바가 있다면 업데이트 (예: image.fillAmount = _currentTimer / _maxDuration)
+            
+            // 🟢 UI 게이지 업데이트 (남은 시간 비율로 fillAmount 설정)
+            TrollEvents.OnUpdateDebuffUI?.Invoke(_currentTimer / _maxDuration);
 
             yield return null; // 다음 프레임까지 대기
         }
@@ -124,5 +124,6 @@ public class CameraOctopusEffect : MonoBehaviourPun
         }
 
         // 🟢 UI 게이지 바 끄기
+        TrollEvents.OnHideDebuffUI?.Invoke();
     }
 }

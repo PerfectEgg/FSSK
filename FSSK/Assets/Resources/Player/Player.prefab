@@ -290,7 +290,6 @@ MonoBehaviour:
   _spawnRotation: {x: 90, y: 0, z: 0}
   _maxDuration: 8
   _mashReduction: 0.5
-  _octopusHitSound: {fileID: 8300000, guid: 23c68f01a714a384fae4fe9e3c4ac97f, type: 3}
 --- !u!114 &2787537740279360644
 MonoBehaviour:
   m_ObjectHideFlags: 0

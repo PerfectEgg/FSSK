@@ -44,6 +44,7 @@ public class Siren : MonsterTroll
     {
         if (state == MonsterState.Entering)
         {
+            TrollEvents.OnShowWarningMessage?.Invoke(MonsterType.Siren);
             Debug.Log("🧜‍♀️ [세이렌 등장] 2초 뒤 매혹적인 노래가 시작됩니다!");
 
             Debug.Log($"🧜‍♀️ [세이렌 등장] 등장 사운드 재생 요청 발사!");
@@ -59,6 +60,8 @@ public class Siren : MonsterTroll
         
         if (state == MonsterState.Exiting)
         {
+            TrollEvents.OnHideWarningMessage?.Invoke();
+
             // 방장이 상태를 Exiting으로 넘기면, 모두에게 "노래 끝!" 방송
             if (PhotonNetwork.IsMasterClient) 
                 photonView.RPC("RPC_StopSinging", RpcTarget.All);
@@ -207,6 +210,8 @@ public class Siren : MonsterTroll
 
     void OnDestroy()
     {
+        TrollEvents.OnHideWarningMessage?.Invoke();
+
         if (PhotonNetwork.IsMasterClient)
             TrollEvents.TriggerTrollFinished();
     }

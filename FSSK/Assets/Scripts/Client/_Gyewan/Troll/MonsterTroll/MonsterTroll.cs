@@ -1,6 +1,8 @@
 using UnityEngine;
-using Photon.Pun; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
+using Photon.Pun;
+using Unity.VisualScripting; // 🟢 [멀티플레이] 포톤 네임스페이스 추가
 
+public enum MonsterType { Kraken, Siren }
 public enum MonsterState { Entering, Action, Exiting }
 
 // 몬스터의 경우 (클릭 불가, 키보드로 방어)

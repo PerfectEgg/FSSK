@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 using Photon.Pun;
 using System.Collections;
 
@@ -35,6 +36,7 @@ public class CameraRumEffect : MonoBehaviourPun
     {
         TrollEvents.OnHitByRum -= HandleHitByRum;
         GameEvents.OnGameOverTriggered -= HandleGameOver;
+
         SetMaterialProperties(0f);
     }
 
@@ -94,7 +96,8 @@ public class CameraRumEffect : MonoBehaviourPun
 
             _currentTimer -= timeToDecrease;
 
-            // 🟢 UI 게이지 바가 있다면 업데이트 (예: image.fillAmount = _currentTimer / _maxDuration)
+            // 🟢 UI 게이지 업데이트 (남은 시간 비율로 fillAmount 설정)
+            TrollEvents.OnUpdateDebuffUI?.Invoke(_currentTimer / _maxDuration);
 
             yield return null; // 다음 프레임까지 대기
         }
@@ -122,5 +125,6 @@ public class CameraRumEffect : MonoBehaviourPun
         SetMaterialProperties(0f);
 
         // 🟢 UI 게이지 바 끄기
+        TrollEvents.OnHideDebuffUI?.Invoke();
     }
 }

@@ -149,6 +149,12 @@ public static class TrollEvents
         OnLightningStrikeRequested?.Invoke(level, patternIndex);
     }
 
+    // 경고 메시지 표시 이벤트
+    public static Action<MonsterType> OnShowWarningMessage; // 경고 메세지 표시 이벤트 (몬스터 타입 전달)
+    public static Action OnHideWarningMessage;              // 경고 메세지 숨김 이벤트
+    public static Action<float> OnUpdateDebuffUI;           // 디버프 UI 업데이트 이벤트 (남은 시간 전달)
+    public static Action OnHideDebuffUI;                    // 디버프 UI 숨김 이벤트
+
     // 트롤링 이벤트 종료 알림 (이 이벤트가 호출되면 매니저가 대기 타이머를 재시작함)
     public static Action OnTrollFinished;
     public static void TriggerTrollFinished()
