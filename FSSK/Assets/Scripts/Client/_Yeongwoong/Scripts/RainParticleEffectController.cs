@@ -73,6 +73,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     [Header("Screen Rain Overlay")]
     [SerializeField] private bool enableScreenRainOverlay = true;
+    [SerializeField] private bool showScreenRainOverlayOnlyInPlacementMode = true;
     [SerializeField] private Color screenRainColor = new(0.72f, 0.84f, 1f, 1f);
     [SerializeField, Range(0.25f, 1.25f)] private float screenRainAmountMultiplier = 1f;
     [SerializeField] private bool enableScreenRainWindTilt = true;
@@ -103,12 +104,14 @@ public sealed class RainParticleEffectController : MonoBehaviour
     private float _screenRainCurrentAlpha;
     private float _screenRainUvOffset;
     private float _screenRainWindUvOffset;
+    private bool _isExpansionMode;
 
     private void OnEnable()
     {
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;
         TrollEvents.OnRainLevelChanged += HandleRainLevelChanged;
         OmokWindVisualEvents.OnVelocityXChanged += HandleWindVisualVelocityXChanged;
+        TrollEvents.OnExpansionModeChanged += HandleExpansionModeChanged;
         GameEvents.OnGameOverTriggered += HandleGameOver;
     }
 
@@ -117,6 +120,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
         TrollEvents.OnWaveStageChanged -= HandleWaveStageChanged;
         TrollEvents.OnRainLevelChanged -= HandleRainLevelChanged;
         OmokWindVisualEvents.OnVelocityXChanged -= HandleWindVisualVelocityXChanged;
+        TrollEvents.OnExpansionModeChanged -= HandleExpansionModeChanged;
         GameEvents.OnGameOverTriggered -= HandleGameOver;
 
         StopRainParticles(true);
@@ -235,6 +239,16 @@ public sealed class RainParticleEffectController : MonoBehaviour
         if (useWindVisualVelocityEvent)
         {
             SetWindVelocityTarget(velocityX);
+        }
+    }
+
+    private void HandleExpansionModeChanged(bool isExpansionMode)
+    {
+        _isExpansionMode = isExpansionMode;
+
+        if (!ShouldShowScreenRainOverlay())
+        {
+            HideScreenRainOverlay();
         }
     }
 
@@ -690,7 +704,7 @@ public sealed class RainParticleEffectController : MonoBehaviour
 
     private void UpdateScreenRainOverlay()
     {
-        float targetAlpha = enableScreenRainOverlay ? GetScreenRainAlphaForLevel(_currentRainLevel) : 0f;
+        float targetAlpha = ShouldShowScreenRainOverlay() ? GetScreenRainAlphaForLevel(_currentRainLevel) : 0f;
         if (targetAlpha <= 0f && _screenRainCurrentAlpha <= 0f && _screenRainCanvas == null)
         {
             return;
@@ -810,6 +824,12 @@ public sealed class RainParticleEffectController : MonoBehaviour
         {
             _screenRainFarLayer.texture = texture;
         }
+    }
+
+    private bool ShouldShowScreenRainOverlay()
+    {
+        return enableScreenRainOverlay &&
+               (!showScreenRainOverlayOnlyInPlacementMode || !_isExpansionMode);
     }
 
     private RawImage CreateScreenRainLayer(Transform parent, string objectName, Texture texture)

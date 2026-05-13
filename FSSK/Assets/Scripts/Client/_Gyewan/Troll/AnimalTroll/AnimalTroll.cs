@@ -47,6 +47,7 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     [Header("Animal Settings")]
     [SerializeField] protected float _throwForce = 20f; // 던지는 힘
     private Vector3 _originalPosition;   // 움직이는 위치를 저장하고 되돌릴 때 사용할 변수
+    private const float DragLiftHeight = 1f;
 
     public void SetGrabbedState(bool isGrabbed)
     {
@@ -59,12 +60,16 @@ public abstract class AnimalTroll : TrollBase, IDraggable
     {
         if (isGrabbed)
         {
+            if (_isGrabbed) return;
+
             // ✅ 방장이 확정한 위치를 _originalPosition으로 세팅
-            _originalPosition = authorativePosition;
+            _originalPosition = GetTableRestPosition(authorativePosition);
             OnDragStart();
         }
         else
         {
+            if (!_isGrabbed) return;
+
             OnDragEnd();
         }
     }
@@ -207,6 +212,11 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         
         if (PhotonNetwork.IsMasterClient)
         {
+            if (TrollManager.ShouldPreserveWinningBlockerObject(gameObject))
+            {
+                yield break;
+            }
+
             if (!photonView.IsMine)
             {
                 photonView.RequestOwnership();
@@ -277,7 +287,9 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         // 🟢 [핵심 1] 잡는 순간 애니메이터를 기절시켜 위치 간섭을 완벽 차단!
         if (_animator != null) _animator.enabled = false;
         
-        transform.position += Vector3.up * 1f; // 살짝 띄워서 잡힌 느낌 연출
+        _originalPosition = GetTableRestPosition(_originalPosition);
+        FreezeRigidbodyAt(_originalPosition);
+        transform.position = _originalPosition + (Vector3.up * DragLiftHeight); // 살짝 띄워서 잡힌 느낌 연출
     }
 
     public void OnDragEnd()
@@ -323,12 +335,11 @@ public abstract class AnimalTroll : TrollBase, IDraggable
         {
             Debug.Log("아직 책상 위입니다! 방해 계속 진행");
 
-            transform.position = _originalPosition;     
-            gameObject.layer = LayerMask.NameToLayer("Interactable"); 
-            if (_animator != null) _animator.enabled = true;
+            Vector3 restorePosition = GetTableRestPosition(_originalPosition);
+            RestoreToTableLocal(restorePosition);
 
             // ✅ 위치 복구: 방장이 확정한 원래 위치로 되돌리고, 레이어와 애니메이터도 복구
-            photonView.RPC("RestoreToTableRPC", RpcTarget.MasterClient, _originalPosition);
+            photonView.RPC("RestoreToTableRPC", RpcTarget.MasterClient, restorePosition);
         }
     }
 
@@ -354,10 +365,34 @@ public abstract class AnimalTroll : TrollBase, IDraggable
             // 방장이 물리적 권한과 AI 권한을 모두 온전히 회수
             photonView.RequestOwnership(); 
             
-            transform.position = origPos;
-            gameObject.layer = LayerMask.NameToLayer("Interactable"); 
-            if (_animator != null) _animator.enabled = true;
+            RestoreToTableLocal(GetTableRestPosition(origPos));
         }
+    }
+
+    private Vector3 GetTableRestPosition(Vector3 position)
+    {
+        position.y = _spawnY;
+        return position;
+    }
+
+    private void RestoreToTableLocal(Vector3 position)
+    {
+        transform.position = position;
+        gameObject.layer = LayerMask.NameToLayer("Interactable");
+        if (_animator != null) _animator.enabled = true;
+
+        FreezeRigidbodyAt(position);
+    }
+
+    private void FreezeRigidbodyAt(Vector3 position)
+    {
+        if (_rb == null) return;
+
+        _rb.linearVelocity = Vector3.zero;
+        _rb.angularVelocity = Vector3.zero;
+        _rb.useGravity = false;
+        _rb.isKinematic = true;
+        _rb.position = position;
     }
 
     // --- Trigger 이벤트로 상태 스위칭 ---

@@ -129,6 +129,30 @@ public sealed class WaterLevelController : MonoBehaviour
     private bool _hasStage;
     private FieldInfo _waveManagerStageDurationField;
 
+    public bool IsTimeoutEndingWaterComplete
+    {
+        get
+        {
+            if (!_hasStage)
+            {
+                return true;
+            }
+
+            int stopStage = GetStopStage();
+            if (_currentStage < stopStage)
+            {
+                return false;
+            }
+
+            if (!surgeAfterTargetStage || surgeDurationSeconds <= 0f)
+            {
+                return true;
+            }
+
+            return Time.time - _stageStartedAt >= surgeDurationSeconds;
+        }
+    }
+
     private void OnEnable()
     {
         TrollEvents.OnWaveStageChanged += HandleWaveStageChanged;

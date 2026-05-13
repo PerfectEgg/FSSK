@@ -32,6 +32,11 @@ public class MonsterTroll : TrollBase
     // --- TrollBase(추상 클래스)의 메서드 구현 ---
     public override void EndTroll()
     {
+        if (TrollManager.ShouldPreserveWinningBlockerObject(gameObject))
+        {
+            return;
+        }
+
         PhotonNetwork.Destroy(gameObject);
     }
     public override void ApplyEffect() { }

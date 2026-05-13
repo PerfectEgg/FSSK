@@ -43,6 +43,8 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
     [Header("Timeout Result Sequence")]
     [SerializeField] private bool _fadeScreenBeforeTimeoutResult = true;
+    [SerializeField, Min(0f)] private float _timeoutResultDelayAfterWaterComplete = 1f;
+    [SerializeField, Min(0f)] private float _timeoutWaterWaitTimeoutSeconds = 8f;
     [SerializeField, Min(0f)] private float _timeoutFadeDuration = 0.85f;
     [SerializeField, Range(0f, 1f)] private float _timeoutFadeTargetAlpha = 0.72f;
     [SerializeField] private Color _timeoutFadeColor = Color.black;
@@ -595,7 +597,7 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
                 ? GameResultType.Draw
                 : (iWon ? GameResultType.Win : GameResultType.Lose);
         bool keepTimeoutEndingSequenceActive =
-            _resultPanel != null && ShouldDelayResultForTimeoutFade(resultType);
+            _resultPanel != null && ShouldDelayResultForTimeoutSequence(resultType);
 
         Debug.Log($"[NetworkGameManager] 게임 종료 (winner: {winnerActorNumber}, 결과: {resultType}, delta: {delta:+#;-#;0})");
 
@@ -653,9 +655,9 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
                (resultType == GameResultType.Win || resultType == GameResultType.Lose);
     }
 
-    private bool ShouldDelayResultForTimeoutFade(GameResultType resultType)
+    private bool ShouldDelayResultForTimeoutSequence(GameResultType resultType)
     {
-        return _fadeScreenBeforeTimeoutResult && resultType == GameResultType.Timeout;
+        return resultType == GameResultType.Timeout;
     }
 
     private IEnumerator ShowResultAfterWinningLineFlash(GameResultType resultType, int currentScore, int delta)
@@ -717,10 +719,19 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
 
     private IEnumerator ShowResultAfterTimeoutFade(GameResultType resultType, int currentScore, int delta)
     {
+        yield return WaitForTimeoutWaterCompletion();
+        GameEvents.FinishTimeoutEndingSequence();
+
+        if (!_fadeScreenBeforeTimeoutResult)
+        {
+            ShowResultPanel(resultType, currentScore, delta);
+            _pendingResultSequence = null;
+            yield break;
+        }
+
         Image overlay = EnsureTimeoutFadeOverlay();
         if (overlay == null)
         {
-            GameEvents.FinishTimeoutEndingSequence();
             ShowResultPanel(resultType, currentScore, delta);
             _pendingResultSequence = null;
             yield break;
@@ -751,9 +762,35 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
             SetTimeoutFadeOverlayAlpha(overlay, targetAlpha);
         }
 
-        GameEvents.FinishTimeoutEndingSequence();
         ShowResultPanel(resultType, currentScore, delta);
         _pendingResultSequence = null;
+    }
+
+    private IEnumerator WaitForTimeoutWaterCompletion()
+    {
+        WaterLevelController waterController = FindFirstObjectByType<WaterLevelController>();
+        if (waterController != null)
+        {
+            float maxWaitSeconds = Mathf.Max(0f, _timeoutWaterWaitTimeoutSeconds);
+            float startedAt = Time.unscaledTime;
+
+            while (!waterController.IsTimeoutEndingWaterComplete)
+            {
+                if (maxWaitSeconds > 0f && Time.unscaledTime - startedAt >= maxWaitSeconds)
+                {
+                    Debug.LogWarning("[NetworkGameManager] Timeout water completion wait exceeded max wait.");
+                    break;
+                }
+
+                yield return null;
+            }
+        }
+
+        float extraDelay = Mathf.Max(0f, _timeoutResultDelayAfterWaterComplete);
+        if (extraDelay > 0f)
+        {
+            yield return new WaitForSecondsRealtime(extraDelay);
+        }
     }
 
     private static bool TryGetWinningLineFlashTargets(out OmokMatchManager match, out OmokStoneDropper dropper)

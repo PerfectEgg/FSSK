@@ -106,7 +106,10 @@ public class TrollManager : MonoBehaviour
         {
             if (troll != null)
             {
-                PhotonNetwork.Destroy(troll.gameObject);
+                if (!ShouldPreserveWinningBlockerObject(troll.gameObject))
+                {
+                    PhotonNetwork.Destroy(troll.gameObject);
+                }
             }
         }
 
@@ -115,9 +118,81 @@ public class TrollManager : MonoBehaviour
         {
             if (troll != null)
             {
-                PhotonNetwork.Destroy(troll.gameObject);
+                if (!ShouldPreserveWinningBlockerObject(troll.gameObject))
+                {
+                    PhotonNetwork.Destroy(troll.gameObject);
+                }
             }
         }
+    }
+
+    public static bool ShouldPreserveWinningBlockerObject(GameObject candidate)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        OmokMatchManager match = FindFirstObjectByType<OmokMatchManager>();
+        if (match == null || !match.HasWinningBlockerStack)
+        {
+            return false;
+        }
+
+        return IsWinningBlockerObject(
+            candidate.transform,
+            match.WinningBlockerTarget,
+            match.WinningBlockerViewId);
+    }
+
+    private static bool IsWinningBlockerObject(
+        Transform candidate,
+        Transform winningBlockerTarget,
+        int winningBlockerViewId)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        if (winningBlockerTarget != null &&
+            (winningBlockerTarget == candidate ||
+             winningBlockerTarget.IsChildOf(candidate) ||
+             candidate.IsChildOf(winningBlockerTarget)))
+        {
+            return true;
+        }
+
+        if (winningBlockerViewId <= 0)
+        {
+            return false;
+        }
+
+        PhotonView candidateView = candidate.GetComponentInParent<PhotonView>();
+        if (candidateView != null && candidateView.ViewID == winningBlockerViewId)
+        {
+            return true;
+        }
+
+        PhotonView[] childViews = candidate.GetComponentsInChildren<PhotonView>(true);
+        foreach (PhotonView childView in childViews)
+        {
+            if (childView != null && childView.ViewID == winningBlockerViewId)
+            {
+                return true;
+            }
+        }
+
+        PhotonView blockerView = PhotonView.Find(winningBlockerViewId);
+        if (blockerView == null)
+        {
+            return false;
+        }
+
+        Transform blockerTransform = blockerView.transform;
+        return blockerTransform == candidate ||
+               blockerTransform.IsChildOf(candidate) ||
+               candidate.IsChildOf(blockerTransform);
     }
 
     // 싱클톤 설정

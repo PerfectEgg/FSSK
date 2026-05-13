@@ -338,7 +338,7 @@ public class PlayerInteraction : MonoBehaviourPun, IPunObservable
         }
         else
         {
-            if (itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
+            if (itemTroll != null && itemPV.TryGetComponent(out Rigidbody rb)) rb.isKinematic = false;
 
             // 🟢 [핵심 수정] 놓을 때도 내 캐릭터만 비워줍니다.
             if (photonView.IsMine) 
