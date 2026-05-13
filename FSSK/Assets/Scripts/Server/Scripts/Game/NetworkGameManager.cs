@@ -57,6 +57,26 @@ public class NetworkGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private AudioClip _gameBGM;
 
     // ──────────────────────────────────────────────────────────────
+    // 디버깅 용
+    // ──────────────────────────────────────────────────────────────
+    public void ForceDisconnect() => PhotonNetwork.Disconnect();
+
+    public void LogNetworkState()
+    {
+        var room = PhotonNetwork.CurrentRoom;
+        Debug.Log(
+            $"[NetworkGameManager] " +
+            $"Connected={PhotonNetwork.IsConnected}, " +
+            $"InRoom={PhotonNetwork.InRoom}, " +
+            $"IsMaster={PhotonNetwork.IsMasterClient}, " +
+            $"Master={PhotonNetwork.MasterClient?.NickName ?? "(none)"}, " +
+            $"PlayerCount={room?.PlayerCount}/{room?.MaxPlayers}, " +
+            $"Room={room?.Name ?? "(none)"}, " +
+            $"Region={PhotonNetwork.CloudRegion}, " +
+            $"AutoSyncScene={PhotonNetwork.AutomaticallySyncScene}");
+    }
+
+    // ──────────────────────────────────────────────────────────────
     //  상태
     // ──────────────────────────────────────────────────────────────
     public float GameTimeLeft { get; private set; } // 게임 전체 남은 시간
