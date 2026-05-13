@@ -25,7 +25,7 @@ public class MatchingManager : MonoBehaviourPunCallbacks
     [Header("사운드 설정")]
     [SerializeField] private AudioClip _lobbyBGM;
 
-    private const string SOLO_BUTTON_NAME = "SoloPlayBtn";
+    private const string SOLO_BUTTON_NAME = "Btn_single";
     private const string CANCEL_LABEL = "취소";
 
     private float _matchingTime;

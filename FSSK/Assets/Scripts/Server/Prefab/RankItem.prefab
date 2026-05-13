@@ -67,15 +67,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: "1000\uC810"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: a4ad143eff17d4a4284298e572441947, type: 2}
-  m_sharedMaterial: {fileID: -6750084682230211583, guid: a4ad143eff17d4a4284298e572441947, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: f4cd0c8624abffe419dfba91f057e53e, type: 2}
+  m_sharedMaterial: {fileID: -1518919266999312070, guid: f4cd0c8624abffe419dfba91f057e53e, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -92,8 +92,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 40
+  m_fontSizeBase: 40
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -204,15 +204,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\uC724\uC11C\uD604"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: a4ad143eff17d4a4284298e572441947, type: 2}
-  m_sharedMaterial: {fileID: -6750084682230211583, guid: a4ad143eff17d4a4284298e572441947, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: f4cd0c8624abffe419dfba91f057e53e, type: 2}
+  m_sharedMaterial: {fileID: -1518919266999312070, guid: f4cd0c8624abffe419dfba91f057e53e, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -229,8 +229,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 40
+  m_fontSizeBase: 40
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -341,15 +341,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: "103\uC704"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: a4ad143eff17d4a4284298e572441947, type: 2}
-  m_sharedMaterial: {fileID: -6750084682230211583, guid: a4ad143eff17d4a4284298e572441947, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: f4cd0c8624abffe419dfba91f057e53e, type: 2}
+  m_sharedMaterial: {fileID: -1518919266999312070, guid: f4cd0c8624abffe419dfba91f057e53e, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -366,8 +366,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 40
+  m_fontSizeBase: 40
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -474,7 +474,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
