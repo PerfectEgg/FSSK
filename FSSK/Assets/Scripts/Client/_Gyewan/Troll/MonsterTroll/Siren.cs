@@ -48,7 +48,6 @@ public class Siren : MonsterTroll
 
             Debug.Log($"🧜‍♀️ [세이렌 등장] 등장 사운드 재생 요청 발사!");
             photonView.RPC("RPC_EnterSound", RpcTarget.All);
-            
         }
         
         if (state == MonsterState.Action)

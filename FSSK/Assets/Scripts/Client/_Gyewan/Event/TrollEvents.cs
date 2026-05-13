@@ -70,6 +70,9 @@ public static class TrollEvents
         OnPositionReleased?.Invoke(pos);
     }
 
+    // 크라켄: 공격 시작 시 강제 확장 모드 요청 이벤트
+    public static Action OnEnterExpansionModeRequest;
+
     // 크라켄: "오른쪽(true)에서 공격하는데 피했니?" 라고 물어보면, bool(성공 여부)로 대답하는 이벤트
     public static Func<bool, bool> OnKrakenDodgeCheck;
 

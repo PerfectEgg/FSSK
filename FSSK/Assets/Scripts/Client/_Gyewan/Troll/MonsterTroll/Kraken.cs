@@ -83,6 +83,8 @@ public class Kraken : MonsterTroll
     {
         if (state == MonsterState.Entering)
         {
+            TrollEvents.OnEnterExpansionModeRequest?.Invoke();
+
             Debug.Log($"<color=cyan>[Kraken]</color> Entering 상태 진입. RPC 발사 시도!");
             photonView.RPC("RPC_EnterSound", RpcTarget.All);
         }

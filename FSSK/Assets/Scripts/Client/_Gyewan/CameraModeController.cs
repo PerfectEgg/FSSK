@@ -29,6 +29,7 @@ public class CameraModeController : MonoBehaviourPun
 
     private void OnEnable()
     {
+        TrollEvents.OnEnterExpansionModeRequest += HandleEnterExpansionRequest;
         TrollEvents.OnSirenEffect += HandleSirenEffect;  // 세이렌 이벤트 구독
         TrollEvents.OnStunEffect += HandleStunEffect;   // 기절 이벤트 구독
         GameEvents.OnGameOverTriggered += HandleGameOver;
@@ -36,9 +37,25 @@ public class CameraModeController : MonoBehaviourPun
 
     private void OnDisable()
     {
+        TrollEvents.OnEnterExpansionModeRequest -= HandleEnterExpansionRequest;
         TrollEvents.OnSirenEffect -= HandleSirenEffect;
         TrollEvents.OnStunEffect -= HandleStunEffect;
         GameEvents.OnGameOverTriggered -= HandleGameOver;
+    }
+
+    private void HandleEnterExpansionRequest()
+    {
+        // 🟢 남의 캐릭터는 이 이벤트에 반응해서 내 화면 카메라를 돌리면 안 됩니다!
+        if (!photonView.IsMine) return;
+
+        if (_isGameOver) return;
+
+        if (!_isExpansionMode)
+        {
+            Debug.Log("🎥 [카메라] 크라켄 공격 시작! 강제 확장 모드로 전환!");
+            _isExpansionMode = true;
+            SetCameraMode(true);
+        }
     }
 
     private void HandleSirenEffect(bool isSinging, Transform target)

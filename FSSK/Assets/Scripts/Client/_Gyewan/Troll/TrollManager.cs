@@ -250,10 +250,9 @@ public class TrollManager : MonoBehaviour
     private float CalculateWaitTime(int nextCount)
     {
         if (nextCount <= 0) return 5f; // 초기값
-        if (nextCount <= 5) return 10f;
-        if (nextCount <= 10) return 8f;
-        if (nextCount <= 14) return 6f;
-        if (nextCount <= 18) return 4f;
+        if (nextCount <= 3) return 8f;
+        if (nextCount <= 6) return 6f;
+        if (nextCount <= 9) return 4f;
         return 2f; // 19회 이상 최소 대기 시간
     }
 }
